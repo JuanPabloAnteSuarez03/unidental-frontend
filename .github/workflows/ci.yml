@@ -8,7 +8,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [18.x, 20.x] # Puedes ajustar las versiones de Node según necesites
+        node-version: [20.x] # Cambiado para usar solo una versión de Node.js
 
     steps:
     - uses: actions/checkout@v4
