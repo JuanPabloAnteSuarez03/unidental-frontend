@@ -181,7 +181,7 @@ const InventoryTable = ({ products = [] }) => {
                     <tbody>
                         {products.map((item, index) => (
                             <TableRow
-                                key={item.id || index}
+                                key={item.id || `unique-${index}`}
                                 item={item}
                                 index={index}
                             />
