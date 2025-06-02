@@ -16,7 +16,7 @@ const Pagination = ({
     const [maxValidPage, setMaxValidPage] = useState(totalPages);
 
     // Actualizar el valor del input cuando cambia la página actual
-    React.useEffect(() => {
+    useEffect(() => {
         setPageInputValue(currentPage);
     }, [currentPage]);
 
