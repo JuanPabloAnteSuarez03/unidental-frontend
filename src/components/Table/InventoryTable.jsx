@@ -1,22 +1,11 @@
 // src/components/Table/InventoryTable.jsx
-import React, { useMemo, useCallback } from "react";
+import React, { useMemo } from "react";
 import TableRow from "./TableRow";
 
 // Eliminamos la dependencia en los datos de mock si no es necesaria
 // import mockInventoryItems from "../../data/mockInventoryData";
 
-const InventoryTable = ({ products = [], sortConfig, onSort }) => {
-    // Función para obtener el icono de ordenamiento (memoizada)
-    const getSortIcon = useCallback(
-        (columnKey) => {
-            if (sortConfig.key !== columnKey) {
-                return " ↕️"; // Icono neutral cuando no está ordenado
-            }
-            return sortConfig.direction === "ascending" ? " ⬆️" : " ⬇️";
-        },
-        [sortConfig.key, sortConfig.direction]
-    );
-
+const InventoryTable = ({ products = [] }) => {
     // Estilos memoizados para mejorar rendimiento
     const styles = useMemo(
         () => ({
@@ -40,72 +29,41 @@ const InventoryTable = ({ products = [], sortConfig, onSort }) => {
                 width: "100%",
                 borderCollapse: "collapse",
                 minWidth: "1000px",
+                tableLayout: "fixed", // Ayuda a distribuir mejor las columnas
             },
             thead: {
                 backgroundColor: "#2c3e50",
                 color: "white",
             },
-            headerCell: {
+            header: {
                 border: "1px solid #34495e",
-                padding: "12px",
+                padding: "12px 8px",
                 fontWeight: "600",
-                cursor: "pointer",
-                userSelect: "none",
-                transition: "background-color 0.2s ease",
-                position: "relative",
+                textAlign: "center",
+                verticalAlign: "middle",
+                height: "50px",
             },
-            headerCellLeft: {
+            headerLeft: {
                 textAlign: "left",
             },
-            headerCellCenter: {
+            headerCenter: {
                 textAlign: "center",
             },
-            headerCellRight: {
+            headerRight: {
                 textAlign: "right",
             },
-            nonSortableHeader: {
-                border: "1px solid #34495e",
-                padding: "12px",
-                textAlign: "center",
-                fontWeight: "600",
-            },
+            // Definición de anchos específicos para columnas
+            skuColumn: { width: "10%" },
+            nameColumn: { width: "18%" },
+            brandColumn: { width: "10%" },
+            categoryColumn: { width: "12%" },
+            unitColumn: { width: "7%" },
+            stockColumn: { width: "6%" },
+            priceColumn: { width: "8%" },
+            marginColumn: { width: "8%" },
+            supplierColumn: { width: "13%" },
         }),
         []
-    );
-
-    // Evento de hover para encabezados (memoizado)
-    const handleHeaderMouseOver = useCallback((e) => {
-        e.target.style.backgroundColor = "#34495e";
-    }, []);
-
-    const handleHeaderMouseOut = useCallback((e) => {
-        e.target.style.backgroundColor = "transparent";
-    }, []);
-
-    // Manejadores de ordenamiento (memoizados)
-    const handleSortBySku = useCallback(() => onSort("sku"), [onSort]);
-    const handleSortByName = useCallback(() => onSort("name"), [onSort]);
-    const handleSortByBrand = useCallback(() => onSort("brand"), [onSort]);
-    const handleSortByCategory = useCallback(
-        () => onSort("category_name"),
-        [onSort]
-    );
-    const handleSortByStock = useCallback(() => onSort("stock"), [onSort]);
-    const handleSortByPurchasePrice = useCallback(
-        () => onSort("purchase_price"),
-        [onSort]
-    );
-    const handleSortBySalePrice = useCallback(
-        () => onSort("sale_price"),
-        [onSort]
-    );
-    const handleSortByLocation = useCallback(
-        () => onSort("location"),
-        [onSort]
-    );
-    const handleSortBySupplier = useCallback(
-        () => onSort("supplier"),
-        [onSort]
     );
 
     // Comprobar si hay productos válidos (podrían ser undefined o null)
@@ -130,117 +88,93 @@ const InventoryTable = ({ products = [], sortConfig, onSort }) => {
                         <tr style={styles.thead}>
                             <th
                                 style={{
-                                    ...styles.headerCell,
-                                    ...styles.headerCellLeft,
+                                    ...styles.header,
+                                    ...styles.headerLeft,
+                                    ...styles.skuColumn,
                                 }}
-                                onClick={handleSortBySku}
-                                onMouseOver={handleHeaderMouseOver}
-                                onMouseOut={handleHeaderMouseOut}
-                                title="Clic para ordenar por código"
                             >
-                                Código{getSortIcon("sku")}
+                                SKU
                             </th>
                             <th
                                 style={{
-                                    ...styles.headerCell,
-                                    ...styles.headerCellLeft,
+                                    ...styles.header,
+                                    ...styles.headerLeft,
+                                    ...styles.nameColumn,
                                 }}
-                                onClick={handleSortByName}
-                                onMouseOver={handleHeaderMouseOver}
-                                onMouseOut={handleHeaderMouseOut}
-                                title="Clic para ordenar por nombre"
                             >
-                                Producto{getSortIcon("name")}
+                                Producto
                             </th>
                             <th
                                 style={{
-                                    ...styles.headerCell,
-                                    ...styles.headerCellLeft,
+                                    ...styles.header,
+                                    ...styles.headerLeft,
+                                    ...styles.brandColumn,
                                 }}
-                                onClick={handleSortByBrand}
-                                onMouseOver={handleHeaderMouseOver}
-                                onMouseOut={handleHeaderMouseOut}
-                                title="Clic para ordenar por marca"
                             >
-                                Marca{getSortIcon("brand")}
+                                Marca
                             </th>
                             <th
                                 style={{
-                                    ...styles.headerCell,
-                                    ...styles.headerCellLeft,
+                                    ...styles.header,
+                                    ...styles.headerLeft,
+                                    ...styles.categoryColumn,
                                 }}
-                                onClick={handleSortByCategory}
-                                onMouseOver={handleHeaderMouseOver}
-                                onMouseOut={handleHeaderMouseOut}
-                                title="Clic para ordenar por categoría"
                             >
-                                Categoría{getSortIcon("category_name")}
+                                Categoría
                             </th>
                             <th
                                 style={{
-                                    ...styles.headerCell,
-                                    ...styles.headerCellCenter,
+                                    ...styles.header,
+                                    ...styles.headerCenter,
+                                    ...styles.unitColumn,
                                 }}
-                                onClick={handleSortByStock}
-                                onMouseOver={handleHeaderMouseOver}
-                                onMouseOut={handleHeaderMouseOut}
-                                title="Clic para ordenar por stock"
                             >
-                                Stock{getSortIcon("stock")}
+                                U. Medida
                             </th>
                             <th
                                 style={{
-                                    ...styles.headerCell,
-                                    ...styles.headerCellRight,
+                                    ...styles.header,
+                                    ...styles.headerCenter,
+                                    ...styles.stockColumn,
                                 }}
-                                onClick={handleSortByPurchasePrice}
-                                onMouseOver={handleHeaderMouseOver}
-                                onMouseOut={handleHeaderMouseOut}
-                                title="Clic para ordenar por precio de compra"
                             >
-                                P. Compra{getSortIcon("purchase_price")}
+                                Stock
                             </th>
                             <th
                                 style={{
-                                    ...styles.headerCell,
-                                    ...styles.headerCellRight,
+                                    ...styles.header,
+                                    ...styles.headerRight,
+                                    ...styles.priceColumn,
                                 }}
-                                onClick={handleSortBySalePrice}
-                                onMouseOver={handleHeaderMouseOver}
-                                onMouseOut={handleHeaderMouseOut}
-                                title="Clic para ordenar por precio de venta"
                             >
-                                P. Venta{getSortIcon("sale_price")}
+                                P. Compra
                             </th>
                             <th
-                                style={styles.nonSortableHeader}
-                                title="Margen calculado (no ordenable)"
+                                style={{
+                                    ...styles.header,
+                                    ...styles.headerRight,
+                                    ...styles.priceColumn,
+                                }}
+                            >
+                                P. Venta
+                            </th>
+                            <th
+                                style={{
+                                    ...styles.header,
+                                    ...styles.headerCenter,
+                                    ...styles.marginColumn,
+                                }}
                             >
                                 Margen
                             </th>
                             <th
                                 style={{
-                                    ...styles.headerCell,
-                                    ...styles.headerCellLeft,
+                                    ...styles.header,
+                                    ...styles.headerLeft,
+                                    ...styles.supplierColumn,
                                 }}
-                                onClick={handleSortByLocation}
-                                onMouseOver={handleHeaderMouseOver}
-                                onMouseOut={handleHeaderMouseOut}
-                                title="Clic para ordenar por sede"
                             >
-                                Sede{getSortIcon("location")}
-                            </th>
-                            <th
-                                style={{
-                                    ...styles.headerCell,
-                                    ...styles.headerCellLeft,
-                                }}
-                                onClick={handleSortBySupplier}
-                                onMouseOver={handleHeaderMouseOver}
-                                onMouseOut={handleHeaderMouseOut}
-                                title="Clic para ordenar por proveedor"
-                            >
-                                Proveedor{getSortIcon("supplier")}
+                                Proveedor
                             </th>
                         </tr>
                     </thead>

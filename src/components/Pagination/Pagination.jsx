@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 
 const Pagination = ({
     currentPage,
@@ -12,11 +12,18 @@ const Pagination = ({
 }) => {
     // Estado para almacenar el valor del input
     const [pageInputValue, setPageInputValue] = useState(currentPage);
+    // Estado para almacenar el valor máximo de página válido
+    const [maxValidPage, setMaxValidPage] = useState(totalPages);
 
     // Actualizar el valor del input cuando cambia la página actual
     React.useEffect(() => {
         setPageInputValue(currentPage);
     }, [currentPage]);
+
+    // Actualizar el valor máximo de página cuando cambia totalPages
+    useEffect(() => {
+        setMaxValidPage(totalPages);
+    }, [totalPages]);
 
     // Estilos memoizados para evitar recreaciones
     const styles = useMemo(
@@ -88,28 +95,62 @@ const Pagination = ({
                 color: "#6c757d",
                 fontSize: "14px",
             },
+            maxPagesInfo: {
+                padding: "4px 8px",
+                fontSize: "13px",
+                color: "#dc3545",
+                display: "none", // Inicialmente oculto
+            },
+            pageCounter: {
+                padding: "4px 8px",
+                fontSize: "13px",
+                color: "#495057",
+                fontWeight: "500",
+            },
         }),
         []
     );
+
+    // Referencia para el mensaje de error
+    const errorMessageRef = React.useRef(null);
 
     // Manejador para actualizar el valor del input
     const handleInputChange = useCallback((e) => {
         const value = e.target.value;
         if (value === "" || /^\d+$/.test(value)) {
             setPageInputValue(value);
+
+            // Ocultar mensaje de error si estaba visible
+            if (errorMessageRef.current) {
+                errorMessageRef.current.style.display = "none";
+            }
         }
     }, []);
 
-    // Manejador para ir a la página ingresada
+    // Manejador para ir a la página ingresada con validación estricta
     const handleGoToPage = useCallback(() => {
         const pageNumber = parseInt(pageInputValue, 10);
-        if (!isNaN(pageNumber) && pageNumber >= 1 && pageNumber <= totalPages) {
-            goToPage(pageNumber);
+
+        if (!isNaN(pageNumber)) {
+            if (pageNumber >= 1 && pageNumber <= maxValidPage) {
+                goToPage(pageNumber);
+                // Ocultar mensaje de error si estaba visible
+                if (errorMessageRef.current) {
+                    errorMessageRef.current.style.display = "none";
+                }
+            } else {
+                // Mostrar mensaje de error
+                if (errorMessageRef.current) {
+                    errorMessageRef.current.style.display = "block";
+                }
+                // Restaurar al valor válido si es inválido
+                setPageInputValue(currentPage);
+            }
         } else {
-            // Restaurar al valor válido si es inválido
+            // Restaurar al valor válido si no es un número
             setPageInputValue(currentPage);
         }
-    }, [pageInputValue, totalPages, goToPage, currentPage]);
+    }, [pageInputValue, maxValidPage, goToPage, currentPage]);
 
     // Manejador para la tecla Enter en el input
     const handleKeyPress = useCallback(
@@ -125,10 +166,11 @@ const Pagination = ({
     const pageNumbers = useMemo(() => {
         const range = [];
         const maxVisiblePages = 5;
+        const maxPage = maxValidPage;
 
-        if (totalPages <= maxVisiblePages) {
+        if (maxPage <= maxVisiblePages) {
             // Mostrar todas las páginas si son pocas
-            for (let i = 1; i <= totalPages; i++) {
+            for (let i = 1; i <= maxPage; i++) {
                 range.push(i);
             }
         } else {
@@ -137,11 +179,11 @@ const Pagination = ({
 
             // Calcular el rango de páginas a mostrar
             let start = Math.max(2, currentPage - 1);
-            let end = Math.min(totalPages - 1, currentPage + 1);
+            let end = Math.min(maxPage - 1, currentPage + 1);
 
             // Ajustar para mostrar siempre 3 páginas (o las que quepan)
-            if (start === 2) end = Math.min(4, totalPages - 1);
-            if (end === totalPages - 1) start = Math.max(2, totalPages - 3);
+            if (start === 2) end = Math.min(4, maxPage - 1);
+            if (end === maxPage - 1) start = Math.max(2, maxPage - 3);
 
             // Añadir elipsis antes si es necesario
             if (start > 2) range.push("...");
@@ -152,23 +194,23 @@ const Pagination = ({
             }
 
             // Añadir elipsis después si es necesario
-            if (end < totalPages - 1) range.push("...");
+            if (end < maxPage - 1) range.push("...");
 
             // Siempre mostrar la última página
-            range.push(totalPages);
+            range.push(maxPage);
         }
 
         return range;
-    }, [currentPage, totalPages]);
+    }, [currentPage, maxValidPage]);
 
     // Manejadores de eventos para botones específicos
     const handlePageClick = useCallback(
         (page) => {
-            if (typeof page === "number") {
+            if (typeof page === "number" && page <= maxValidPage) {
                 goToPage(page);
             }
         },
-        [goToPage]
+        [goToPage, maxValidPage]
     );
 
     // Manejadores de eventos para estilos
@@ -183,6 +225,29 @@ const Pagination = ({
             e.target.style.backgroundColor = "#2c3e50";
         }
     }, []);
+
+    // Información adicional sobre la paginación
+    const paginationInfo = useMemo(() => {
+        const itemsPerPage = 25; // Coincide con ITEMS_PER_PAGE en useInventory.js
+        const startItem = (currentPage - 1) * itemsPerPage + 1;
+        let endItem = currentPage * itemsPerPage;
+
+        // Si estamos en la última página, el último ítem es el total
+        if (currentPage === maxValidPage) {
+            const totalItems = maxValidPage * itemsPerPage;
+            endItem = Math.min(endItem, totalItems);
+        }
+
+        return {
+            startItem,
+            endItem,
+        };
+    }, [currentPage, maxValidPage]);
+
+    // No renderizar el componente si no hay páginas
+    if (maxValidPage === 0) {
+        return null;
+    }
 
     return (
         <div style={styles.container}>
@@ -234,13 +299,23 @@ const Pagination = ({
             {/* Botón Siguiente */}
             <button
                 onClick={goToNextPage}
-                disabled={!hasNextPage || isLoading}
-                style={styles.button(hasNextPage && !isLoading)}
+                disabled={
+                    !hasNextPage || isLoading || currentPage >= maxValidPage
+                }
+                style={styles.button(
+                    hasNextPage && !isLoading && currentPage < maxValidPage
+                )}
                 onMouseOver={(e) =>
-                    handleButtonHover(e, hasNextPage && !isLoading)
+                    handleButtonHover(
+                        e,
+                        hasNextPage && !isLoading && currentPage < maxValidPage
+                    )
                 }
                 onMouseOut={(e) =>
-                    handleButtonLeave(e, hasNextPage && !isLoading)
+                    handleButtonLeave(
+                        e,
+                        hasNextPage && !isLoading && currentPage < maxValidPage
+                    )
                 }
                 aria-label="Página siguiente"
             >
@@ -257,6 +332,8 @@ const Pagination = ({
                     onKeyPress={handleKeyPress}
                     style={styles.pageInput}
                     aria-label="Número de página"
+                    min="1"
+                    max={maxValidPage}
                 />
                 <button
                     onClick={handleGoToPage}
@@ -271,7 +348,18 @@ const Pagination = ({
                 >
                     Ir
                 </button>
-                <span>de {totalPages}</span>
+                <span>de {maxValidPage}</span>
+                <div ref={errorMessageRef} style={styles.maxPagesInfo}>
+                    Solo hay {maxValidPage} página
+                    {maxValidPage !== 1 ? "s" : ""} disponible
+                    {maxValidPage !== 1 ? "s" : ""} con productos
+                </div>
+            </div>
+
+            {/* Contador de ítems */}
+            <div style={styles.pageCounter}>
+                Mostrando {paginationInfo.startItem}-{paginationInfo.endItem} de
+                aproximadamente {maxValidPage * 25} productos
             </div>
         </div>
     );

@@ -12,22 +12,25 @@ const InventoryPage = () => {
         searchText,
         searchCode,
         searchCategory,
+        searchStock,
+        searchSupplier,
+        searchMinPrice,
+        searchMaxPrice,
 
-        // Estado de ordenamiento
-        sortConfig,
-
-        // Funciones para actualizar estados de búsqueda y ordenamiento
+        // Funciones para actualizar estados de búsqueda
         updateSearchText,
         updateSearchCode,
         updateSearchCategory,
-        handleSort,
+        updateSearchStock,
+        updateSearchSupplier,
+        updateSearchMinPrice,
+        updateSearchMaxPrice,
         clearFilters,
 
         // Datos procesados y de estado de la API
-        filteredProducts, // Productos de la página actual, ya filtrados por API y ordenados localmente
+        filteredProducts, // Productos de la página actual, ya filtrados por API
         totalProducts, // Total de productos que coinciden con los filtros (de la API)
         totalGeneralProducts, // Total general de productos sin filtros
-        // filteredCount, // Este ahora representa los items en la página actual después del sort local
 
         // Paginación
         isLoading,
@@ -43,7 +46,13 @@ const InventoryPage = () => {
 
     // Determinar qué contador mostrar en la cabecera
     const displayCount =
-        searchText || searchCode || searchCategory
+        searchText ||
+        searchCode ||
+        searchCategory ||
+        searchStock ||
+        searchSupplier ||
+        searchMinPrice ||
+        searchMaxPrice
             ? totalProducts
             : totalGeneralProducts;
 
@@ -90,9 +99,17 @@ const InventoryPage = () => {
                 searchText={searchText}
                 searchCode={searchCode}
                 searchCategory={searchCategory}
+                searchStock={searchStock}
+                searchSupplier={searchSupplier}
+                searchMinPrice={searchMinPrice}
+                searchMaxPrice={searchMaxPrice}
                 onSearchTextChange={updateSearchText}
                 onSearchCodeChange={updateSearchCode}
                 onSearchCategoryChange={updateSearchCategory}
+                onSearchStockChange={updateSearchStock}
+                onSearchSupplierChange={updateSearchSupplier}
+                onSearchMinPriceChange={updateSearchMinPrice}
+                onSearchMaxPriceChange={updateSearchMaxPrice}
                 onClearFilters={clearFilters}
                 // Actualizado para usar los contadores correctos
                 filteredCount={totalProducts || 0} // Productos que coinciden con el filtro actual
@@ -131,12 +148,7 @@ const InventoryPage = () => {
             {/* Tabla de inventario y Controles de Paginación (solo si no hay error y no está cargando O si hay productos) */}
             {!error && (
                 <>
-                    <InventoryTable
-                        products={filteredProducts} // Le pasas los productos de la página actual
-                        sortConfig={sortConfig}
-                        onSort={handleSort}
-                    />{" "}
-                    {/* [cite: src/components/Table/InventoryTable.jsx] */}
+                    <InventoryTable products={filteredProducts} />
                     {/* Nuevo componente de paginación */}
                     {totalProducts > 0 && (
                         <Pagination

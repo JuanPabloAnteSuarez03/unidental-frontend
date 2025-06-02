@@ -24,7 +24,11 @@ function LoginForm({ onLoginSubmit, error, loading }) {
     };
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form
+            onSubmit={handleSubmit}
+            className="space-y-6"
+            data-testid="login-form"
+        >
             <div>
                 <label
                     htmlFor="username"

@@ -5,9 +5,17 @@ const SearchBar = ({
     searchText,
     searchCode,
     searchCategory,
+    searchStock,
+    searchSupplier,
+    searchMinPrice,
+    searchMaxPrice,
     onSearchTextChange,
     onSearchCodeChange,
     onSearchCategoryChange,
+    onSearchStockChange,
+    onSearchSupplierChange,
+    onSearchMinPriceChange,
+    onSearchMaxPriceChange,
     onClearFilters,
     filteredCount,
     totalProducts,
@@ -41,9 +49,18 @@ const SearchBar = ({
             },
             formGrid: {
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
                 gap: "15px",
                 marginBottom: "15px",
+            },
+            priceContainer: {
+                display: "flex",
+                flexDirection: "row",
+                gap: "8px",
+                alignItems: "center",
+            },
+            halfInput: {
+                flex: 1,
             },
             label: {
                 display: "block",
@@ -64,6 +81,9 @@ const SearchBar = ({
             },
             monospaceInput: {
                 fontFamily: "monospace",
+            },
+            numberInput: {
+                textAlign: "right",
             },
             buttonContainer: {
                 display: "flex",
@@ -86,8 +106,23 @@ const SearchBar = ({
 
     // Determinar si hay filtros activos
     const hasActiveFilters = useMemo(
-        () => searchText || searchCode || searchCategory,
-        [searchText, searchCode, searchCategory]
+        () =>
+            searchText ||
+            searchCode ||
+            searchCategory ||
+            searchStock ||
+            searchSupplier ||
+            searchMinPrice ||
+            searchMaxPrice,
+        [
+            searchText,
+            searchCode,
+            searchCategory,
+            searchStock,
+            searchSupplier,
+            searchMinPrice,
+            searchMaxPrice,
+        ]
     );
 
     // Manejadores de eventos optimizados con useCallback
@@ -110,6 +145,39 @@ const SearchBar = ({
             onSearchCategoryChange(e.target.value);
         },
         [onSearchCategoryChange]
+    );
+
+    // Nuevos manejadores para los campos adicionales
+    const handleStockChange = useCallback(
+        (e) => {
+            onSearchStockChange(e.target.value);
+        },
+        [onSearchStockChange]
+    );
+
+    const handleSupplierChange = useCallback(
+        (e) => {
+            onSearchSupplierChange(e.target.value);
+        },
+        [onSearchSupplierChange]
+    );
+
+    const handleMinPriceChange = useCallback(
+        (e) => {
+            // Solo permitir números
+            const value = e.target.value.replace(/[^0-9]/g, "");
+            onSearchMinPriceChange(value);
+        },
+        [onSearchMinPriceChange]
+    );
+
+    const handleMaxPriceChange = useCallback(
+        (e) => {
+            // Solo permitir números
+            const value = e.target.value.replace(/[^0-9]/g, "");
+            onSearchMaxPriceChange(value);
+        },
+        [onSearchMaxPriceChange]
     );
 
     const handleInputFocus = useCallback((e) => {
@@ -190,6 +258,71 @@ const SearchBar = ({
                         onFocus={handleInputFocus}
                         onBlur={handleInputBlur}
                     />
+                </div>
+
+                {/* Nuevo: Campo de búsqueda por stock */}
+                <div>
+                    <label style={styles.label}>Stock Mínimo</label>
+                    <input
+                        type="number"
+                        placeholder="Stock mínimo..."
+                        value={searchStock}
+                        onChange={handleStockChange}
+                        style={{ ...styles.input, ...styles.numberInput }}
+                        onFocus={handleInputFocus}
+                        onBlur={handleInputBlur}
+                        min="0"
+                    />
+                </div>
+
+                {/* Nuevo: Campo de búsqueda por proveedor */}
+                <div>
+                    <label style={styles.label}>Proveedor</label>
+                    <input
+                        type="text"
+                        placeholder="Buscar por proveedor..."
+                        value={searchSupplier}
+                        onChange={handleSupplierChange}
+                        style={styles.input}
+                        onFocus={handleInputFocus}
+                        onBlur={handleInputBlur}
+                    />
+                </div>
+
+                {/* Nuevo: Campos de búsqueda por rango de precio */}
+                <div>
+                    <label style={styles.label}>Rango de Precio</label>
+                    <div style={styles.priceContainer}>
+                        <div style={styles.halfInput}>
+                            <input
+                                type="text"
+                                placeholder="Mínimo"
+                                value={searchMinPrice}
+                                onChange={handleMinPriceChange}
+                                style={{
+                                    ...styles.input,
+                                    ...styles.numberInput,
+                                }}
+                                onFocus={handleInputFocus}
+                                onBlur={handleInputBlur}
+                            />
+                        </div>
+                        <span>-</span>
+                        <div style={styles.halfInput}>
+                            <input
+                                type="text"
+                                placeholder="Máximo"
+                                value={searchMaxPrice}
+                                onChange={handleMaxPriceChange}
+                                style={{
+                                    ...styles.input,
+                                    ...styles.numberInput,
+                                }}
+                                onFocus={handleInputFocus}
+                                onBlur={handleInputBlur}
+                            />
+                        </div>
+                    </div>
                 </div>
             </div>
 
