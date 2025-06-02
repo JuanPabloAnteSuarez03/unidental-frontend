@@ -228,14 +228,13 @@ const Pagination = ({
 
     // Información adicional sobre la paginación
     const paginationInfo = useMemo(() => {
-        const itemsPerPage = 25; // Coincide con ITEMS_PER_PAGE en useInventory.js
+        const itemsPerPage = Math.ceil(totalItems / totalPages); // Derive items per page dynamically
         const startItem = (currentPage - 1) * itemsPerPage + 1;
         let endItem = currentPage * itemsPerPage;
 
         // Si estamos en la última página, el último ítem es el total
-        if (currentPage === maxValidPage) {
-            const totalItems = maxValidPage * itemsPerPage;
-            endItem = Math.min(endItem, totalItems);
+        if (currentPage === totalPages) {
+            endItem = totalItems;
         }
 
         return {
