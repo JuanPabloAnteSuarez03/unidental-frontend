@@ -1,12 +1,8 @@
 // src/services/authService.js
+import API_CONFIG from "../config/api.js";
 
-// Define la URL base de tu API.
-// En un proyecto más grande, podrías obtener esto de variables de entorno
-// o de una configuración centralizada, similar a como lo hace tu hook useAuth.js.
-// Por ahora, la mantenemos simple aquí.
-const API_BASE_URL = import.meta.env.DEV
-    ? "/api" // Para usar el proxy de Vite en desarrollo
-    : "https://unidental-backend-production.up.railway.app/api"; // URL directa para producción
+// Define la URL base de tu API usando la configuración centralizada
+const API_BASE_URL = API_CONFIG.BASE_URL;
 
 /**
  * Realiza una solicitud de inicio de sesión al backend.
@@ -16,7 +12,7 @@ const API_BASE_URL = import.meta.env.DEV
  * @throws {Error} Si la respuesta de la red no es exitosa.
  */
 export const loginUser = async (username, password) => {
-    const loginUrl = `${API_BASE_URL}/auth/token/login/`;
+    const loginUrl = `${API_BASE_URL}${API_CONFIG.ENDPOINTS.LOGIN}`;
 
     try {
         const response = await fetch(loginUrl, {
@@ -69,7 +65,7 @@ export const loginUser = async (username, password) => {
  * @throws {Error} Si la respuesta de la red no es exitosa o hay otros errores.
  */
 export const requestPasswordReset = async (email) => {
-    const requestResetUrl = `${API_BASE_URL}/auth/users/reset_password/`;
+    const requestResetUrl = `${API_BASE_URL}${API_CONFIG.ENDPOINTS.RESET_PASSWORD}`;
     console.log(
         "Requesting password reset for:",
         email,
@@ -122,7 +118,7 @@ export const requestPasswordReset = async (email) => {
  * @throws {Error} Si la respuesta de la red no es exitosa o hay otros errores.
  */
 export const resetPasswordConfirm = async (uid, token, newPassword) => {
-    const confirmResetUrl = `${API_BASE_URL}/auth/users/reset_password_confirm/`;
+    const confirmResetUrl = `${API_BASE_URL}${API_CONFIG.ENDPOINTS.RESET_PASSWORD_CONFIRM}`;
     console.log(
         "Confirming password reset with:",
         { uid, token, new_password: "HIDDEN" },

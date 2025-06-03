@@ -1,6 +1,11 @@
 // Mock para import.meta.env de Vite
 global.import = {};
-global.import.meta = { env: { DEV: false } };
+global.import.meta = {
+    env: {
+        DEV: false,
+        VITE_API_URL: "http://test-api-url.com/api",
+    },
+};
 
 // Polyfills para TextEncoder/TextDecoder en Node.js
 if (typeof global.TextEncoder === "undefined") {
@@ -10,6 +15,29 @@ if (typeof global.TextEncoder === "undefined") {
 if (typeof global.TextDecoder === "undefined") {
     global.TextDecoder = require("util").TextDecoder;
 }
+
+// Mock específico para el archivo api.js
+jest.mock(
+    "./src/config/api.js",
+    () => {
+        return {
+            __esModule: true,
+            default: {
+                BASE_URL: "http://test-api-url.com/api",
+                ENDPOINTS: {
+                    LOGIN: "/auth/token/login/",
+                    LOGOUT: "/auth/token/logout/",
+                    USER_PROFILE: "/auth/users/me/",
+                    RESET_PASSWORD: "/auth/users/reset_password/",
+                    RESET_PASSWORD_CONFIRM:
+                        "/auth/users/reset_password_confirm/",
+                    INVENTORY: "/catalogs/products/",
+                },
+            },
+        };
+    },
+    { virtual: true }
+);
 
 // También hacemos un mock directo para cualquier componente que use import.meta
 jest.mock(

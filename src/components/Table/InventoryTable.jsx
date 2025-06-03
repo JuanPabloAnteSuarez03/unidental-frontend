@@ -2,8 +2,6 @@
 import React, { useMemo } from "react";
 import TableRow from "./TableRow";
 
-// Eliminamos la dependencia en los datos de mock si no es necesaria
-// import mockInventoryItems from "../../data/mockInventoryData";
 
 const InventoryTable = ({ products = [] }) => {
     // Estilos memoizados para mejorar rendimiento
