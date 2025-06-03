@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import API_CONFIG from "../config/api.js";
 
-// URL base de tu API para productos
+// URL base completa para productos
 const API_PRODUCTS_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.INVENTORY}`;
 
 // Configuración de caché
@@ -74,7 +74,6 @@ const useInventory = () => {
     const convertToProxyUrl = useCallback((url) => {
         if (!url) return null;
 
-        // En producción o si es una URL relativa, la usamos directamente
         return url;
     }, []);
 

@@ -2,7 +2,6 @@
 import React, { useMemo } from "react";
 import TableRow from "./TableRow";
 
-
 const InventoryTable = ({ products = [] }) => {
     // Estilos memoizados para mejorar rendimiento
     const styles = useMemo(
