@@ -146,13 +146,15 @@ describe("AuthContext", () => {
             </AuthProvider>
         );
 
+        // Esperar primero a que se llame a removeItem
         await waitFor(() =>
             expect(localStorageMock.removeItem).toHaveBeenCalledWith(
                 "authToken"
             )
         );
 
-        expect(authContext.authToken).toBeNull();
+        // Luego esperar a que authToken sea null
+        await waitFor(() => expect(authContext.authToken).toBeNull());
         expect(authContext.currentUser).toBeNull();
     });
 

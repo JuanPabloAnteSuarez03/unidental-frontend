@@ -76,9 +76,9 @@ describe("LoginPage", () => {
         render(<LoginPage />);
 
         // Verificar que el título de la página se muestra
-        expect(screen.getByText("Iniciar Sesión")).toBeInTheDocument();
+        expect(screen.getByText("Bienvenido")).toBeInTheDocument();
         expect(
-            screen.getByText("Accede a tu panel de administración")
+            screen.getByText("Ingresa tus credenciales para acceder")
         ).toBeInTheDocument();
 
         // Verificar que el formulario de login se renderiza

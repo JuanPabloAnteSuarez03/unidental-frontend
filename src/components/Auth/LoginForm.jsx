@@ -2,16 +2,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 
-/**
- * LoginForm component.
- * Renders a form with username and password fields, a submit button,
- * and a space to display error messages.
- *
- * @param {object} props - The component's props.
- * @param {function} props.onLoginSubmit - Function to call when the form is submitted.
- * @param {string} props.error - Error message to display.
- * @param {boolean} props.loading - Indicates if a login operation is in progress.
- */
 function LoginForm({ onLoginSubmit, error, loading }) {
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
@@ -23,18 +13,76 @@ function LoginForm({ onLoginSubmit, error, loading }) {
         }
     };
 
+    // Estilos de elementos individuales
+    const formStyle = {
+        width: "100%",
+        fontFamily: "'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+    };
+
+    const fieldContainerStyle = {
+        marginBottom: "20px",
+    };
+
+    const labelStyle = {
+        display: "block",
+        marginBottom: "10px",
+        fontSize: "16px",
+        fontWeight: "500",
+        color: "#666",
+        fontFamily: "'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+    };
+
+    const inputStyle = {
+        width: "100%",
+        padding: "12px",
+        border: "1px solid #ddd",
+        borderRadius: "4px",
+        fontSize: "16px",
+        boxSizing: "border-box",
+        fontFamily: "'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+    };
+
+    const buttonStyle = {
+        width: "100%",
+        padding: "12px",
+        backgroundColor: "rgb(44, 62, 80)",
+        color: "white",
+        border: "none",
+        borderRadius: "4px",
+        fontSize: "16px",
+        cursor: "pointer",
+        fontFamily: "'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+    };
+
+    const linkContainerStyle = {
+        textAlign: "center",
+        marginTop: "20px",
+        fontFamily: "'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+    };
+
+    const linkStyle = {
+        color: "#007bff",
+        textDecoration: "none",
+    };
+
+    const textStyle = {
+        color: "#666",
+    };
+
+    const adminTextStyle = {
+        color: "#666",
+        fontFamily: "'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+    };
+
     return (
         <form
             onSubmit={handleSubmit}
-            className="space-y-6"
+            style={formStyle}
             data-testid="login-form"
         >
-            <div>
-                <label
-                    htmlFor="username"
-                    className="block text-sm font-medium text-gray-700"
-                >
-                    Nombre de Usuario
+            <div style={fieldContainerStyle}>
+                <label htmlFor="username" style={labelStyle}>
+                    Usuario
                 </label>
                 <input
                     type="text"
@@ -43,17 +91,13 @@ function LoginForm({ onLoginSubmit, error, loading }) {
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     required
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                    placeholder="tu_usuario"
+                    style={inputStyle}
                     disabled={loading}
                 />
             </div>
 
-            <div>
-                <label
-                    htmlFor="password"
-                    className="block text-sm font-medium text-gray-700"
-                >
+            <div style={fieldContainerStyle}>
+                <label htmlFor="password" style={labelStyle}>
                     Contraseña
                 </label>
                 <input
@@ -63,36 +107,41 @@ function LoginForm({ onLoginSubmit, error, loading }) {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                    placeholder="tu_contraseña"
+                    style={inputStyle}
                     disabled={loading}
                 />
             </div>
 
-            {/* Espacio para mensajes de error */}
             {error && (
-                <div className="p-3 bg-red-100 border border-red-400 text-red-700 rounded-md">
-                    <p className="text-sm">{error}</p>
+                <div
+                    style={{
+                        padding: "12px",
+                        backgroundColor: "#ffeded",
+                        color: "#d63031",
+                        marginBottom: "15px",
+                        borderRadius: "4px",
+                    }}
+                >
+                    <p style={{ fontWeight: "500" }}>Error de Autenticación</p>
+                    <p>{error}</p>
                 </div>
             )}
 
-            <div>
-                <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-300"
-                >
-                    {loading ? "Ingresando..." : "Ingresar"}
-                </button>
-            </div>
+            <button type="submit" disabled={loading} style={buttonStyle}>
+                {loading ? "Ingresando..." : "Ingresar"}
+            </button>
 
-            <div className="text-sm text-center">
-                <Link
-                    to="/password-reset"
-                    className="font-medium text-indigo-600 hover:text-indigo-500"
-                >
-                    ¿No recuerdo mi contraseña?
-                </Link>
+            <div style={linkContainerStyle}>
+                <p>
+                    <Link to="/password-reset" style={linkStyle}>
+                        ¿Olvidaste tu contraseña?
+                    </Link>
+                </p>
+                <p style={{ marginTop: "8px" }}>
+                    <span style={adminTextStyle}>
+                        ¿Problemas para acceder? Contacta al administrador
+                    </span>
+                </p>
             </div>
         </form>
     );

@@ -25,7 +25,7 @@ describe("LoginForm", () => {
         renderWithRouter(<LoginForm {...defaultProps} />);
 
         // Verificar que los campos de usuario y contraseña están presentes
-        const usernameInput = screen.getByLabelText(/nombre de usuario/i);
+        const usernameInput = screen.getByLabelText(/usuario/i);
         const passwordInput = screen.getByLabelText(/contraseña/i);
 
         expect(usernameInput).toBeInTheDocument();
@@ -44,9 +44,9 @@ describe("LoginForm", () => {
     test("renders 'forgot password' link", () => {
         renderWithRouter(<LoginForm {...defaultProps} />);
 
-        // Verificar que el enlace "¿No recuerdo mi contraseña?" está presente
+        // Verificar que el enlace "¿Olvidaste tu contraseña?" está presente
         const forgotPasswordLink = screen.getByText(
-            /¿no recuerdo mi contraseña?/i
+            /¿olvidaste tu contraseña?/i
         );
         expect(forgotPasswordLink).toBeInTheDocument();
         expect(forgotPasswordLink.tagName).toBe("A");
@@ -57,7 +57,7 @@ describe("LoginForm", () => {
         renderWithRouter(<LoginForm {...defaultProps} />);
 
         // Obtener los campos de entrada
-        const usernameInput = screen.getByLabelText(/nombre de usuario/i);
+        const usernameInput = screen.getByLabelText(/usuario/i);
         const passwordInput = screen.getByLabelText(/contraseña/i);
 
         // Simular cambios en los inputs
@@ -76,7 +76,7 @@ describe("LoginForm", () => {
         );
 
         // Obtener los campos de entrada y el botón de submit
-        const usernameInput = screen.getByLabelText(/nombre de usuario/i);
+        const usernameInput = screen.getByLabelText(/usuario/i);
         const passwordInput = screen.getByLabelText(/contraseña/i);
         const submitButton = screen.getByRole("button", { name: /ingresar/i });
 
@@ -106,7 +106,7 @@ describe("LoginForm", () => {
         expect(submitButton).toBeDisabled();
 
         // Verificar que los inputs están deshabilitados
-        const usernameInput = screen.getByLabelText(/nombre de usuario/i);
+        const usernameInput = screen.getByLabelText(/usuario/i);
         const passwordInput = screen.getByLabelText(/contraseña/i);
         expect(usernameInput).toBeDisabled();
         expect(passwordInput).toBeDisabled();

@@ -1,12 +1,24 @@
 // src/components/layouts/MainLayout.jsx
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 // Asegúrate que la ruta a useAuth sea la correcta según tu estructura de proyecto
 import { useAuth } from "../../context/AuthContext"; // [cite: src/context/AuthContext.jsx]
 
 const MainLayout = ({ children }) => {
     const { authToken } = useAuth();
     const isAuthenticated = !!authToken;
+    const location = useLocation();
+
+    // Verificar si estamos en la página de login o related
+    const isAuthPage =
+        location.pathname === "/login" ||
+        location.pathname === "/" ||
+        location.pathname.includes("/password-reset");
+
+    // Si es una página de autenticación, mostrar solo el contenido sin header ni footer
+    if (isAuthPage) {
+        return <>{children}</>;
+    }
 
     return (
         <div style={{ minHeight: "100vh", fontFamily: "Arial, sans-serif" }}>
