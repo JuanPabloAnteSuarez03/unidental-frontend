@@ -1,6 +1,7 @@
 // src/context/AuthContext.jsx
 import React, { createContext, useState, useEffect, useContext } from "react";
 import { loginUser } from "../services/authService"; // Importar el servicio
+import API_CONFIG from "../config/api.js";
 
 const AuthContext = createContext(null);
 
@@ -12,7 +13,8 @@ export const AuthProvider = ({ children }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [authError, setAuthError] = useState(null);
 
-    const BASE_URL = "https://unidental-backend-production.up.railway.app/api";
+    // Usar la configuración centralizada de la API
+    const BASE_URL = API_CONFIG.BASE_URL;
 
     // Efecto para cargar datos del usuario si hay un token al iniciar
     useEffect(() => {
@@ -20,12 +22,15 @@ export const AuthProvider = ({ children }) => {
             const fetchCurrentUser = async () => {
                 setIsLoading(true);
                 try {
-                    const response = await fetch(`${BASE_URL}/auth/users/me/`, {
-                        headers: {
-                            Authorization: `Token ${authToken}`, // Djoser usualmente usa 'Token <token_value>'
-                            "Content-Type": "application/json",
-                        },
-                    });
+                    const response = await fetch(
+                        `${BASE_URL}${API_CONFIG.ENDPOINTS.USER_PROFILE}`,
+                        {
+                            headers: {
+                                Authorization: `Token ${authToken}`,
+                                "Content-Type": "application/json",
+                            },
+                        }
+                    );
                     if (!response.ok) {
                         // Si falla la obtención del usuario (ej. token expirado), desloguear
                         if (
@@ -38,11 +43,9 @@ export const AuthProvider = ({ children }) => {
                             await logout(); // Usar la función logout para limpiar todo
                             return;
                         }
-                        const errorData = await response
-                            .json()
-                            .catch(() => ({
-                                detail: "Error al cargar datos del usuario.",
-                            }));
+                        const errorData = await response.json().catch(() => ({
+                            detail: "Error al cargar datos del usuario.",
+                        }));
                         throw new Error(
                             errorData.detail || `Error ${response.status}`
                         );
@@ -99,13 +102,16 @@ export const AuthProvider = ({ children }) => {
 
         if (token) {
             try {
-                const response = await fetch(`${BASE_URL}/auth/token/logout/`, {
-                    method: "POST", // [cite: 1]
-                    headers: {
-                        Authorization: `Token ${token}`,
-                        "Content-Type": "application/json",
-                    },
-                });
+                const response = await fetch(
+                    `${BASE_URL}${API_CONFIG.ENDPOINTS.LOGOUT}`,
+                    {
+                        method: "POST",
+                        headers: {
+                            Authorization: `Token ${token}`,
+                            "Content-Type": "application/json",
+                        },
+                    }
+                );
                 // Djoser's /token/logout/ endpoint returns 204 No Content on success.
                 if (!response.ok && response.status !== 204) {
                     // Incluso si falla el logout en el backend, procedemos a limpiar localmente

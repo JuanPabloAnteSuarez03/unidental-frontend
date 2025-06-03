@@ -1,19 +1,10 @@
 // src/hooks/useInventory.js
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
+import API_CONFIG from "../config/api.js";
 
-// URL base de tu API para productos
-const API_PRODUCTS_URL = import.meta.env.DEV
-    ? "/api/catalogs/products/" // Usará el proxy de Vite en desarrollo
-    : "https://unidental-backend-production.up.railway.app/api/catalogs/products/";
-
-// URL base completa para cuando necesitemos analizar las URL
-const FULL_BASE_URL = import.meta.env.DEV
-    ? window.location.origin + "/api/catalogs/products/" // URL completa en desarrollo
-    : "https://unidental-backend-production.up.railway.app/api/catalogs/products/";
-
-// Dominio del API para reescribir URLs en desarrollo
-const API_DOMAIN = "https://unidental-backend-production.up.railway.app";
+// URL base completa para productos
+const API_PRODUCTS_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.INVENTORY}`;
 
 // Configuración de caché
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos en milisegundos
@@ -82,11 +73,6 @@ const useInventory = () => {
     // Función optimizada para convertir URLs absolutas a URLs relativas para el proxy
     const convertToProxyUrl = useCallback((url) => {
         if (!url) return null;
-
-        // Solo necesitamos la conversión en desarrollo y si la URL es absoluta
-        if (import.meta.env.DEV && url.startsWith(API_DOMAIN)) {
-            return url.replace(API_DOMAIN, "");
-        }
 
         return url;
     }, []);

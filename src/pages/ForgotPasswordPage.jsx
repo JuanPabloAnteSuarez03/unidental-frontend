@@ -1,6 +1,7 @@
+// src/pages/ForgotPasswordPage.jsx
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { requestPasswordReset } from "../services/authService";
+import { requestPasswordReset } from "../services/authService"; //
 
 const ForgotPasswordPage = () => {
     const [email, setEmail] = useState("");
@@ -10,15 +11,12 @@ const ForgotPasswordPage = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-
         if (!email || !email.includes("@")) {
             setError("Por favor ingrese un correo electrónico válido");
             return;
         }
-
         setIsLoading(true);
         setError("");
-
         try {
             await requestPasswordReset(email);
             setSuccess(true);
@@ -32,86 +30,173 @@ const ForgotPasswordPage = () => {
         }
     };
 
-    return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 py-12 px-4 sm:px-6 lg:px-8">
-            <div className="w-full max-w-md space-y-8">
-                <div>
-                    <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-                        Recuperar Contraseña
-                    </h2>
-                    <p className="mt-2 text-center text-sm text-gray-600">
-                        Ingresa tu correo electrónico para recibir instrucciones
-                    </p>
-                </div>
+    // Estilos con la misma tipografía y colores que el login
+    const containerStyle = {
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        minHeight: "100vh",
+        backgroundColor: "white",
+        padding: "0 15px",
+        fontFamily: "'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+    };
 
-                <div className="p-8 bg-white shadow-xl rounded-lg">
-                    {success ? (
-                        <div className="text-center">
-                            <div className="mb-4 p-4 bg-green-100 rounded-md">
-                                <p className="text-green-700">
-                                    Se ha enviado un enlace para restablecer tu
-                                    contraseña a {email}. Por favor revisa tu
-                                    correo electrónico.
-                                </p>
-                            </div>
-                            <Link
-                                to="/login"
-                                className="text-indigo-600 hover:text-indigo-500"
-                            >
+    const formContainerStyle = {
+        width: "100%",
+        maxWidth: "440px",
+    };
+
+    const titleStyle = {
+        fontSize: "28px",
+        fontWeight: "600",
+        color: "#333",
+        textAlign: "center",
+        marginBottom: "8px",
+        fontFamily: "'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+    };
+
+    const subtitleStyle = {
+        fontSize: "16px",
+        color: "#666",
+        textAlign: "center",
+        marginBottom: "30px",
+        fontFamily: "'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+    };
+
+    const formStyle = {
+        width: "100%",
+        fontFamily: "'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+    };
+
+    const fieldContainerStyle = {
+        marginBottom: "20px",
+    };
+
+    const labelStyle = {
+        display: "block",
+        marginBottom: "10px",
+        fontSize: "16px",
+        fontWeight: "500",
+        color: "#666",
+        fontFamily: "'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+    };
+
+    const inputStyle = {
+        width: "100%",
+        padding: "12px",
+        border: "1px solid #ddd",
+        borderRadius: "4px",
+        fontSize: "16px",
+        boxSizing: "border-box",
+        fontFamily: "'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+    };
+
+    const buttonStyle = {
+        width: "100%",
+        padding: "12px",
+        backgroundColor: "rgb(44, 62, 80)",
+        color: "white",
+        border: "none",
+        borderRadius: "4px",
+        fontSize: "16px",
+        cursor: "pointer",
+        fontFamily: "'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+    };
+
+    const linkContainerStyle = {
+        textAlign: "center",
+        marginTop: "20px",
+        fontFamily: "'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+    };
+
+    const linkStyle = {
+        color: "#007bff",
+        textDecoration: "none",
+    };
+
+    const successStyle = {
+        padding: "16px",
+        backgroundColor: "#e3fcef",
+        color: "#2f9e5f",
+        borderRadius: "4px",
+        marginBottom: "20px",
+        textAlign: "center",
+        fontFamily: "'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+    };
+
+    const errorStyle = {
+        padding: "12px",
+        backgroundColor: "#ffeded",
+        color: "#d63031",
+        marginBottom: "15px",
+        borderRadius: "4px",
+        fontFamily: "'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+    };
+
+    return (
+        <div style={containerStyle}>
+            <div style={formContainerStyle}>
+                <h2 style={titleStyle}>Recuperar Contraseña</h2>
+                <p style={subtitleStyle}>
+                    Ingresa tu correo electrónico para recibir instrucciones
+                </p>
+
+                {success ? (
+                    <div>
+                        <div style={successStyle}>
+                            <p>
+                                Se ha enviado un enlace para restablecer tu
+                                contraseña a {email}. Por favor revisa tu correo
+                                electrónico.
+                            </p>
+                        </div>
+                        <div style={linkContainerStyle}>
+                            <Link to="/login" style={linkStyle}>
                                 Volver a iniciar sesión
                             </Link>
                         </div>
-                    ) : (
-                        <form onSubmit={handleSubmit} className="space-y-6">
-                            <div>
-                                <label
-                                    htmlFor="email"
-                                    className="block text-sm font-medium text-gray-700"
-                                >
-                                    Correo Electrónico
-                                </label>
-                                <input
-                                    type="email"
-                                    id="email"
-                                    name="email"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    required
-                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                                    placeholder="tu@email.com"
-                                    disabled={isLoading}
-                                />
-                            </div>
+                    </div>
+                ) : (
+                    <form onSubmit={handleSubmit} style={formStyle}>
+                        <div style={fieldContainerStyle}>
+                            <label htmlFor="email" style={labelStyle}>
+                                Correo Electrónico
+                            </label>
+                            <input
+                                type="email"
+                                id="email"
+                                name="email"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                required
+                                style={inputStyle}
+                                placeholder="tu@email.com"
+                                disabled={isLoading}
+                            />
+                        </div>
 
-                            {error && (
-                                <div className="p-3 bg-red-100 border border-red-400 text-red-700 rounded-md">
-                                    <p className="text-sm">{error}</p>
-                                </div>
-                            )}
-
-                            <div>
-                                <button
-                                    type="submit"
-                                    disabled={isLoading}
-                                    className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-300"
-                                >
-                                    {isLoading
-                                        ? "Enviando..."
-                                        : "Enviar Instrucciones"}
-                                </button>
+                        {error && (
+                            <div style={errorStyle}>
+                                <p>{error}</p>
                             </div>
+                        )}
 
-                            <div className="text-sm text-center mt-4">
-                                <Link
-                                    to="/login"
-                                    className="font-medium text-indigo-600 hover:text-indigo-500"
-                                >
-                                    Volver a Iniciar Sesión
-                                </Link>
-                            </div>
-                        </form>
-                    )}
-                </div>
+                        <button
+                            type="submit"
+                            disabled={isLoading}
+                            style={buttonStyle}
+                        >
+                            {isLoading ? "Enviando..." : "Enviar Instrucciones"}
+                        </button>
+
+                        <div style={linkContainerStyle}>
+                            <Link to="/login" style={linkStyle}>
+                                Volver a Iniciar Sesión
+                            </Link>
+                        </div>
+                    </form>
+                )}
             </div>
         </div>
     );
