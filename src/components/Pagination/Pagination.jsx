@@ -9,6 +9,7 @@ const Pagination = ({
     hasNextPage,
     hasPrevPage,
     isLoading,
+    totalItems,
 }) => {
     // Estado para almacenar el valor del input
     const [pageInputValue, setPageInputValue] = useState(currentPage);
@@ -228,20 +229,23 @@ const Pagination = ({
 
     // Información adicional sobre la paginación
     const paginationInfo = useMemo(() => {
-        const itemsPerPage = Math.ceil(totalItems / totalPages); // Derive items per page dynamically
+        // Si totalItems no está definido, calcularlo aproximadamente
+        const actualTotalItems = totalItems || totalPages * 25;
+        const itemsPerPage = Math.ceil(actualTotalItems / totalPages) || 25; // Derive items per page dynamically
         const startItem = (currentPage - 1) * itemsPerPage + 1;
         let endItem = currentPage * itemsPerPage;
 
         // Si estamos en la última página, el último ítem es el total
         if (currentPage === totalPages) {
-            endItem = totalItems;
+            endItem = actualTotalItems;
         }
 
         return {
             startItem,
             endItem,
+            actualTotalItems,
         };
-    }, [currentPage, maxValidPage]);
+    }, [currentPage, totalPages, totalItems]);
 
     // No renderizar el componente si no hay páginas
     if (maxValidPage === 0) {
@@ -358,7 +362,7 @@ const Pagination = ({
             {/* Contador de ítems */}
             <div style={styles.pageCounter}>
                 Mostrando {paginationInfo.startItem}-{paginationInfo.endItem} de
-                aproximadamente {maxValidPage * 25} productos
+                aproximadamente {paginationInfo.actualTotalItems} productos
             </div>
         </div>
     );

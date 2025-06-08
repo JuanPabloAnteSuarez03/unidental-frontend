@@ -1,6 +1,28 @@
 import { useState, useCallback } from "react";
 
 /**
+ * Convert absolute backend URLs to relative URLs for proxy in development
+ * @param {string} url - Absolute or relative URL
+ * @returns {string} - Relative URL that works with Vite proxy
+ */
+const convertToProxyUrl = (url) => {
+    if (!url) return url;
+    
+    // If already a relative URL, return as is
+    if (url.startsWith('/')) return url;
+    
+    // If it's an absolute URL from our backend, convert to relative
+    const backendBaseUrl = 'https://unidental-backend-production.up.railway.app';
+    if (url.startsWith(backendBaseUrl)) {
+        // Remove the base URL, keep the path starting with /api
+        return url.replace(backendBaseUrl, '');
+    }
+    
+    // For any other absolute URL, return as is (shouldn't happen in our case)
+    return url;
+};
+
+/**
  * Hook para manejar la paginación de productos
  * @param {Function} fetchProducts - Función para obtener productos
  * @returns {Object} - Estados y funciones para la paginación
@@ -38,7 +60,9 @@ const usePagination = (fetchProducts) => {
 
             // Extraer parámetros de la URL
             try {
-                const url = new URL(nextPageUrl);
+                // Convert absolute URL to relative URL for proxy first
+                const proxyUrl = convertToProxyUrl(nextPageUrl);
+                const url = new URL(proxyUrl, window.location.origin);
                 const params = {};
 
                 // Convertir los parámetros de búsqueda a un objeto
@@ -65,7 +89,9 @@ const usePagination = (fetchProducts) => {
 
             // Extraer parámetros de la URL
             try {
-                const url = new URL(prevPageUrl);
+                // Convert absolute URL to relative URL for proxy first
+                const proxyUrl = convertToProxyUrl(prevPageUrl);
+                const url = new URL(proxyUrl, window.location.origin);
                 const params = {};
 
                 // Convertir los parámetros de búsqueda a un objeto

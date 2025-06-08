@@ -9,6 +9,28 @@ const API_INVENTORY_MOVEMENTS_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINT
 const API_LOCATIONS_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.LOCATIONS}`;
 
 /**
+ * Convert absolute backend URLs to relative URLs for proxy in development
+ * @param {string} url - Absolute or relative URL
+ * @returns {string} - Relative URL that works with Vite proxy
+ */
+const convertToProxyUrl = (url) => {
+    if (!url) return url;
+    
+    // If already a relative URL, return as is
+    if (url.startsWith('/')) return url;
+    
+    // If it's an absolute URL from our backend, convert to relative
+    const backendBaseUrl = 'https://unidental-backend-production.up.railway.app';
+    if (url.startsWith(backendBaseUrl)) {
+        // Remove the base URL, keep the path starting with /api
+        return url.replace(backendBaseUrl, '');
+    }
+    
+    // For any other absolute URL, return as is (shouldn't happen in our case)
+    return url;
+};
+
+/**
  * Get products with optional filtering parameters
  * @param {Object} params - Filter parameters
  * @param {string} authToken - Authentication token
@@ -81,7 +103,9 @@ export const getStockData = async (productIds = [], authToken, signal) => {
 
         // Get additional pages if they exist
         while (stockData.next && !signal?.aborted) {
-            stockData = await fetchStockPage(stockData.next, authToken, signal);
+            // Convert absolute URL to relative URL for proxy
+            const nextUrl = convertToProxyUrl(stockData.next);
+            stockData = await fetchStockPage(nextUrl, authToken, signal);
             if (!stockData) break;
             processStockData(stockData.results, stockMap);
         }
@@ -300,7 +324,9 @@ export const getStockMap = async (authToken, signal) => {
 
         // Get additional pages if they exist
         while (stockData.next && !signal?.aborted) {
-            stockData = await fetchStockPage(stockData.next, authToken, signal);
+            // Convert absolute URL to relative URL for proxy
+            const nextUrl = convertToProxyUrl(stockData.next);
+            stockData = await fetchStockPage(nextUrl, authToken, signal);
             if (!stockData) break;
             processStockData(stockData.results, stockMap);
         }
