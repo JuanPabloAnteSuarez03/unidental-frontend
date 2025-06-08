@@ -1,69 +1,47 @@
 // src/components/Table/TableRow.jsx
-import React, { useMemo } from "react";
+import React, { useMemo, memo } from "react";
 
-const TableRow = ({ item, index }) => {
+const TableRow = memo(({ product, isStockLoading = false }) => {
     // Extraer información del producto y calcular valores derivados
     const { margen, stockBajo, stockCritico, styles, extractedInfo } =
         useMemo(() => {
             // Calcula el margen basado en los campos del API
-            // Asumimos que el precio de compra viene de PurchaseOption.purchase_price
             const margenValue =
-                item.purchase_price && item.sale_price
-                    ? ((item.sale_price - item.purchase_price) /
-                          item.purchase_price) *
+                product.purchase_price && product.sale_price
+                    ? ((product.sale_price - product.purchase_price) /
+                          product.purchase_price) *
                       100
                     : 0;
 
-            // Extraer información de proveedor y stock desde description
+            // Extraer información de proveedor desde description
             let providerName = "";
-            let stockSur = "";
-            let stockNorte = "";
 
-            // Parsear description para obtener proveedor y stock
-            if (item.description) {
-                // Extraer nombre del proveedor
-                const providerMatch = item.description.match(
+            // Parsear description para obtener proveedor
+            if (product.description) {
+                const providerMatch = product.description.match(
                     /Proveedor:\s*([^.]+?)(?=\.|$|\s*Stock)/i
                 );
                 if (providerMatch && providerMatch[1]) {
                     providerName = providerMatch[1].trim();
                 }
-
-                // Extraer información de stock
-                const stockMatch = item.description.match(
-                    /Stock Sur:\s*([^,]*),\s*Norte:\s*([^.]*)/i
-                );
-                if (stockMatch) {
-                    stockSur = stockMatch[1].trim();
-                    stockNorte = stockMatch[2].trim();
-                }
             }
 
-            // Determinar niveles de stock basados en el stock real o el valor del API
-            let totalStock = item.stock || 0;
+            // Determinar niveles de stock
+            const rawStock = product.stock !== undefined ? product.stock : 0;
+            const totalStock =
+                typeof rawStock === "number"
+                    ? rawStock
+                    : parseInt(rawStock, 10) || 0;
 
-            // Si no hay stock definido en el API pero tenemos información de las sedes
-            if (!item.stock && (stockNorte || stockSur)) {
-                // Intentar extraer números del stock
-                const extractNumber = (str) => {
-                    const matches = str.match(/\d+/g);
-                    return matches ? parseInt(matches[0], 10) : 0;
-                };
+            // Niveles de stock configurables
+            const NIVEL_STOCK_BAJO = 10;
+            const NIVEL_STOCK_CRITICO = 5;
 
-                const norteValue = extractNumber(stockNorte);
-                const surValue = extractNumber(stockSur);
-
-                totalStock = norteValue + surValue;
-            }
-
-            const isStockBajo = totalStock < 10;
-            const isStockCritico = totalStock < 5;
+            const isStockBajo = totalStock < NIVEL_STOCK_BAJO;
+            const isStockCritico = totalStock < NIVEL_STOCK_CRITICO;
 
             // Estilos computados basados en los datos
             const computedStyles = {
-                row: {
-                    backgroundColor: index % 2 === 0 ? "#ffffff" : "#f8f9fa",
-                },
                 cell: {
                     border: "1px solid #dee2e6",
                     padding: "10px",
@@ -98,12 +76,16 @@ const TableRow = ({ item, index }) => {
                     fontWeight: "600",
                 },
                 stockIndicator: {
-                    color: isStockCritico
+                    color: isStockLoading
+                        ? "#6c757d"
+                        : isStockCritico
                         ? "#dc3545"
                         : isStockBajo
                         ? "#fd7e14"
                         : "#28a745",
-                    backgroundColor: isStockCritico
+                    backgroundColor: isStockLoading
+                        ? "#f8f9fa"
+                        : isStockCritico
                         ? "#f8d7da"
                         : isStockBajo
                         ? "#fff3cd"
@@ -114,23 +96,15 @@ const TableRow = ({ item, index }) => {
                     display: "inline-flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    minWidth: "40px",
+                    minWidth: "60px",
+                    position: "relative",
                 },
-                stockDetailBadge: {
-                    fontSize: "11px",
-                    padding: "2px 5px",
-                    borderRadius: "3px",
-                    backgroundColor: "#f0f0f0",
-                    color: "#555",
-                    margin: "2px",
-                    display: "inline-block",
+                stockLoading: {
+                    animation: "pulse 1.5s ease-in-out infinite",
                 },
                 priceCell: {
                     textAlign: "right",
                     fontFamily: "monospace",
-                },
-                salePriceCell: {
-                    fontWeight: "600",
                 },
                 marginCell: {
                     textAlign: "center",
@@ -157,16 +131,6 @@ const TableRow = ({ item, index }) => {
                     fontSize: "13px",
                     fontWeight: "500",
                 },
-                barcodeBadge: {
-                    display: "inline-block",
-                    fontFamily: "monospace",
-                    backgroundColor: "#f8f9fa",
-                    color: "#495057",
-                    padding: "2px 6px",
-                    borderRadius: "4px",
-                    fontSize: "12px",
-                    marginLeft: "5px",
-                },
             };
 
             return {
@@ -175,136 +139,114 @@ const TableRow = ({ item, index }) => {
                 stockCritico: isStockCritico,
                 styles: computedStyles,
                 extractedInfo: {
-                    proveedor: providerName || item.supplier_name || "",
-                    stockSur,
-                    stockNorte,
+                    proveedor: providerName || product.supplier_name || "",
                     totalStock,
                 },
             };
-        }, [item, index]);
+        }, [product, isStockLoading]);
 
-    // Si hay información del proveedor, mostrarla (del campo supplier_name o del description)
+    // Información del proveedor
     const supplierInfo =
         extractedInfo.proveedor ||
-        (item.supplier
-            ? typeof item.supplier === "object"
-                ? item.supplier.name
-                : item.supplier
+        (product.supplier
+            ? typeof product.supplier === "object"
+                ? product.supplier.name
+                : product.supplier
             : "");
 
     // Determinar el mensaje para el tooltip del stock
     const getStockTooltip = () => {
-        if (stockCritico) {
-            return "Stock crítico: Se requiere reposición urgente";
-        } else if (stockBajo) {
-            return "Stock bajo: Considerar reposición próximamente";
+        if (isStockLoading) {
+            return "Cargando información de stock...";
         }
-        return "Stock disponible";
+        if (stockCritico) {
+            return `Stock crítico (${extractedInfo.totalStock}): Se requiere reposición urgente`;
+        } else if (stockBajo) {
+            return `Stock bajo (${extractedInfo.totalStock}): Considerar reposición próximamente`;
+        }
+        return `Stock disponible: ${extractedInfo.totalStock} unidades`;
     };
 
-    // Mostrar stock total o información por sedes
+    // Renderizar información del stock con estado de carga
     const renderStockInfo = () => {
-        // Si tenemos información detallada de stock por sede
-        if (extractedInfo.stockNorte || extractedInfo.stockSur) {
+        if (isStockLoading) {
             return (
-                <>
-                    <span
-                        style={styles.stockIndicator}
-                        title={getStockTooltip()}
-                    >
-                        {extractedInfo.totalStock}
-                    </span>
-                    <div style={{ marginTop: "3px", fontSize: "11px" }}>
-                        {extractedInfo.stockNorte && (
-                            <span
-                                style={styles.stockDetailBadge}
-                                title="Stock en sede Norte"
-                            >
-                                Norte: {extractedInfo.stockNorte}
-                            </span>
-                        )}
-                        {extractedInfo.stockSur && (
-                            <span
-                                style={styles.stockDetailBadge}
-                                title="Stock en sede Sur"
-                            >
-                                Sur: {extractedInfo.stockSur}
-                            </span>
-                        )}
-                    </div>
-                </>
+                <span
+                    style={{ ...styles.stockIndicator, ...styles.stockLoading }}
+                    title={getStockTooltip()}
+                >
+                    ...
+                </span>
             );
         }
 
-        // Si solo tenemos stock total
         return (
             <span style={styles.stockIndicator} title={getStockTooltip()}>
-                {item.stock !== undefined ? item.stock : "N/D"}
+                {extractedInfo.totalStock} {stockCritico && "⚠️"}
             </span>
         );
     };
 
-    return (
-        <tr style={styles.row}>
-            <td style={{ ...styles.cell, ...styles.codeCell }}>{item.sku}</td>
-            <td style={{ ...styles.cell, ...styles.nameCell }}>
-                {item.name}
-                {item.barcode && (
-                    <span style={styles.barcodeBadge} title="Código de barras">
-                        {item.barcode}
-                    </span>
-                )}
-            </td>
-            <td style={{ ...styles.cell, ...styles.brandCell }}>
-                {item.brand}
-            </td>
-            <td style={styles.cell}>
-                <span style={styles.categoryBadge}>{item.category_name}</span>
-            </td>
-            <td style={{ ...styles.cell, ...styles.unitCell }}>
-                {item.unit || "N/A"}
-            </td>
-            <td style={{ ...styles.cell, ...styles.stockCell }}>
-                {renderStockInfo()}
-            </td>
-            <td style={{ ...styles.cell, ...styles.priceCell }}>
-                $
-                {typeof item.purchase_price === "number"
-                    ? item.purchase_price.toFixed(2)
-                    : "0.00"}
-            </td>
-            <td
-                style={{
-                    ...styles.cell,
-                    ...styles.priceCell,
-                    ...styles.salePriceCell,
-                }}
-            >
-                $
-                {typeof item.sale_price === "number"
-                    ? item.sale_price.toFixed(2)
-                    : "0.00"}
-            </td>
-            <td style={{ ...styles.cell, ...styles.marginCell }}>
-                <span style={styles.marginValue}>
-                    {isNaN(margen) ? "0.0" : margen.toFixed(1)}%
-                </span>
-            </td>
-            <td style={{ ...styles.cell, ...styles.supplierCell }}>
-                {supplierInfo ? (
-                    <span
-                        style={styles.supplierBadge}
-                        title={`Proveedor: ${supplierInfo}`}
-                    >
-                        {supplierInfo}
-                    </span>
-                ) : (
-                    "No especificado"
-                )}
-            </td>
-        </tr>
-    );
-};
+    // Animación CSS para el loading
+    const pulseAnimation = `
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+    `;
 
-// Utilizamos React.memo para evitar renderizados innecesarios
-export default React.memo(TableRow);
+    return (
+        <>
+            <style>{pulseAnimation}</style>
+            <tr>
+                <td style={{ ...styles.cell, ...styles.codeCell }}>
+                    {product.sku || "-"}
+                </td>
+                <td style={{ ...styles.cell, ...styles.nameCell }}>
+                    {product.name}
+                </td>
+                <td style={{ ...styles.cell, ...styles.brandCell }}>
+                    {product.brand || "-"}
+                </td>
+                <td style={styles.cell}>
+                    {product.category_name ? (
+                        <span style={styles.categoryBadge}>
+                            {product.category_name}
+                        </span>
+                    ) : (
+                        "-"
+                    )}
+                </td>
+                <td style={{ ...styles.cell, ...styles.unitCell }}>
+                    {product.unit_of_measure || "-"}
+                </td>
+                <td style={{ ...styles.cell, ...styles.stockCell }}>
+                    {renderStockInfo()}
+                </td>
+                <td style={{ ...styles.cell, ...styles.priceCell }}>
+                    {product.sale_price
+                        ? `$${product.sale_price.toLocaleString()}`
+                        : "-"}
+                </td>
+                <td style={{ ...styles.cell, ...styles.marginCell }}>
+                    <span style={styles.marginValue}>
+                        {margen > 0 ? `${margen.toFixed(1)}%` : "-"}
+                    </span>
+                </td>
+                <td style={{ ...styles.cell, ...styles.supplierCell }}>
+                    {supplierInfo ? (
+                        <span style={styles.supplierBadge}>{supplierInfo}</span>
+                    ) : (
+                        "-"
+                    )}
+                </td>
+            </tr>
+        </>
+    );
+});
+
+// Añadir displayName para mejor debugging
+TableRow.displayName = "TableRow";
+
+export default TableRow;
