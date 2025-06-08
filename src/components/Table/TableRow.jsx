@@ -14,12 +14,10 @@ const TableRow = ({ item, index }) => {
                       100
                     : 0;
 
-            // Extraer información de proveedor y stock desde description
+            // Extraer información de proveedor desde description
             let providerName = "";
-            let stockSur = "";
-            let stockNorte = "";
 
-            // Parsear description para obtener proveedor y stock
+            // Parsear description para obtener proveedor
             if (item.description) {
                 // Extraer nombre del proveedor
                 const providerMatch = item.description.match(
@@ -28,36 +26,22 @@ const TableRow = ({ item, index }) => {
                 if (providerMatch && providerMatch[1]) {
                     providerName = providerMatch[1].trim();
                 }
-
-                // Extraer información de stock
-                const stockMatch = item.description.match(
-                    /Stock Sur:\s*([^,]*),\s*Norte:\s*([^.]*)/i
-                );
-                if (stockMatch) {
-                    stockSur = stockMatch[1].trim();
-                    stockNorte = stockMatch[2].trim();
-                }
             }
 
-            // Determinar niveles de stock basados en el stock real o el valor del API
-            let totalStock = item.stock || 0;
+            // Determinar niveles de stock basados en el stock proporcionado por la API
+            // Asegurar que el stock es un número válido
+            const rawStock = item.stock !== undefined ? item.stock : 0;
+            const totalStock =
+                typeof rawStock === "number"
+                    ? rawStock
+                    : parseInt(rawStock, 10) || 0;
 
-            // Si no hay stock definido en el API pero tenemos información de las sedes
-            if (!item.stock && (stockNorte || stockSur)) {
-                // Intentar extraer números del stock
-                const extractNumber = (str) => {
-                    const matches = str.match(/\d+/g);
-                    return matches ? parseInt(matches[0], 10) : 0;
-                };
+            // Niveles de stock configurables
+            const NIVEL_STOCK_BAJO = 10;
+            const NIVEL_STOCK_CRITICO = 5;
 
-                const norteValue = extractNumber(stockNorte);
-                const surValue = extractNumber(stockSur);
-
-                totalStock = norteValue + surValue;
-            }
-
-            const isStockBajo = totalStock < 10;
-            const isStockCritico = totalStock < 5;
+            const isStockBajo = totalStock < NIVEL_STOCK_BAJO;
+            const isStockCritico = totalStock < NIVEL_STOCK_CRITICO;
 
             // Estilos computados basados en los datos
             const computedStyles = {
@@ -176,8 +160,6 @@ const TableRow = ({ item, index }) => {
                 styles: computedStyles,
                 extractedInfo: {
                     proveedor: providerName || item.supplier_name || "",
-                    stockSur,
-                    stockNorte,
                     totalStock,
                 },
             };
@@ -195,51 +177,20 @@ const TableRow = ({ item, index }) => {
     // Determinar el mensaje para el tooltip del stock
     const getStockTooltip = () => {
         if (stockCritico) {
-            return "Stock crítico: Se requiere reposición urgente";
+            return `Stock crítico (${extractedInfo.totalStock}): Se requiere reposición urgente (Menos de 5 unidades)`;
         } else if (stockBajo) {
-            return "Stock bajo: Considerar reposición próximamente";
+            return `Stock bajo (${extractedInfo.totalStock}): Considerar reposición próximamente (Menos de 10 unidades)`;
         }
-        return "Stock disponible";
+        return `Stock disponible: ${extractedInfo.totalStock} unidades`;
     };
 
-    // Mostrar stock total o información por sedes
+    // Mostrar stock total con mejores indicadores visuales
     const renderStockInfo = () => {
-        // Si tenemos información detallada de stock por sede
-        if (extractedInfo.stockNorte || extractedInfo.stockSur) {
-            return (
-                <>
-                    <span
-                        style={styles.stockIndicator}
-                        title={getStockTooltip()}
-                    >
-                        {extractedInfo.totalStock}
-                    </span>
-                    <div style={{ marginTop: "3px", fontSize: "11px" }}>
-                        {extractedInfo.stockNorte && (
-                            <span
-                                style={styles.stockDetailBadge}
-                                title="Stock en sede Norte"
-                            >
-                                Norte: {extractedInfo.stockNorte}
-                            </span>
-                        )}
-                        {extractedInfo.stockSur && (
-                            <span
-                                style={styles.stockDetailBadge}
-                                title="Stock en sede Sur"
-                            >
-                                Sur: {extractedInfo.stockSur}
-                            </span>
-                        )}
-                    </div>
-                </>
-            );
-        }
+        const stockLabel = stockCritico ? "CRÍTICO" : stockBajo ? "BAJO" : "OK";
 
-        // Si solo tenemos stock total
         return (
             <span style={styles.stockIndicator} title={getStockTooltip()}>
-                {item.stock !== undefined ? item.stock : "N/D"}
+                {extractedInfo.totalStock} {stockCritico && "⚠️"}
             </span>
         );
     };

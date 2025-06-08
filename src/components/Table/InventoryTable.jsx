@@ -2,13 +2,14 @@
 import React, { useMemo } from "react";
 import TableRow from "./TableRow";
 
-const InventoryTable = ({ products = [] }) => {
+const InventoryTable = ({ products = [], isLoading = false }) => {
     // Estilos memoizados para mejorar rendimiento
     const styles = useMemo(
         () => ({
             container: {
                 overflowX: "auto",
                 marginTop: "15px",
+                position: "relative",
             },
             emptyState: {
                 textAlign: "center",
@@ -59,6 +60,32 @@ const InventoryTable = ({ products = [] }) => {
             priceColumn: { width: "8%" },
             marginColumn: { width: "8%" },
             supplierColumn: { width: "13%" },
+            loadingOverlay: {
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: "rgba(255, 255, 255, 0.7)",
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                zIndex: 10,
+                borderRadius: "8px",
+            },
+            loadingSpinner: {
+                width: "60px",
+                height: "60px",
+                border: "5px solid #f3f3f3",
+                borderTop: "5px solid #3498db",
+                borderRadius: "50%",
+                animation: "spin 1s linear infinite",
+            },
+            loadingText: {
+                marginTop: "15px",
+                fontWeight: "600",
+                color: "#3498db",
+            },
         }),
         []
     );
@@ -66,15 +93,46 @@ const InventoryTable = ({ products = [] }) => {
     // Comprobar si hay productos válidos (podrían ser undefined o null)
     const hasProducts = Array.isArray(products) && products.length > 0;
 
+    // Estilo para la animación del spinner
+    const spinnerKeyframes = `
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    `;
+
     return (
         <div style={styles.container}>
+            {/* Estilo para la animación */}
+            <style>{spinnerKeyframes}</style>
+
+            {/* Loading Overlay */}
+            {isLoading && hasProducts && (
+                <div style={styles.loadingOverlay}>
+                    <div>
+                        <div style={styles.loadingSpinner}></div>
+                        <div style={styles.loadingText}>
+                            Cargando datos de stock...
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Mensaje cuando no hay productos */}
-            {!hasProducts && (
+            {!hasProducts && !isLoading && (
                 <div style={styles.emptyState}>
                     <p style={styles.emptyText}>
                         No se encontraron productos que coincidan con los
                         filtros de búsqueda.
                     </p>
+                </div>
+            )}
+
+            {/* Mensaje de carga cuando no hay productos aún */}
+            {!hasProducts && isLoading && (
+                <div style={styles.emptyState}>
+                    <div style={styles.loadingSpinner}></div>
+                    <p style={styles.loadingText}>Cargando productos...</p>
                 </div>
             )}
 

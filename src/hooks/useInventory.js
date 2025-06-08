@@ -1,10 +1,13 @@
 // src/hooks/useInventory.js
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
-import API_CONFIG from "../config/api.js";
-
-// URL base completa para productos
-const API_PRODUCTS_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.INVENTORY}`;
+import inventoryService from "../services/inventoryService";
+import {
+    useNameSearch,
+    usePagination,
+    useFilterReset,
+    useCategoryFilter,
+} from "./inventory";
 
 // Configuración de caché
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos en milisegundos
@@ -33,35 +36,26 @@ const calculateRealisticPageCount = (count) => {
 const useInventory = () => {
     // Estado para los productos de la página actual
     const [products, setProducts] = useState([]);
-    // Estado para el término de búsqueda por texto (nombre/marca)
-    const [searchText, setSearchText] = useState("");
-    // Estado para el término de búsqueda por código/SKU
-    const [searchCode, setSearchCode] = useState("");
-    // Estado para el término de búsqueda por categoría
-    const [searchCategory, setSearchCategory] = useState("");
 
-    // Estados para filtros adicionales
-    const [searchStock, setSearchStock] = useState("");
-    const [searchSupplier, setSearchSupplier] = useState("");
-    const [searchMinPrice, setSearchMinPrice] = useState("");
-    const [searchMaxPrice, setSearchMaxPrice] = useState("");
+    // Estado para productos combinados con stock (para evitar el flasheo de stock 0)
+    const [combinedProducts, setCombinedProducts] = useState([]);
 
     // Obtenemos el token de autenticación del contexto
     const { authToken } = useAuth();
 
-    // Estados para la paginación
+    // Mantenemos estos estados
     const [count, setCount] = useState(0); // Total de productos en la BD
-    const [nextPageUrl, setNextPageUrl] = useState(null); // URL para la siguiente página
-    const [prevPageUrl, setPrevPageUrl] = useState(null); // URL para la página anterior
-    const [currentPage, setCurrentPage] = useState(1); // Página actual (opcional, para UI)
-    const [totalPages, setTotalPages] = useState(0); // Total de páginas disponibles
 
     // Estados de carga y error
     const [isLoading, setIsLoading] = useState(false);
+    const [isStockLoading, setIsStockLoading] = useState(false);
     const [error, setError] = useState(null);
 
     // Estado adicional para mantener el total general de productos (sin filtros)
     const [totalCount, setTotalCount] = useState(0);
+
+    // Estado para almacenar información de stock
+    const [stockData, setStockData] = useState({});
 
     // Caché para evitar llamadas repetidas a la API
     const cache = useRef(new Map());
@@ -69,6 +63,8 @@ const useInventory = () => {
     const lastTotalFetch = useRef(0);
     // AbortController para cancelar peticiones cuando cambian los filtros
     const abortControllerRef = useRef(null);
+    // Ref para guardar el último abortController de stock
+    const stockAbortControllerRef = useRef(null);
 
     // Función optimizada para convertir URLs absolutas a URLs relativas para el proxy
     const convertToProxyUrl = useCallback((url) => {
@@ -77,128 +73,51 @@ const useInventory = () => {
         return url;
     }, []);
 
-    // Función para construir la URL con filtros (memoizada para evitar recálculos)
-    const buildUrlWithFilters = useCallback(
-        (baseUrl, page = null) => {
-            const params = new URLSearchParams();
+    // Función para combinar los datos de productos con la información de stock
+    const mergeProductsWithStock = useCallback((products, stockMap) => {
+        if (!products || !Array.isArray(products)) {
+            console.warn("Products is not a valid array:", products);
+            return [];
+        }
 
-            // Parámetros de búsqueda según la documentación de la API
-            if (searchText) params.append("name", searchText);
+        if (!stockMap || typeof stockMap !== "object") {
+            console.warn("Stock map is not a valid object:", stockMap);
+            return products;
+        }
 
-            // Para el SKU, intentamos dos enfoques:
-            // 1. Búsqueda exacta por SKU
-            // 2. Búsqueda genérica de texto que podría coincidir con SKU
-            if (searchCode) {
-                params.append("sku", searchCode);
-                // También añadimos una búsqueda genérica que puede ayudar con coincidencias parciales
-                params.append("search", searchCode);
+        console.log("Merging products with stock data");
+
+        return products.map((product) => {
+            // Crear una copia del producto para no mutar el original
+            const enrichedProduct = { ...product };
+
+            // Añadir información de stock si existe
+            // Buscar el stock por el ID del producto
+            if (product.id && stockMap[product.id] !== undefined) {
+                // Ensure stock is a number
+                enrichedProduct.stock =
+                    typeof stockMap[product.id] === "number"
+                        ? stockMap[product.id]
+                        : parseInt(stockMap[product.id], 10) || 0;
+
+                console.log(
+                    `Product ${product.id} (${product.name}) has stock: ${enrichedProduct.stock}`
+                );
+            } else {
+                // Si no hay información de stock, establecer a 0
+                enrichedProduct.stock = 0;
+                console.log(
+                    `No stock data found for product ${product.id} (${product.name})`
+                );
             }
 
-            if (searchCategory) params.append("category_name", searchCategory);
-
-            // Para el stock, usamos diferentes parámetros para aumentar probabilidad de éxito
-            if (searchStock) {
-                // Intenta con el campo directo
-                params.append("stock", searchStock);
-                // También prueba con el comparador de "mayor o igual que"
-                params.append("stock__gte", searchStock);
-            }
-
-            // Para el proveedor, prueba diferentes variantes del nombre del campo
-            if (searchSupplier) {
-                // Intenta con diferentes formatos que podría aceptar la API
-                params.append("supplier__name", searchSupplier);
-                params.append("supplier_name", searchSupplier);
-                // También usamos el campo genérico de búsqueda
-                params.append("search", searchSupplier);
-            }
-
-            // Precios mínimo y máximo - intentamos varias formas
-            if (searchMinPrice) {
-                // Intentamos varios formatos para aumentar la probabilidad de éxito
-                params.append("purchase_price__gte", searchMinPrice);
-                params.append("sale_price__gte", searchMinPrice);
-                // También intentamos con un parámetro más genérico
-                params.append("price_min", searchMinPrice);
-            }
-
-            if (searchMaxPrice) {
-                // Intentamos varios formatos para aumentar la probabilidad de éxito
-                params.append("purchase_price__lte", searchMaxPrice);
-                params.append("sale_price__lte", searchMaxPrice);
-                // También intentamos con un parámetro más genérico
-                params.append("price_max", searchMaxPrice);
-            }
-
-            // Añadir número de página si se especifica
-            if (page !== null) {
-                params.append("page", page.toString());
-            }
-
-            const queryString = params.toString();
-            const finalUrl = queryString
-                ? `${baseUrl}?${queryString}`
-                : baseUrl;
-
-            // Depurar la URL final para ayudar a diagnosticar problemas
-            console.log("URL de consulta construida:", finalUrl);
-
-            return finalUrl;
-        },
-        [
-            searchText,
-            searchCode,
-            searchCategory,
-            searchStock,
-            searchSupplier,
-            searchMinPrice,
-            searchMaxPrice,
-        ]
-    );
-
-    // Función para obtener el total de productos (sin filtros) con caché
-    const fetchTotalCount = useCallback(
-        async (forceRefresh = false) => {
-            if (!authToken) return;
-
-            // Si ya tenemos datos recientes en caché y no se fuerza la actualización, usarlos
-            const now = Date.now();
-            if (
-                !forceRefresh &&
-                now - lastTotalFetch.current < CACHE_DURATION &&
-                totalCount > 0
-            ) {
-                return;
-            }
-
-            try {
-                const response = await fetch(API_PRODUCTS_URL, {
-                    headers: {
-                        Authorization: `Token ${authToken}`,
-                        "Content-Type": "application/json",
-                    },
-                });
-
-                if (!response.ok) {
-                    console.error(
-                        `Error al obtener el total de productos: ${response.status}`
-                    );
-                    return;
-                }
-
-                const data = await response.json();
-                setTotalCount(data.count || 0);
-                lastTotalFetch.current = now;
-            } catch (err) {
-                console.error("Error al obtener el total de productos:", err);
-            }
-        },
-        [authToken, totalCount]
-    );
+            return enrichedProduct;
+        });
+    }, []);
 
     // Función para obtener productos de la API con soporte para caché y cancelación
     const fetchProducts = useCallback(
-        async (url) => {
+        async (url = null, params = {}) => {
             if (!authToken) {
                 setError(
                     "No hay token de autenticación. Inicie sesión nuevamente."
@@ -217,48 +136,44 @@ const useInventory = () => {
             abortControllerRef.current = new AbortController();
             const { signal } = abortControllerRef.current;
 
-            // Verificar si tenemos datos en caché y están frescos
-            const cacheKey = url;
+            // Generar clave de caché basada en params
+            const cacheKey = JSON.stringify(params);
             const now = Date.now();
             const cachedData = cache.current.get(cacheKey);
 
-            // Limpiar la caché si hay un cambio en los filtros
-            if (
-                searchText ||
-                searchCode ||
-                searchCategory ||
-                searchStock ||
-                searchSupplier ||
-                searchMinPrice ||
-                searchMaxPrice
-            ) {
-                cache.current.clear();
-            }
-
             if (cachedData && now - cachedData.timestamp < CACHE_DURATION) {
-                // Usar datos de caché
+                console.log("Usando datos en caché para", params);
                 setProducts(cachedData.data.results || []);
-                setCount(cachedData.data.count || 0);
-                setNextPageUrl(convertToProxyUrl(cachedData.data.next));
-                setPrevPageUrl(convertToProxyUrl(cachedData.data.previous));
+                setCount(
+                    typeof cachedData.data.count === "number"
+                        ? cachedData.data.count
+                        : parseInt(cachedData.data.count, 10) || 0
+                );
 
-                // Calcular el total de páginas
-                const apiCount = cachedData.data.count || 0;
-                // Calcular el número real de páginas basado en la cantidad de productos
-                setTotalPages(calculateRealisticPageCount(apiCount));
+                // Actualizar el estado de paginación
+                const pageCount = calculateRealisticPageCount(
+                    typeof cachedData.data.count === "number"
+                        ? cachedData.data.count
+                        : parseInt(cachedData.data.count, 10) || 0
+                );
 
                 // Extraer número de página
+                let currentPageValue = 1;
                 try {
-                    const fullUrl = url.startsWith("http")
-                        ? url
-                        : new URL(url, window.location.origin).href;
-                    const urlParams = new URLSearchParams(
-                        new URL(fullUrl).search
-                    );
-                    setCurrentPage(parseInt(urlParams.get("page") || "1", 10));
-                } catch (e) {
+                    if (params.page) {
+                        currentPageValue = parseInt(params.page, 10);
+                    }
+                } catch (urlError) {
                     // Ignorar errores de análisis de URL
                 }
+
+                // Actualizar el estado de paginación usando el hook
+                pagination.updatePaginationState(
+                    currentPageValue,
+                    pageCount,
+                    convertToProxyUrl(cachedData.data.next),
+                    convertToProxyUrl(cachedData.data.previous)
+                );
 
                 return;
             }
@@ -267,81 +182,88 @@ const useInventory = () => {
             setError(null);
 
             try {
-                console.log("Fetching products from URL:", url);
-                const response = await fetch(url, {
-                    headers: {
-                        Authorization: `Token ${authToken}`,
-                        "Content-Type": "application/json",
-                    },
-                    signal,
-                });
+                // Usar la función del servicio para obtener productos
+                const data = await inventoryService.getProducts(
+                    params,
+                    authToken,
+                    signal
+                );
 
-                if (signal.aborted) return;
-
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    throw new Error(
-                        errorData.detail ||
-                            `Error ${response.status}: ${response.statusText}`
-                    );
+                if (signal.aborted) {
+                    console.log("Fetch aborted, not updating state");
+                    return;
                 }
 
-                const data = await response.json();
+                if (!data) {
+                    console.log("No data returned from API");
+                    return;
+                }
 
-                // Guardar en caché
+                console.log("Productos recibidos:", data);
+
+                // Actualizar el estado con los datos recibidos
+                setProducts(data.results || []);
+                setCount(
+                    typeof data.count === "number"
+                        ? data.count
+                        : parseInt(data.count, 10) || 0
+                );
+
+                // Calcular número de páginas
+                const pageCount = calculateRealisticPageCount(
+                    typeof data.count === "number"
+                        ? data.count
+                        : parseInt(data.count, 10) || 0
+                );
+
+                // Extraer número de página
+                let currentPageValue = 1;
+                try {
+                    if (params.page) {
+                        currentPageValue = parseInt(params.page, 10);
+                    }
+                } catch (urlError) {
+                    // Ignorar errores de análisis de URL
+                }
+
+                // Actualizar el estado de paginación usando el hook
+                pagination.updatePaginationState(
+                    currentPageValue,
+                    pageCount,
+                    convertToProxyUrl(data.next),
+                    convertToProxyUrl(data.previous)
+                );
+
+                // Actualizar la caché
                 cache.current.set(cacheKey, {
                     data,
                     timestamp: now,
                 });
 
-                // Limitar el tamaño de la caché a 20 entradas
-                if (cache.current.size > 20) {
-                    const oldestKey = [...cache.current.keys()][0];
-                    cache.current.delete(oldestKey);
-                }
-
-                setProducts(data.results || []);
-
-                // Asegúrate de que count sea un número
-                const apiCount =
-                    typeof data.count === "number"
-                        ? data.count
-                        : parseInt(data.count, 10) || 0;
-
-                setCount(apiCount);
-
-                // Calcular el total de páginas basado en la cantidad real de productos
-                setTotalPages(calculateRealisticPageCount(apiCount));
-
-                // Procesar URLs de paginación
-                const nextUrl = convertToProxyUrl(data.next);
-                const prevUrl = convertToProxyUrl(data.previous);
-
-                setNextPageUrl(nextUrl);
-                setPrevPageUrl(prevUrl);
-
-                // Extraer el número de página de la URL actual
-                try {
-                    const fullUrl = url.startsWith("http")
-                        ? url
-                        : new URL(url, window.location.origin).href;
-                    const urlParams = new URLSearchParams(
-                        new URL(fullUrl).search
+                // También actualizamos el total general de productos si no hay filtros
+                if (
+                    Object.keys(params).length === 0 ||
+                    (Object.keys(params).length === 1 && params.page)
+                ) {
+                    setTotalCount(
+                        typeof data.count === "number"
+                            ? data.count
+                            : parseInt(data.count, 10) || 0
                     );
-                    setCurrentPage(parseInt(urlParams.get("page") || "1", 10));
-                } catch (urlError) {
-                    // Ignorar errores de análisis de URL
+                    lastTotalFetch.current = now;
                 }
             } catch (err) {
-                if (err.name === "AbortError") {
-                    // Ignorar errores de cancelación
+                if (signal.aborted) {
+                    console.log("Fetch aborted, not updating error state");
                     return;
                 }
 
-                console.error("Error fetching inventory:", err);
-                setError(err.message);
+                console.error("Error al obtener productos:", err);
+                setError(
+                    err.message ||
+                        "Error al cargar productos. Intente de nuevo."
+                );
                 setProducts([]);
-                setCount(0);
             } finally {
                 if (!signal.aborted) {
                     setIsLoading(false);
@@ -351,184 +273,320 @@ const useInventory = () => {
         [authToken, convertToProxyUrl]
     );
 
-    // Limpiar caché cuando cambia el token de autenticación
-    useEffect(() => {
-        cache.current.clear();
-        lastTotalFetch.current = 0;
+    // Función para cargar el stock de todos los productos
+    const fetchStockData = useCallback(async () => {
+        if (!authToken) {
+            console.warn("No authentication token available for stock fetch");
+            return;
+        }
+
+        // Cancelar cualquier solicitud previa
+        if (stockAbortControllerRef.current) {
+            stockAbortControllerRef.current.abort();
+        }
+
+        // Crear un nuevo controlador para esta solicitud
+        stockAbortControllerRef.current = new AbortController();
+        const { signal } = stockAbortControllerRef.current;
+
+        setIsStockLoading(true);
+
+        const MAX_RETRIES = 2;
+        let retries = 0;
+        let success = false;
+
+        while (retries <= MAX_RETRIES && !success && !signal.aborted) {
+            try {
+                console.log(`Fetching stock data (attempt ${retries + 1})`);
+                const stockMap = await inventoryService.getStockMap(
+                    authToken,
+                    signal
+                );
+
+                if (signal.aborted) {
+                    console.log("Stock fetch was aborted");
+                    break;
+                }
+
+                console.log(
+                    "Stock data received:",
+                    Object.keys(stockMap).length,
+                    "products"
+                );
+
+                // Validate stock data
+                if (!stockMap || typeof stockMap !== "object") {
+                    throw new Error("Invalid stock data received");
+                }
+
+                setStockData(stockMap);
+                success = true;
+            } catch (err) {
+                if (signal.aborted) {
+                    console.log("Stock fetch aborted during error handling");
+                    break;
+                }
+
+                retries++;
+                console.error(
+                    `Error al obtener datos de stock (intento ${retries}):`,
+                    err
+                );
+
+                if (retries <= MAX_RETRIES) {
+                    console.log(
+                        `Retrying stock fetch in ${retries * 1000}ms...`
+                    );
+                    await new Promise((resolve) =>
+                        setTimeout(resolve, retries * 1000)
+                    );
+                }
+            } finally {
+                if (!signal.aborted) {
+                    setIsStockLoading(false);
+                }
+            }
+        }
+
+        if (!success && !signal.aborted) {
+            console.error("Failed to fetch stock data after all retries");
+            setIsStockLoading(false);
+        }
     }, [authToken]);
 
-    // Efecto para cargar los productos iniciales o cuando cambian los filtros
-    useEffect(() => {
-        if (authToken) {
-            const initialUrl = buildUrlWithFilters(API_PRODUCTS_URL);
-            fetchProducts(initialUrl);
-
-            // Si no hay filtros activos, actualizamos también el conteo total
-            if (
-                !searchText &&
-                !searchCode &&
-                !searchCategory &&
-                !searchStock &&
-                !searchSupplier &&
-                !searchMinPrice &&
-                !searchMaxPrice
-            ) {
-                fetchTotalCount();
-            }
-        }
-
-        // Limpiar al desmontar
-        return () => {
-            if (abortControllerRef.current) {
-                abortControllerRef.current.abort();
-            }
-        };
-    }, [
-        fetchProducts,
-        buildUrlWithFilters,
-        searchText,
-        searchCode,
-        searchCategory,
-        searchStock,
-        searchSupplier,
-        searchMinPrice,
-        searchMaxPrice,
-        authToken,
-        fetchTotalCount,
-    ]);
-
-    // Efecto para obtener el total de productos cuando se inicia el componente
-    useEffect(() => {
-        if (authToken) {
-            fetchTotalCount();
-        }
-    }, [authToken, fetchTotalCount]);
-
-    // Funciones para actualizar los estados de búsqueda
-    const updateSearchText = useCallback((text) => {
-        setSearchText(text);
+    // Función para resetear la página actual a la primera página
+    const resetPage = useCallback(() => {
+        pagination.updatePaginationState(1, pagination.totalPages, null, null);
     }, []);
 
-    const updateSearchCode = useCallback((code) => {
-        setSearchCode(code);
+    // Función para limpiar la caché y forzar nueva búsqueda
+    const clearCache = useCallback(() => {
+        cache.current = new Map();
     }, []);
 
-    const updateSearchCategory = useCallback((category) => {
-        setSearchCategory(category);
-    }, []);
+    // Utilizamos el hook personalizado para la paginación
+    const pagination = usePagination(fetchProducts);
 
-    // Funciones para los filtros adicionales
-    const updateSearchStock = useCallback((stock) => {
-        setSearchStock(stock);
-    }, []);
-
-    const updateSearchSupplier = useCallback((supplier) => {
-        setSearchSupplier(supplier);
-    }, []);
-
-    const updateSearchMinPrice = useCallback((price) => {
-        setSearchMinPrice(price);
-    }, []);
-
-    const updateSearchMaxPrice = useCallback((price) => {
-        setSearchMaxPrice(price);
-    }, []);
-
-    const clearFilters = useCallback(() => {
-        setSearchText("");
-        setSearchCode("");
-        setSearchCategory("");
-        setSearchStock("");
-        setSearchSupplier("");
-        setSearchMinPrice("");
-        setSearchMaxPrice("");
-    }, []);
-
-    // Funciones para paginación
-    const goToNextPage = useCallback(() => {
-        if (nextPageUrl) {
-            fetchProducts(nextPageUrl);
-        }
-    }, [nextPageUrl, fetchProducts]);
-
-    const goToPrevPage = useCallback(() => {
-        if (prevPageUrl) {
-            fetchProducts(prevPageUrl);
-        }
-    }, [prevPageUrl, fetchProducts]);
-
-    // Función para ir a una página específica
-    const goToPage = useCallback(
-        (pageNumber) => {
-            // Validación estricta: no permitir navegación a páginas inválidas
-            const validatedPageNumber = Math.max(
-                1,
-                Math.min(pageNumber, totalPages)
-            );
-
-            if (validatedPageNumber === currentPage) {
-                return; // No hacer nada si es la misma página
-            }
-
-            // Si la página solicitada es mayor que el total, ir a la última página disponible
-            const targetPage =
-                validatedPageNumber > totalPages
-                    ? totalPages
-                    : validatedPageNumber;
-
-            const url = buildUrlWithFilters(API_PRODUCTS_URL, targetPage);
-
-            // Registrar en consola para depuración
-            console.log(
-                `Navegando a la página ${targetPage} de ${totalPages} totales`
-            );
-
-            fetchProducts(url);
-        },
-        [buildUrlWithFilters, currentPage, fetchProducts, totalPages]
+    // Utilizamos el hook personalizado para la búsqueda por nombre
+    const { nameFilter, searchByName, resetNameFilter } = useNameSearch(
+        resetPage,
+        clearCache
     );
 
-    // Propiedades memoizadas
-    const hasNextPage = !!nextPageUrl;
-    const hasPrevPage = !!prevPageUrl;
+    // Utilizamos el hook personalizado para el filtro de categorías
+    const {
+        selectedCategories,
+        availableCategories,
+        isLoading: isCategoriesLoading,
+        error: categoriesError,
+        updateSelectedCategories,
+        resetCategoryFilter,
+    } = useCategoryFilter(resetPage, clearCache);
+
+    // Array de funciones de reset para cada filtro
+    const resetFunctions = [resetNameFilter, resetCategoryFilter];
+
+    // Utilizamos el hook para resetear todos los filtros
+    const { resetAllFilters } = useFilterReset({
+        resetPage,
+        clearCache,
+        resetFunctions,
+    });
+
+    // Efecto para cargar productos al inicio y cuando cambian los filtros
+    useEffect(() => {
+        // Crear objeto de parámetros para la API
+        const params = {
+            page: pagination.currentPage,
+        };
+
+        // Añadir filtro de nombre si existe
+        if (nameFilter) {
+            params.name = nameFilter;
+        }
+
+        // Añadir filtro de categorías si hay seleccionadas
+        if (selectedCategories && selectedCategories.length > 0) {
+            params.category = selectedCategories;
+        }
+
+        // Log para depuración
+        console.log("Parámetros de búsqueda enviados a la API:", params);
+
+        // Cancelar cualquier solicitud previa
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+        }
+
+        // Crear un nuevo controlador para esta solicitud
+        abortControllerRef.current = new AbortController();
+        const { signal } = abortControllerRef.current;
+
+        setIsLoading(true);
+        setError(null);
+
+        // Decidir qué función del servicio utilizar
+        const fetchData = async () => {
+            try {
+                const data = await inventoryService.getProducts(
+                    params,
+                    authToken,
+                    signal
+                );
+
+                if (signal.aborted) {
+                    console.log("Fetch aborted, not updating state");
+                    return;
+                }
+
+                if (!data) {
+                    console.log("No data returned from API");
+                    return;
+                }
+
+                // Actualizar el estado con los datos recibidos
+                setProducts(data.results || []);
+                setCount(
+                    typeof data.count === "number"
+                        ? data.count
+                        : parseInt(data.count, 10) || 0
+                );
+
+                // Calcular número de páginas
+                const pageCount = calculateRealisticPageCount(
+                    typeof data.count === "number"
+                        ? data.count
+                        : parseInt(data.count, 10) || 0
+                );
+
+                // Actualizar el estado de paginación usando el hook
+                pagination.updatePaginationState(
+                    pagination.currentPage,
+                    pageCount,
+                    convertToProxyUrl(data.next),
+                    convertToProxyUrl(data.previous)
+                );
+
+                // También actualizamos el total general de productos si no hay filtros
+                if (
+                    Object.keys(params).length === 0 ||
+                    (Object.keys(params).length === 1 && params.page)
+                ) {
+                    setTotalCount(
+                        typeof data.count === "number"
+                            ? data.count
+                            : parseInt(data.count, 10) || 0
+                    );
+                    lastTotalFetch.current = Date.now();
+                }
+            } catch (err) {
+                if (signal.aborted) {
+                    console.log("Fetch aborted, not updating error state");
+                    return;
+                }
+
+                console.error("Error al obtener productos:", err);
+                setError(
+                    err.message ||
+                        "Error al cargar productos. Intente de nuevo."
+                );
+                setProducts([]);
+            } finally {
+                if (!signal.aborted) {
+                    setIsLoading(false);
+                }
+            }
+        };
+
+        fetchData();
+    }, [
+        pagination.currentPage,
+        nameFilter,
+        selectedCategories,
+        authToken,
+        convertToProxyUrl,
+    ]);
+
+    // Efecto para combinar productos con datos de stock
+    useEffect(() => {
+        if (products.length > 0 && Object.keys(stockData).length > 0) {
+            // Combinamos los productos con su información de stock
+            const enriched = mergeProductsWithStock(products, stockData);
+            setCombinedProducts(enriched);
+        } else if (products.length > 0 && !isStockLoading) {
+            // Si hay productos pero no hay datos de stock y ya no estamos cargando stock,
+            // actualizamos con lo que tenemos (puede ser que no haya stock disponible)
+            const enriched = mergeProductsWithStock(products, stockData);
+            setCombinedProducts(enriched);
+        } else if (products.length === 0) {
+            // Si no hay productos, limpiamos también los combinados
+            setCombinedProducts([]);
+        }
+    }, [products, stockData, isStockLoading, mergeProductsWithStock]);
+
+    // Efecto para cargar productos al iniciar y cuando cambia el token
+    useEffect(() => {
+        if (authToken) {
+            console.log("Cargando productos iniciales");
+
+            // Verificar si hay parámetros en la URL que debamos procesar
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                const pageParam = urlParams.get("page");
+
+                // Si hay un parámetro de página, actualizamos el estado de paginación
+                if (pageParam) {
+                    const pageNumber = parseInt(pageParam, 10);
+                    if (!isNaN(pageNumber) && pageNumber > 0) {
+                        console.log(
+                            `Restaurando página desde URL: ${pageNumber}`
+                        );
+                        pagination.updatePaginationState(
+                            pageNumber,
+                            pagination.totalPages,
+                            null,
+                            null
+                        );
+                    }
+                }
+            } catch (error) {
+                console.error("Error al procesar parámetros de URL:", error);
+            }
+
+            fetchProducts();
+            fetchStockData();
+        }
+    }, [authToken, fetchProducts, fetchStockData]);
 
     return {
-        // Estados de búsqueda
-        searchText,
-        searchCode,
-        searchCategory,
-        searchStock,
-        searchSupplier,
-        searchMinPrice,
-        searchMaxPrice,
-
-        // Funciones para actualizar estados
-        updateSearchText,
-        updateSearchCode,
-        updateSearchCategory,
-        updateSearchStock,
-        updateSearchSupplier,
-        updateSearchMinPrice,
-        updateSearchMaxPrice,
-        clearFilters,
-
-        // Datos procesados y de estado
-        filteredProducts: products,
-        totalProducts: count,
+        // Datos procesados y estados
+        filteredProducts: combinedProducts,
         totalGeneralProducts: totalCount,
-        filteredCount: products.length,
 
-        // Paginación
-        isLoading,
-        error,
-        goToNextPage,
-        goToPrevPage,
-        goToPage,
-        hasNextPage,
-        hasPrevPage,
-        currentPage,
-        totalPages,
-        itemsPerPage: ITEMS_PER_PAGE,
+        // Estado de carga y errores
+        isLoading: isLoading || isStockLoading || isCategoriesLoading,
+        error: error || categoriesError,
+
+        // Funciones y estado de paginación
+        goToNextPage: pagination.goToNextPage,
+        goToPrevPage: pagination.goToPrevPage,
+        goToPage: pagination.goToPage,
+        hasNextPage: pagination.hasNextPage,
+        hasPrevPage: pagination.hasPrevPage,
+        currentPage: pagination.currentPage,
+        totalPages: pagination.totalPages,
+
+        // Filtros
+        searchByName,
+        nameFilter,
+
+        // Filtro de categorías
+        selectedCategories,
+        availableCategories,
+        updateSelectedCategories,
+
+        // Reseteo de filtros
+        resetAllFilters,
     };
 };
 

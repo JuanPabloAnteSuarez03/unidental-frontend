@@ -1,35 +1,15 @@
 // src/pages/InventoryPage.jsx
 import React from "react"; // Importa React
 import useInventory from "../hooks/useInventory"; // [cite: src/hooks/useInventory.js]
-import SearchBar from "../components/SearchBar/SearchBar"; // [cite: src/components/SearchBar/SearchBar.jsx]
 import InventoryTable from "../components/Table/InventoryTable"; // [cite: src/components/Table/InventoryTable.jsx]
 import Pagination from "../components/Pagination/Pagination"; // [cite: src/components/Pagination/Pagination.jsx]
+import SearchFiltersContainer from "../components/SearchFilters/SearchFiltersContainer";
 
 const InventoryPage = () => {
     // Utilizamos el hook personalizado para obtener toda la lógica de inventario
     const {
-        // Estados de búsqueda
-        searchText,
-        searchCode,
-        searchCategory,
-        searchStock,
-        searchSupplier,
-        searchMinPrice,
-        searchMaxPrice,
-
-        // Funciones para actualizar estados de búsqueda
-        updateSearchText,
-        updateSearchCode,
-        updateSearchCategory,
-        updateSearchStock,
-        updateSearchSupplier,
-        updateSearchMinPrice,
-        updateSearchMaxPrice,
-        clearFilters,
-
         // Datos procesados y de estado de la API
         filteredProducts, // Productos de la página actual, ya filtrados por API
-        totalProducts, // Total de productos que coinciden con los filtros (de la API)
         totalGeneralProducts, // Total general de productos sin filtros
 
         // Paginación
@@ -42,19 +22,37 @@ const InventoryPage = () => {
         hasPrevPage,
         currentPage,
         totalPages, // Total de páginas disponibles
+
+        // Filtros
+        searchByName,
+        nameFilter,
+
+        // Filtro de categorías
+        selectedCategories,
+        availableCategories,
+        updateSelectedCategories,
+
+        // Reseteo de filtros
+        resetAllFilters,
     } = useInventory(); // [cite: src/hooks/useInventory.js]
 
-    // Determinar qué contador mostrar en la cabecera
-    const displayCount =
-        searchText ||
-        searchCode ||
-        searchCategory ||
-        searchStock ||
-        searchSupplier ||
-        searchMinPrice ||
-        searchMaxPrice
-            ? totalProducts
-            : totalGeneralProducts;
+    // Manejador para la búsqueda global
+    const handleSearch = (filters) => {
+        console.log("Aplicando filtros:", filters);
+
+        // Filtro de nombre
+        searchByName(filters.name);
+
+        // Filtro de categorías
+        updateSelectedCategories(filters.categories);
+
+        console.log(
+            "Filtros aplicados - Nombre:",
+            filters.name,
+            "Categorías:",
+            filters.categories
+        );
+    };
 
     return (
         <div
@@ -91,44 +89,13 @@ const InventoryPage = () => {
                     }}
                 >
                     Administra y consulta el inventario de productos (
-                    {displayCount !== undefined ? displayCount : 0} en total)
+                    {totalGeneralProducts !== undefined
+                        ? totalGeneralProducts
+                        : 0}{" "}
+                    en total)
                 </p>
             </div>
-            {/* Componente de búsqueda */}
-            <SearchBar
-                searchText={searchText}
-                searchCode={searchCode}
-                searchCategory={searchCategory}
-                searchStock={searchStock}
-                searchSupplier={searchSupplier}
-                searchMinPrice={searchMinPrice}
-                searchMaxPrice={searchMaxPrice}
-                onSearchTextChange={updateSearchText}
-                onSearchCodeChange={updateSearchCode}
-                onSearchCategoryChange={updateSearchCategory}
-                onSearchStockChange={updateSearchStock}
-                onSearchSupplierChange={updateSearchSupplier}
-                onSearchMinPriceChange={updateSearchMinPrice}
-                onSearchMaxPriceChange={updateSearchMaxPrice}
-                onClearFilters={clearFilters}
-                // Actualizado para usar los contadores correctos
-                filteredCount={totalProducts || 0} // Productos que coinciden con el filtro actual
-                totalProducts={totalGeneralProducts || 0} // Total general de productos
-            />{" "}
-            {/* [cite: src/components/SearchBar/SearchBar.jsx] */}
-            {/* Estado de Carga */}
-            {isLoading && (
-                <div
-                    style={{
-                        textAlign: "center",
-                        padding: "20px",
-                        fontSize: "18px",
-                        color: "#007bff",
-                    }}
-                >
-                    Cargando productos...
-                </div>
-            )}
+
             {/* Estado de Error */}
             {error && (
                 <div
@@ -140,17 +107,34 @@ const InventoryPage = () => {
                         border: "1px solid red",
                         borderRadius: "4px",
                         backgroundColor: "#ffebee",
+                        marginBottom: "20px",
                     }}
                 >
                     Error al cargar productos: {error}
                 </div>
             )}
-            {/* Tabla de inventario y Controles de Paginación (solo si no hay error y no está cargando O si hay productos) */}
+
+            {/* Componente de búsqueda y filtros */}
+            <SearchFiltersContainer
+                onSearch={handleSearch}
+                onReset={resetAllFilters}
+                nameFilter={nameFilter}
+                selectedCategories={selectedCategories}
+                availableCategories={availableCategories}
+                isCategoriesLoading={
+                    isLoading && availableCategories.length === 0
+                }
+            />
+
+            {/* Tabla de inventario y Controles de Paginación (solo si no hay error o si hay productos) */}
             {!error && (
                 <>
-                    <InventoryTable products={filteredProducts} />
+                    <InventoryTable
+                        products={filteredProducts}
+                        isLoading={isLoading}
+                    />
                     {/* Nuevo componente de paginación */}
-                    {totalProducts > 0 && (
+                    {totalGeneralProducts > 0 && (
                         <Pagination
                             currentPage={currentPage}
                             totalPages={totalPages}
@@ -165,7 +149,7 @@ const InventoryPage = () => {
                 </>
             )}
             {/* Mensaje si no hay productos en total después de aplicar filtros y no hay error */}
-            {!isLoading && !error && totalProducts === 0 && (
+            {!isLoading && !error && totalGeneralProducts === 0 && (
                 <div
                     style={{
                         textAlign: "center",
@@ -183,8 +167,7 @@ const InventoryPage = () => {
                             margin: 0,
                         }}
                     >
-                        No se encontraron productos que coincidan con los
-                        filtros de búsqueda.
+                        No se encontraron productos.
                     </p>
                 </div>
             )}

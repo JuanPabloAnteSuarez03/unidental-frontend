@@ -14,6 +14,11 @@ const API_CONFIG = {
         RESET_PASSWORD: "/auth/users/reset_password/",
         RESET_PASSWORD_CONFIRM: "/auth/users/reset_password_confirm/",
         INVENTORY: "/catalogs/products/",
+        STOCK_SUMMARY: "/inventory/stock/summary/",
+        STOCK: "/inventory/stock/",
+        CATEGORIES: "/catalogs/categories/",
+        INVENTORY_MOVEMENTS: "/inventory/movements/",
+        LOCATIONS: "/inventory/locations/",
     },
 };
 
