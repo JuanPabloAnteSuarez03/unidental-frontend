@@ -69,7 +69,18 @@ const useInventory = () => {
     // Función optimizada para convertir URLs absolutas a URLs relativas para el proxy
     const convertToProxyUrl = useCallback((url) => {
         if (!url) return null;
-
+        
+        // If already a relative URL, return as is
+        if (url.startsWith('/')) return url;
+        
+        // If it's an absolute URL from our backend, convert to relative
+        const backendBaseUrl = 'https://unidental-backend-production.up.railway.app';
+        if (url.startsWith(backendBaseUrl)) {
+            // Remove the base URL, keep the path starting with /api
+            return url.replace(backendBaseUrl, '');
+        }
+        
+        // For any other absolute URL, return as is (shouldn't happen in our case)
         return url;
     }, []);
 

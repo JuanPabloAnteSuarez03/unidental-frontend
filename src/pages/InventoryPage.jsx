@@ -144,6 +144,7 @@ const InventoryPage = () => {
                             hasNextPage={hasNextPage}
                             hasPrevPage={hasPrevPage}
                             isLoading={isLoading}
+                            totalItems={totalGeneralProducts}
                         />
                     )}
                 </>

@@ -2,9 +2,11 @@
 
 // Configuración centralizada para endpoints API
 const API_CONFIG = {
-    BASE_URL:
-        import.meta.env.VITE_API_URL ||
-        "https://unidental-backend-production.up.railway.app/api",
+    // En desarrollo, usar el proxy de Vite (/api)
+    // En producción, usar la URL completa
+    BASE_URL: import.meta.env.DEV 
+        ? "/api" 
+        : (import.meta.env.VITE_API_URL || "https://unidental-backend-production.up.railway.app/api"),
 
     // Endpoints específicos
     ENDPOINTS: {
