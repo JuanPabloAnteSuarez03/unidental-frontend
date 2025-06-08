@@ -9,15 +9,11 @@ import {
     useCategoryFilter,
 } from "./inventory";
 
-// Configuración de caché optimizada
-const CACHE_DURATION = 15 * 60 * 1000; // Aumentado a 15 minutos para mejor rendimiento
-const STOCK_CACHE_DURATION = 10 * 60 * 1000; // Cache específico para stock
+// Configuración de caché
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos en milisegundos
 
-// Número de productos por página optimizado
-const ITEMS_PER_PAGE = 50; // Aumentado para reducir llamadas a API
-
-// Cache separado para stock
-const stockCache = new Map();
+// Número de productos por página (debe coincidir con el backend)
+const ITEMS_PER_PAGE = 25; // Según nuestras pruebas, el backend muestra 25 productos por página
 
 // Función para calcular un número realista de páginas basado en el conteo de productos
 const calculateRealisticPageCount = (count) => {
@@ -50,7 +46,7 @@ const useInventory = () => {
     // Mantenemos estos estados
     const [count, setCount] = useState(0); // Total de productos en la BD
 
-    // Estados de carga y error optimizados
+    // Estados de carga y error
     const [isLoading, setIsLoading] = useState(false);
     const [isStockLoading, setIsStockLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -73,10 +69,11 @@ const useInventory = () => {
     // Función optimizada para convertir URLs absolutas a URLs relativas para el proxy
     const convertToProxyUrl = useCallback((url) => {
         if (!url) return null;
+
         return url;
     }, []);
 
-    // Función optimizada para combinar los datos de productos con la información de stock
+    // Función para combinar los datos de productos con la información de stock
     const mergeProductsWithStock = useCallback((products, stockMap) => {
         if (!products || !Array.isArray(products)) {
             console.warn("Products is not a valid array:", products);
@@ -85,26 +82,40 @@ const useInventory = () => {
 
         if (!stockMap || typeof stockMap !== "object") {
             console.warn("Stock map is not a valid object:", stockMap);
-            return products.map((product) => ({ ...product, stock: 0 }));
+            return products;
         }
 
+        console.log("Merging products with stock data");
+
         return products.map((product) => {
+            // Crear una copia del producto para no mutar el original
             const enrichedProduct = { ...product };
 
+            // Añadir información de stock si existe
+            // Buscar el stock por el ID del producto
             if (product.id && stockMap[product.id] !== undefined) {
+                // Ensure stock is a number
                 enrichedProduct.stock =
                     typeof stockMap[product.id] === "number"
                         ? stockMap[product.id]
                         : parseInt(stockMap[product.id], 10) || 0;
+
+                console.log(
+                    `Product ${product.id} (${product.name}) has stock: ${enrichedProduct.stock}`
+                );
             } else {
+                // Si no hay información de stock, establecer a 0
                 enrichedProduct.stock = 0;
+                console.log(
+                    `No stock data found for product ${product.id} (${product.name})`
+                );
             }
 
             return enrichedProduct;
         });
     }, []);
 
-    // Función optimizada para obtener productos de la API con mejor caché
+    // Función para obtener productos de la API con soporte para caché y cancelación
     const fetchProducts = useCallback(
         async (url = null, params = {}) => {
             if (!authToken) {
@@ -126,10 +137,7 @@ const useInventory = () => {
             const { signal } = abortControllerRef.current;
 
             // Generar clave de caché basada en params
-            const cacheKey = JSON.stringify({
-                ...params,
-                page_size: ITEMS_PER_PAGE,
-            });
+            const cacheKey = JSON.stringify(params);
             const now = Date.now();
             const cachedData = cache.current.get(cacheKey);
 
@@ -149,15 +157,17 @@ const useInventory = () => {
                         : parseInt(cachedData.data.count, 10) || 0
                 );
 
+                // Extraer número de página
                 let currentPageValue = 1;
                 try {
                     if (params.page) {
                         currentPageValue = parseInt(params.page, 10);
                     }
                 } catch (urlError) {
-                    // Ignorar errores
+                    // Ignorar errores de análisis de URL
                 }
 
+                // Actualizar el estado de paginación usando el hook
                 pagination.updatePaginationState(
                     currentPageValue,
                     pageCount,
@@ -172,14 +182,9 @@ const useInventory = () => {
             setError(null);
 
             try {
-                // Agregar page_size optimizado a los parámetros
-                const optimizedParams = {
-                    ...params,
-                    page_size: ITEMS_PER_PAGE,
-                };
-
+                // Usar la función del servicio para obtener productos
                 const data = await inventoryService.getProducts(
-                    optimizedParams,
+                    params,
                     authToken,
                     signal
                 );
@@ -204,18 +209,24 @@ const useInventory = () => {
                         : parseInt(data.count, 10) || 0
                 );
 
-                // Calcular número de páginas con el nuevo tamaño
-                const pageCount = Math.ceil((data.count || 0) / ITEMS_PER_PAGE);
+                // Calcular número de páginas
+                const pageCount = calculateRealisticPageCount(
+                    typeof data.count === "number"
+                        ? data.count
+                        : parseInt(data.count, 10) || 0
+                );
 
+                // Extraer número de página
                 let currentPageValue = 1;
                 try {
                     if (params.page) {
                         currentPageValue = parseInt(params.page, 10);
                     }
                 } catch (urlError) {
-                    // Ignorar errores
+                    // Ignorar errores de análisis de URL
                 }
 
+                // Actualizar el estado de paginación usando el hook
                 pagination.updatePaginationState(
                     currentPageValue,
                     pageCount,
@@ -232,10 +243,7 @@ const useInventory = () => {
                 // También actualizamos el total general de productos si no hay filtros
                 if (
                     Object.keys(params).length === 0 ||
-                    (Object.keys(params).length === 1 && params.page) ||
-                    (Object.keys(params).length === 2 &&
-                        params.page &&
-                        params.page_size)
+                    (Object.keys(params).length === 1 && params.page)
                 ) {
                     setTotalCount(
                         typeof data.count === "number"
@@ -265,21 +273,10 @@ const useInventory = () => {
         [authToken, convertToProxyUrl]
     );
 
-    // Función optimizada para cargar el stock con cache separado
+    // Función para cargar el stock de todos los productos
     const fetchStockData = useCallback(async () => {
         if (!authToken) {
             console.warn("No authentication token available for stock fetch");
-            return;
-        }
-
-        // Verificar cache de stock
-        const stockCacheKey = "all_stock_data";
-        const now = Date.now();
-        const cachedStock = stockCache.get(stockCacheKey);
-
-        if (cachedStock && now - cachedStock.timestamp < STOCK_CACHE_DURATION) {
-            console.log("Usando datos de stock en caché");
-            setStockData(cachedStock.data);
             return;
         }
 
@@ -288,50 +285,72 @@ const useInventory = () => {
             stockAbortControllerRef.current.abort();
         }
 
+        // Crear un nuevo controlador para esta solicitud
         stockAbortControllerRef.current = new AbortController();
         const { signal } = stockAbortControllerRef.current;
 
         setIsStockLoading(true);
 
-        try {
-            console.log("Fetching stock data");
-            const stockMap = await inventoryService.getStockMap(
-                authToken,
-                signal
-            );
+        const MAX_RETRIES = 2;
+        let retries = 0;
+        let success = false;
 
-            if (signal.aborted) {
-                console.log("Stock fetch was aborted");
-                return;
+        while (retries <= MAX_RETRIES && !success && !signal.aborted) {
+            try {
+                console.log(`Fetching stock data (attempt ${retries + 1})`);
+                const stockMap = await inventoryService.getStockMap(
+                    authToken,
+                    signal
+                );
+
+                if (signal.aborted) {
+                    console.log("Stock fetch was aborted");
+                    break;
+                }
+
+                console.log(
+                    "Stock data received:",
+                    Object.keys(stockMap).length,
+                    "products"
+                );
+
+                // Validate stock data
+                if (!stockMap || typeof stockMap !== "object") {
+                    throw new Error("Invalid stock data received");
+                }
+
+                setStockData(stockMap);
+                success = true;
+            } catch (err) {
+                if (signal.aborted) {
+                    console.log("Stock fetch aborted during error handling");
+                    break;
+                }
+
+                retries++;
+                console.error(
+                    `Error al obtener datos de stock (intento ${retries}):`,
+                    err
+                );
+
+                if (retries <= MAX_RETRIES) {
+                    console.log(
+                        `Retrying stock fetch in ${retries * 1000}ms...`
+                    );
+                    await new Promise((resolve) =>
+                        setTimeout(resolve, retries * 1000)
+                    );
+                }
+            } finally {
+                if (!signal.aborted) {
+                    setIsStockLoading(false);
+                }
             }
+        }
 
-            if (!stockMap || typeof stockMap !== "object") {
-                throw new Error("Invalid stock data received");
-            }
-
-            console.log(
-                "Stock data received:",
-                Object.keys(stockMap).length,
-                "products"
-            );
-
-            setStockData(stockMap);
-
-            // Guardar en cache
-            stockCache.set(stockCacheKey, {
-                data: stockMap,
-                timestamp: now,
-            });
-        } catch (err) {
-            if (signal.aborted) {
-                console.log("Stock fetch aborted during error handling");
-                return;
-            }
-            console.error("Error al obtener datos de stock:", err);
-        } finally {
-            if (!signal.aborted) {
-                setIsStockLoading(false);
-            }
+        if (!success && !signal.aborted) {
+            console.error("Failed to fetch stock data after all retries");
+            setIsStockLoading(false);
         }
     }, [authToken]);
 
@@ -374,12 +393,11 @@ const useInventory = () => {
         resetFunctions,
     });
 
-    // Efecto optimizado para cargar productos al inicio y cuando cambian los filtros
+    // Efecto para cargar productos al inicio y cuando cambian los filtros
     useEffect(() => {
         // Crear objeto de parámetros para la API
         const params = {
             page: pagination.currentPage,
-            page_size: ITEMS_PER_PAGE, // Agregar explícitamente el tamaño de página
         };
 
         // Añadir filtro de nombre si existe
@@ -407,7 +425,7 @@ const useInventory = () => {
         setIsLoading(true);
         setError(null);
 
-        // Función optimizada para cargar datos
+        // Decidir qué función del servicio utilizar
         const fetchData = async () => {
             try {
                 const data = await inventoryService.getProducts(
@@ -426,7 +444,7 @@ const useInventory = () => {
                     return;
                 }
 
-                // Actualizar inmediatamente los productos sin esperar el stock
+                // Actualizar el estado con los datos recibidos
                 setProducts(data.results || []);
                 setCount(
                     typeof data.count === "number"
@@ -434,10 +452,14 @@ const useInventory = () => {
                         : parseInt(data.count, 10) || 0
                 );
 
-                // Calcular número de páginas con el nuevo tamaño
-                const pageCount = Math.ceil((data.count || 0) / ITEMS_PER_PAGE);
+                // Calcular número de páginas
+                const pageCount = calculateRealisticPageCount(
+                    typeof data.count === "number"
+                        ? data.count
+                        : parseInt(data.count, 10) || 0
+                );
 
-                // Actualizar el estado de paginación
+                // Actualizar el estado de paginación usando el hook
                 pagination.updatePaginationState(
                     pagination.currentPage,
                     pageCount,
@@ -447,8 +469,8 @@ const useInventory = () => {
 
                 // También actualizamos el total general de productos si no hay filtros
                 if (
-                    Object.keys(params).length === 1 || // Solo page_size
-                    (Object.keys(params).length === 2 && params.page) // page y page_size
+                    Object.keys(params).length === 0 ||
+                    (Object.keys(params).length === 1 && params.page)
                 ) {
                     setTotalCount(
                         typeof data.count === "number"
@@ -485,37 +507,34 @@ const useInventory = () => {
         convertToProxyUrl,
     ]);
 
-    // Efecto optimizado para combinar productos con datos de stock de forma asíncrona
+    // Efecto para combinar productos con datos de stock
     useEffect(() => {
-        if (products.length > 0) {
-            // Mostrar inmediatamente los productos con stock 0 mientras carga el stock real
-            if (Object.keys(stockData).length === 0 && !isStockLoading) {
-                const productsWithZeroStock = products.map((product) => ({
-                    ...product,
-                    stock: 0,
-                }));
-                setCombinedProducts(productsWithZeroStock);
-            } else if (Object.keys(stockData).length > 0) {
-                // Combinar con datos reales de stock cuando estén disponibles
-                const enriched = mergeProductsWithStock(products, stockData);
-                setCombinedProducts(enriched);
-            }
-        } else {
-            // Si no hay productos, limpiar también los combinados
+        if (products.length > 0 && Object.keys(stockData).length > 0) {
+            // Combinamos los productos con su información de stock
+            const enriched = mergeProductsWithStock(products, stockData);
+            setCombinedProducts(enriched);
+        } else if (products.length > 0 && !isStockLoading) {
+            // Si hay productos pero no hay datos de stock y ya no estamos cargando stock,
+            // actualizamos con lo que tenemos (puede ser que no haya stock disponible)
+            const enriched = mergeProductsWithStock(products, stockData);
+            setCombinedProducts(enriched);
+        } else if (products.length === 0) {
+            // Si no hay productos, limpiamos también los combinados
             setCombinedProducts([]);
         }
     }, [products, stockData, isStockLoading, mergeProductsWithStock]);
 
-    // Efecto para cargar productos y stock en paralelo al iniciar
+    // Efecto para cargar productos al iniciar y cuando cambia el token
     useEffect(() => {
         if (authToken) {
-            console.log("Cargando datos iniciales en paralelo");
+            console.log("Cargando productos iniciales");
 
-            // Verificar parámetros de URL
+            // Verificar si hay parámetros en la URL que debamos procesar
             try {
                 const urlParams = new URLSearchParams(window.location.search);
                 const pageParam = urlParams.get("page");
 
+                // Si hay un parámetro de página, actualizamos el estado de paginación
                 if (pageParam) {
                     const pageNumber = parseInt(pageParam, 10);
                     if (!isNaN(pageNumber) && pageNumber > 0) {
@@ -534,19 +553,8 @@ const useInventory = () => {
                 console.error("Error al procesar parámetros de URL:", error);
             }
 
-            // Cargar productos y stock en paralelo para mejor rendimiento
-            const loadInitialData = async () => {
-                try {
-                    await Promise.allSettled([
-                        fetchProducts(),
-                        fetchStockData(),
-                    ]);
-                } catch (error) {
-                    console.error("Error al cargar datos iniciales:", error);
-                }
-            };
-
-            loadInitialData();
+            fetchProducts();
+            fetchStockData();
         }
     }, [authToken, fetchProducts, fetchStockData]);
 

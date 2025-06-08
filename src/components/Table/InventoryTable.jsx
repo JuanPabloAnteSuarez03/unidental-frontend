@@ -1,8 +1,8 @@
 // src/components/Table/InventoryTable.jsx
-import React, { useMemo, memo } from "react";
+import React, { useMemo } from "react";
 import TableRow from "./TableRow";
 
-const InventoryTable = memo(({ products = [], isLoading = false }) => {
+const InventoryTable = ({ products = [], isLoading = false }) => {
     // Estilos memoizados para mejorar rendimiento
     const styles = useMemo(
         () => ({
@@ -60,14 +60,13 @@ const InventoryTable = memo(({ products = [], isLoading = false }) => {
             priceColumn: { width: "8%" },
             marginColumn: { width: "8%" },
             supplierColumn: { width: "13%" },
-            // Optimized loading overlay - menos opaco para mejor UX
             loadingOverlay: {
                 position: "absolute",
                 top: 0,
                 left: 0,
                 right: 0,
                 bottom: 0,
-                backgroundColor: "rgba(255, 255, 255, 0.5)", // Menos opaco
+                backgroundColor: "rgba(255, 255, 255, 0.7)",
                 display: "flex",
                 justifyContent: "center",
                 alignItems: "center",
@@ -75,45 +74,24 @@ const InventoryTable = memo(({ products = [], isLoading = false }) => {
                 borderRadius: "8px",
             },
             loadingSpinner: {
-                width: "40px", // Más pequeño
-                height: "40px",
-                border: "3px solid #f3f3f3",
-                borderTop: "3px solid #3498db",
+                width: "60px",
+                height: "60px",
+                border: "5px solid #f3f3f3",
+                borderTop: "5px solid #3498db",
                 borderRadius: "50%",
                 animation: "spin 1s linear infinite",
             },
             loadingText: {
-                marginTop: "10px",
-                fontWeight: "500", // Menos bold
+                marginTop: "15px",
+                fontWeight: "600",
                 color: "#3498db",
-                fontSize: "14px", // Más pequeño
-            },
-            // Nuevo indicador discreto para carga de stock
-            stockLoadingIndicator: {
-                position: "absolute",
-                top: "10px",
-                right: "10px",
-                backgroundColor: "rgba(52, 152, 219, 0.9)",
-                color: "white",
-                padding: "5px 10px",
-                borderRadius: "15px",
-                fontSize: "12px",
-                fontWeight: "500",
-                zIndex: 20,
-                boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
             },
         }),
         []
     );
 
-    // Comprobar si hay productos válidos
+    // Comprobar si hay productos válidos (podrían ser undefined o null)
     const hasProducts = Array.isArray(products) && products.length > 0;
-
-    // Memoizar la detección de stock cargando
-    const isStockLoading = useMemo(() => {
-        if (!hasProducts) return false;
-        return products.some((product) => product.stock === undefined);
-    }, [hasProducts, products]);
 
     // Estilo para la animación del spinner
     const spinnerKeyframes = `
@@ -128,20 +106,13 @@ const InventoryTable = memo(({ products = [], isLoading = false }) => {
             {/* Estilo para la animación */}
             <style>{spinnerKeyframes}</style>
 
-            {/* Indicador discreto de carga de stock */}
-            {isStockLoading && hasProducts && (
-                <div style={styles.stockLoadingIndicator}>
-                    Actualizando stock...
-                </div>
-            )}
-
-            {/* Loading Overlay solo para carga inicial */}
-            {isLoading && !hasProducts && (
+            {/* Loading Overlay */}
+            {isLoading && hasProducts && (
                 <div style={styles.loadingOverlay}>
                     <div>
                         <div style={styles.loadingSpinner}></div>
                         <div style={styles.loadingText}>
-                            Cargando productos...
+                            Cargando datos de stock...
                         </div>
                     </div>
                 </div>
@@ -157,7 +128,15 @@ const InventoryTable = memo(({ products = [], isLoading = false }) => {
                 </div>
             )}
 
-            {/* Tabla de productos - Se muestra inmediatamente aunque el stock esté cargando */}
+            {/* Mensaje de carga cuando no hay productos aún */}
+            {!hasProducts && isLoading && (
+                <div style={styles.emptyState}>
+                    <div style={styles.loadingSpinner}></div>
+                    <p style={styles.loadingText}>Cargando productos...</p>
+                </div>
+            )}
+
+            {/* Tabla de productos */}
             {hasProducts && (
                 <table style={styles.table}>
                     <thead>
@@ -223,16 +202,25 @@ const InventoryTable = memo(({ products = [], isLoading = false }) => {
                                     ...styles.priceColumn,
                                 }}
                             >
-                                Precio Unit.
+                                P. Compra
                             </th>
                             <th
                                 style={{
                                     ...styles.header,
                                     ...styles.headerRight,
+                                    ...styles.priceColumn,
+                                }}
+                            >
+                                P. Venta
+                            </th>
+                            <th
+                                style={{
+                                    ...styles.header,
+                                    ...styles.headerCenter,
                                     ...styles.marginColumn,
                                 }}
                             >
-                                Margen (%)
+                                Margen
                             </th>
                             <th
                                 style={{
@@ -246,11 +234,11 @@ const InventoryTable = memo(({ products = [], isLoading = false }) => {
                         </tr>
                     </thead>
                     <tbody>
-                        {products.map((product) => (
+                        {products.map((item, index) => (
                             <TableRow
-                                key={product.id}
-                                product={product}
-                                isStockLoading={product.stock === undefined}
+                                key={item.id || index}
+                                item={item}
+                                index={index}
                             />
                         ))}
                     </tbody>
@@ -258,9 +246,7 @@ const InventoryTable = memo(({ products = [], isLoading = false }) => {
             )}
         </div>
     );
-});
+};
 
-// Añadir displayName para mejor debugging
-InventoryTable.displayName = "InventoryTable";
-
-export default InventoryTable;
+// Utilizamos React.memo para evitar renderizados innecesarios
+export default React.memo(InventoryTable);

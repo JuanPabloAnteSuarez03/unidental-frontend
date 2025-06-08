@@ -20,13 +20,8 @@ export const getProducts = async (params = {}, authToken, signal) => {
         throw new Error("No authentication token provided");
     }
 
-    // Build URL with optimized params
-    const optimizedParams = {
-        ...params,
-        page_size: params.page_size || 50, // Default to larger page size
-    };
-
-    const url = buildUrlWithParams(API_PRODUCTS_URL, optimizedParams);
+    // Build URL with params
+    const url = buildUrlWithParams(API_PRODUCTS_URL, params);
 
     try {
         const response = await fetch(url, {
@@ -41,15 +36,10 @@ export const getProducts = async (params = {}, authToken, signal) => {
             throw new Error(`Error ${response.status}: ${response.statusText}`);
         }
 
-        const data = await response.json();
-
-        // Log performance info
-        console.log(`Loaded ${data.results?.length || 0} products from API`);
-
-        return data;
+        return await response.json();
     } catch (error) {
         if (error.name === "AbortError") {
-            console.log("Products request was aborted");
+            console.log("Request was aborted");
             return null;
         }
         console.error("Error fetching products:", error);
@@ -283,7 +273,7 @@ export const getInventoryMovements = async (params = {}, authToken, signal) => {
 };
 
 /**
- * Get optimized stock map for faster loading
+ * Get stock map for all products
  * @param {string} authToken - Authentication token
  * @param {AbortSignal} signal - AbortController signal for request cancellation
  * @returns {Promise<Object>} - Map of product IDs to stock quantities
@@ -293,56 +283,35 @@ export const getStockMap = async (authToken, signal) => {
         throw new Error("No authentication token provided");
     }
 
+    // Object to store accumulated stock by product
+    const stockMap = {};
+
     try {
-        // Use stock summary endpoint for faster loading
-        const response = await fetch(API_STOCK_SUMMARY_URL, {
-            headers: {
-                Authorization: `Token ${authToken}`,
-                "Content-Type": "application/json",
-            },
-            signal,
-        });
+        // Build initial URL without filtering
+        let url = API_STOCK_URL;
 
-        if (!response.ok) {
-            throw new Error(`Error ${response.status}: ${response.statusText}`);
+        // Get first page of results
+        let stockData = await fetchStockPage(url, authToken, signal);
+
+        if (!stockData) return {};
+
+        // Process first page of results
+        processStockData(stockData.results, stockMap);
+
+        // Get additional pages if they exist
+        while (stockData.next && !signal?.aborted) {
+            stockData = await fetchStockPage(stockData.next, authToken, signal);
+            if (!stockData) break;
+            processStockData(stockData.results, stockMap);
         }
 
-        const data = await response.json();
-
-        // Transform the response into a simple product_id -> stock_quantity map
-        const stockMap = {};
-
-        if (data.results && Array.isArray(data.results)) {
-            data.results.forEach((item) => {
-                if (
-                    item.product_id !== undefined &&
-                    item.total_stock !== undefined
-                ) {
-                    stockMap[item.product_id] = item.total_stock;
-                }
-            });
-        } else if (Array.isArray(data)) {
-            // Handle direct array response
-            data.forEach((item) => {
-                if (
-                    item.product_id !== undefined &&
-                    item.total_stock !== undefined
-                ) {
-                    stockMap[item.product_id] = item.total_stock;
-                }
-            });
-        }
-
-        console.log(
-            `Stock map created with ${Object.keys(stockMap).length} products`
-        );
         return stockMap;
     } catch (error) {
         if (error.name === "AbortError") {
-            console.log("Stock map request was aborted");
+            console.log("Stock request was aborted");
             return {};
         }
-        console.error("Error fetching stock map:", error);
+        console.error("Error fetching stock data:", error);
         throw error;
     }
 };

@@ -530,7 +530,7 @@ const MovimientosDeStockPage = () => {
                 // Construir parámetros para la API
                 const params = {
                     page: page,
-                    page_size: 50, // Aumentado para mejor rendimiento
+                    page_size: 25, // Mismo tamaño que otras tablas
                     ...additionalFilters, // Filtros adicionales (fechas, productos, etc.)
                 };
 
@@ -567,8 +567,8 @@ const MovimientosDeStockPage = () => {
                     setMovementsTotalCount(data.count || 0);
                     setMovementsCurrentPage(page);
 
-                    // Calcular total de páginas con el nuevo tamaño
-                    const totalPages = Math.ceil((data.count || 0) / 50);
+                    // Calcular total de páginas
+                    const totalPages = Math.ceil((data.count || 0) / 25);
                     setMovementsTotalPages(totalPages);
                 }
             } catch (error) {
