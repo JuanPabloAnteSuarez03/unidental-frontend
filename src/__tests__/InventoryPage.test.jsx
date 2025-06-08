@@ -10,21 +10,26 @@ jest.mock("../hooks/useInventory", () => ({
     default: jest.fn(),
 }));
 
-jest.mock("../components/SearchBar/SearchBar", () => {
+jest.mock("../components/SearchFilters/SearchFiltersContainer", () => {
     return {
         __esModule: true,
         default: jest.fn().mockImplementation((props) => (
-            <div data-testid="search-bar">
+            <div data-testid="search-filters">
                 <button
                     data-testid="clear-filters-button"
-                    onClick={props.onClearFilters}
+                    onClick={props.onReset}
                 >
                     Limpiar filtros
                 </button>
                 <input
-                    data-testid="search-text-input"
-                    value={props.searchText}
-                    onChange={(e) => props.onSearchTextChange(e.target.value)}
+                    data-testid="search-name-input"
+                    value={props.nameFilter || ""}
+                    onChange={(e) =>
+                        props.onSearch({
+                            name: e.target.value,
+                            categories: props.selectedCategories || [],
+                        })
+                    }
                 />
             </div>
         )),
@@ -84,23 +89,13 @@ jest.mock("../components/Pagination/Pagination", () => {
 // Ahora importamos los componentes después de haberlos mockeado
 import InventoryPage from "../pages/InventoryPage";
 import useInventory from "../hooks/useInventory";
-import SearchBar from "../components/SearchBar/SearchBar";
+import SearchFiltersContainer from "../components/SearchFilters/SearchFiltersContainer";
 import InventoryTable from "../components/Table/InventoryTable";
 import Pagination from "../components/Pagination/Pagination";
 
 // --- Estado base para el mock de useInventory ---
 const mockUseInventoryDefaultState = {
-    searchText: "",
-    searchCode: "",
-    searchCategory: "",
-    sortConfig: { key: "name", direction: "ascending" },
-    updateSearchText: jest.fn(),
-    updateSearchCode: jest.fn(),
-    updateSearchCategory: jest.fn(),
-    handleSort: jest.fn(),
-    clearFilters: jest.fn(),
     filteredProducts: [],
-    totalProducts: 0,
     totalGeneralProducts: 0,
     isLoading: false,
     error: null,
@@ -111,6 +106,12 @@ const mockUseInventoryDefaultState = {
     hasPrevPage: false,
     currentPage: 1,
     totalPages: 1,
+    searchByName: jest.fn(),
+    nameFilter: "",
+    selectedCategories: [],
+    availableCategories: [],
+    updateSelectedCategories: jest.fn(),
+    resetAllFilters: jest.fn(),
 };
 
 // --- Suite de Tests ---
@@ -133,7 +134,7 @@ describe("InventoryPage", () => {
         ).toBeInTheDocument();
     });
 
-    test("renders page title and description with totalGeneralProducts when no filters active", () => {
+    test("renders page title and description with totalGeneralProducts", () => {
         useInventory.mockReturnValue({
             ...mockUseInventoryDefaultState,
             totalGeneralProducts: 150,
@@ -146,28 +147,12 @@ describe("InventoryPage", () => {
         ).toBeInTheDocument();
     });
 
-    test("renders page title and description with totalProducts when a filter is active", () => {
-        useInventory.mockReturnValue({
-            ...mockUseInventoryDefaultState,
-            searchText: "some filter", // Un filtro está activo
-            totalProducts: 25,
-            totalGeneralProducts: 150,
-        });
-        render(<InventoryPage />);
-        expect(
-            screen.getByText(
-                "Administra y consulta el inventario de productos (25 en total)"
-            )
-        ).toBeInTheDocument();
-    });
-
     test("displays loading message when isLoading is true", () => {
         useInventory.mockReturnValue({
             ...mockUseInventoryDefaultState,
             isLoading: true,
         });
         render(<InventoryPage />);
-        expect(screen.getByText("Cargando productos...")).toBeInTheDocument();
         // Verificamos que se renderizaron los componentes correctos
         expect(screen.getByTestId("inventory-table")).toBeInTheDocument();
         expect(screen.queryByTestId("pagination")).not.toBeInTheDocument();
@@ -204,239 +189,253 @@ describe("InventoryPage", () => {
                 name: "Producto B",
                 code: "P002",
                 category: "Cat2",
-                stock: 20,
+                stock: 5,
                 price: 200,
             },
         ];
 
-        test("renders InventoryTable and Pagination when products exist", () => {
+        beforeEach(() => {
             useInventory.mockReturnValue({
                 ...mockUseInventoryDefaultState,
-                isLoading: false,
-                error: null,
                 filteredProducts: mockProducts,
-                totalProducts: mockProducts.length,
-                totalGeneralProducts: 10, // Podría haber más productos en total
+                totalGeneralProducts: 25,
                 currentPage: 1,
-                totalPages: 2,
+                totalPages: 3,
                 hasNextPage: true,
+                hasPrevPage: false,
             });
-            render(<InventoryPage />);
+        });
 
-            expect(screen.getByTestId("inventory-table")).toBeInTheDocument();
+        test("renders search filters component", () => {
+            render(<InventoryPage />);
+            expect(screen.getByTestId("search-filters")).toBeInTheDocument();
+        });
+
+        test("renders inventory table with products", () => {
+            render(<InventoryPage />);
+            const table = screen.getByTestId("inventory-table");
+            expect(table).toBeInTheDocument();
+            expect(table).toHaveAttribute("data-products-count", "2");
+            expect(screen.getByTestId("product-1")).toBeInTheDocument();
+            expect(screen.getByTestId("product-2")).toBeInTheDocument();
+        });
+
+        test("renders pagination when there are products", () => {
+            render(<InventoryPage />);
             expect(screen.getByTestId("pagination")).toBeInTheDocument();
-
-            // Verifica que no haya mensajes de carga o error
-            expect(
-                screen.queryByText("Cargando productos...")
-            ).not.toBeInTheDocument();
-            expect(
-                screen.queryByText(/Error al cargar productos/)
-            ).not.toBeInTheDocument();
-            // Y que no se muestre el mensaje de "no productos encontrados"
-            expect(
-                screen.queryByText(/No se encontraron productos que coincidan/)
-            ).not.toBeInTheDocument();
+            expect(screen.getByTestId("current-page")).toHaveTextContent("1");
         });
 
-        test("does not render Pagination if totalProducts is 0, even if data loaded", () => {
+        test("calls resetAllFilters when clear filters button is clicked", () => {
+            const mockResetAllFilters = jest.fn();
             useInventory.mockReturnValue({
                 ...mockUseInventoryDefaultState,
-                isLoading: false,
-                error: null,
-                filteredProducts: [],
-                totalProducts: 0,
-                totalGeneralProducts: 10, // Aún hay productos en general, pero ninguno con el filtro
+                filteredProducts: mockProducts,
+                resetAllFilters: mockResetAllFilters,
             });
-            render(<InventoryPage />);
 
-            expect(screen.getByTestId("inventory-table")).toBeInTheDocument();
+            render(<InventoryPage />);
+            const clearButton = screen.getByTestId("clear-filters-button");
+            fireEvent.click(clearButton);
+            expect(mockResetAllFilters).toHaveBeenCalled();
+        });
+
+        test("calls goToNextPage when next page button is clicked", () => {
+            const mockGoToNextPage = jest.fn();
+            useInventory.mockReturnValue({
+                ...mockUseInventoryDefaultState,
+                filteredProducts: mockProducts,
+                totalGeneralProducts: 50,
+                hasNextPage: true,
+                goToNextPage: mockGoToNextPage,
+            });
+
+            render(<InventoryPage />);
+            fireEvent.click(screen.getByTestId("next-page-button"));
+            expect(mockGoToNextPage).toHaveBeenCalled();
+        });
+
+        test("calls goToPrevPage when previous page button is clicked", () => {
+            const mockGoToPrevPage = jest.fn();
+            useInventory.mockReturnValue({
+                ...mockUseInventoryDefaultState,
+                filteredProducts: mockProducts,
+                totalGeneralProducts: 50,
+                hasPrevPage: true,
+                goToPrevPage: mockGoToPrevPage,
+            });
+
+            render(<InventoryPage />);
+            fireEvent.click(screen.getByTestId("prev-page-button"));
+            expect(mockGoToPrevPage).toHaveBeenCalled();
+        });
+
+        test("calls goToPage when page number button is clicked", () => {
+            const mockGoToPage = jest.fn();
+            useInventory.mockReturnValue({
+                ...mockUseInventoryDefaultState,
+                filteredProducts: mockProducts,
+                totalGeneralProducts: 50,
+                goToPage: mockGoToPage,
+            });
+
+            render(<InventoryPage />);
+            fireEvent.click(screen.getByTestId("goto-page-button"));
+            expect(mockGoToPage).toHaveBeenCalledWith(2);
+        });
+    });
+
+    describe("pagination visibility", () => {
+        test("does not render pagination when totalGeneralProducts is 0", () => {
+            useInventory.mockReturnValue({
+                ...mockUseInventoryDefaultState,
+                totalGeneralProducts: 0,
+            });
+
+            render(<InventoryPage />);
             expect(screen.queryByTestId("pagination")).not.toBeInTheDocument();
         });
 
-        test('displays "No se encontraron productos" message when totalProducts is 0 and not loading/error', () => {
+        test("renders pagination when totalGeneralProducts is greater than 0", () => {
             useInventory.mockReturnValue({
                 ...mockUseInventoryDefaultState,
+                totalGeneralProducts: 10,
+            });
+
+            render(<InventoryPage />);
+            expect(screen.getByTestId("pagination")).toBeInTheDocument();
+        });
+    });
+
+    describe("empty state", () => {
+        test("displays no products message when no products and no loading and no error", () => {
+            useInventory.mockReturnValue({
+                ...mockUseInventoryDefaultState,
+                totalGeneralProducts: 0,
                 isLoading: false,
                 error: null,
-                filteredProducts: [],
-                totalProducts: 0,
             });
+
             render(<InventoryPage />);
             expect(
-                screen.getByText(
-                    "No se encontraron productos que coincidan con los filtros de búsqueda."
-                )
+                screen.getByText("No se encontraron productos.")
             ).toBeInTheDocument();
-
-            expect(screen.getByTestId("inventory-table")).toBeInTheDocument();
-            expect(screen.queryByTestId("pagination")).not.toBeInTheDocument();
-        });
-    });
-
-    test("passes correct props to SearchBar", () => {
-        const searchState = {
-            ...mockUseInventoryDefaultState,
-            searchText: "Laptop",
-            searchCode: "LP123",
-            searchCategory: "Electrónicos",
-            totalProducts: 5, // Productos que coinciden con el filtro para SearchBar
-            totalGeneralProducts: 50, // Total general para SearchBar
-        };
-        useInventory.mockReturnValue(searchState);
-        render(<InventoryPage />);
-
-        // Verificar que SearchBar fue llamado con los props correctos
-        const searchBarProps = SearchBar.mock.calls[0][0];
-        expect(searchBarProps.searchText).toBe(searchState.searchText);
-        expect(searchBarProps.searchCode).toBe(searchState.searchCode);
-        expect(searchBarProps.searchCategory).toBe(searchState.searchCategory);
-        expect(searchBarProps.onSearchTextChange).toBe(
-            searchState.updateSearchText
-        );
-        expect(searchBarProps.onSearchCodeChange).toBe(
-            searchState.updateSearchCode
-        );
-        expect(searchBarProps.onSearchCategoryChange).toBe(
-            searchState.updateSearchCategory
-        );
-        expect(searchBarProps.onClearFilters).toBe(searchState.clearFilters);
-        expect(searchBarProps.filteredCount).toBe(searchState.totalProducts);
-        expect(searchBarProps.totalProducts).toBe(
-            searchState.totalGeneralProducts
-        );
-    });
-
-    test("passes correct props to InventoryTable", () => {
-        const mockProducts = [
-            { id: 1, name: "Product A" },
-            { id: 2, name: "Product B" },
-        ];
-        const tableState = {
-            ...mockUseInventoryDefaultState,
-            filteredProducts: mockProducts,
-        };
-        useInventory.mockReturnValue(tableState);
-        render(<InventoryPage />);
-
-        // Verificar que InventoryTable fue llamado con los props correctos
-        const tableProps = InventoryTable.mock.calls[0][0];
-        expect(tableProps.products).toEqual(mockProducts);
-    });
-
-    test("passes correct props to Pagination when visible", () => {
-        const paginationState = {
-            ...mockUseInventoryDefaultState,
-            filteredProducts: [{ id: 1, name: "Product" }], // Al menos un producto
-            totalProducts: 50, // Más de 0 para que se muestre Pagination
-            currentPage: 3,
-            totalPages: 10,
-            hasNextPage: true,
-            hasPrevPage: true,
-        };
-        useInventory.mockReturnValue(paginationState);
-        render(<InventoryPage />);
-
-        // Verificar que Pagination fue llamado con los props correctos
-        const paginationProps = Pagination.mock.calls[0][0];
-        expect(paginationProps.currentPage).toBe(paginationState.currentPage);
-        expect(paginationProps.totalPages).toBe(paginationState.totalPages);
-        expect(paginationProps.goToPage).toBe(paginationState.goToPage);
-        expect(paginationProps.goToNextPage).toBe(paginationState.goToNextPage);
-        expect(paginationProps.goToPrevPage).toBe(paginationState.goToPrevPage);
-        expect(paginationProps.hasNextPage).toBe(paginationState.hasNextPage);
-        expect(paginationProps.hasPrevPage).toBe(paginationState.hasPrevPage);
-        expect(paginationProps.isLoading).toBe(paginationState.isLoading);
-    });
-
-    // Tests de interacción con los componentes
-
-    test("clicking on the clear filters button calls clearFilters", () => {
-        const mockClearFilters = jest.fn();
-        useInventory.mockReturnValue({
-            ...mockUseInventoryDefaultState,
-            clearFilters: mockClearFilters,
-            searchText: "algo", // Para que se muestre el botón de limpiar
         });
 
-        render(<InventoryPage />);
-        fireEvent.click(screen.getByTestId("clear-filters-button"));
+        test("does not display no products message when loading", () => {
+            useInventory.mockReturnValue({
+                ...mockUseInventoryDefaultState,
+                totalGeneralProducts: 0,
+                isLoading: true,
+                error: null,
+            });
 
-        expect(mockClearFilters).toHaveBeenCalledTimes(1);
-    });
-
-    test("changing search text input calls updateSearchText", () => {
-        const mockUpdateSearchText = jest.fn();
-        useInventory.mockReturnValue({
-            ...mockUseInventoryDefaultState,
-            updateSearchText: mockUpdateSearchText,
-        });
-
-        render(<InventoryPage />);
-        fireEvent.change(screen.getByTestId("search-text-input"), {
-            target: { value: "nuevo texto" },
-        });
-
-        expect(mockUpdateSearchText).toHaveBeenCalledWith("nuevo texto");
-    });
-
-    test("clicking on pagination buttons calls correct functions", () => {
-        const mockGoToNextPage = jest.fn();
-        const mockGoToPrevPage = jest.fn();
-        const mockGoToPage = jest.fn();
-
-        useInventory.mockReturnValue({
-            ...mockUseInventoryDefaultState,
-            goToNextPage: mockGoToNextPage,
-            goToPrevPage: mockGoToPrevPage,
-            goToPage: mockGoToPage,
-            filteredProducts: [{ id: 1, name: "Producto" }],
-            totalProducts: 50, // Para que se muestre la paginación
-            hasNextPage: true,
-            hasPrevPage: true,
-        });
-
-        render(<InventoryPage />);
-
-        fireEvent.click(screen.getByTestId("next-page-button"));
-        expect(mockGoToNextPage).toHaveBeenCalledTimes(1);
-
-        fireEvent.click(screen.getByTestId("prev-page-button"));
-        expect(mockGoToPrevPage).toHaveBeenCalledTimes(1);
-
-        fireEvent.click(screen.getByTestId("goto-page-button"));
-        expect(mockGoToPage).toHaveBeenCalledWith(2);
-    });
-
-    test("displays correct products in the table", () => {
-        const mockProducts = [
-            { id: 1, name: "Producto 1" },
-            { id: 2, name: "Producto 2" },
-            { id: 3, name: "Producto 3" },
-        ];
-
-        useInventory.mockReturnValue({
-            ...mockUseInventoryDefaultState,
-            filteredProducts: mockProducts,
-            totalProducts: mockProducts.length,
-        });
-
-        render(<InventoryPage />);
-
-        // Verificar que cada producto se renderiza en la tabla
-        mockProducts.forEach((product) => {
+            render(<InventoryPage />);
             expect(
-                screen.getByTestId(`product-${product.id}`)
-            ).toBeInTheDocument();
-            expect(
-                screen.getByTestId(`product-${product.id}`)
-            ).toHaveTextContent(product.name);
+                screen.queryByText("No se encontraron productos.")
+            ).not.toBeInTheDocument();
         });
 
-        // Verificar el atributo data-products-count en la tabla
-        expect(screen.getByTestId("inventory-table")).toHaveAttribute(
-            "data-products-count",
-            String(mockProducts.length)
-        );
+        test("does not display no products message when there is an error", () => {
+            useInventory.mockReturnValue({
+                ...mockUseInventoryDefaultState,
+                totalGeneralProducts: 0,
+                isLoading: false,
+                error: "Some error",
+            });
+
+            render(<InventoryPage />);
+            expect(
+                screen.queryByText("No se encontraron productos.")
+            ).not.toBeInTheDocument();
+        });
+    });
+
+    describe("component interaction", () => {
+        test("SearchFiltersContainer is rendered with correct props", () => {
+            const mockSearchByName = jest.fn();
+            const mockUpdateSelectedCategories = jest.fn();
+            const mockResetAllFilters = jest.fn();
+
+            useInventory.mockReturnValue({
+                ...mockUseInventoryDefaultState,
+                searchByName: mockSearchByName,
+                nameFilter: "test filter",
+                selectedCategories: ["cat1"],
+                availableCategories: ["cat1", "cat2"],
+                updateSelectedCategories: mockUpdateSelectedCategories,
+                resetAllFilters: mockResetAllFilters,
+                isLoading: false,
+            });
+
+            render(<InventoryPage />);
+
+            // Verificamos que SearchFiltersContainer fue llamado
+            expect(SearchFiltersContainer).toHaveBeenCalled();
+
+            // Verificamos que las props incluyen los valores esperados
+            const callArgs = SearchFiltersContainer.mock.calls[0][0];
+            expect(callArgs.nameFilter).toBe("test filter");
+            expect(callArgs.selectedCategories).toEqual(["cat1"]);
+            expect(callArgs.availableCategories).toEqual(["cat1", "cat2"]);
+            expect(callArgs.isCategoriesLoading).toBe(false);
+            expect(typeof callArgs.onSearch).toBe("function");
+            expect(typeof callArgs.onReset).toBe("function");
+        });
+
+        test("InventoryTable is rendered with correct props", () => {
+            const mockProducts = [{ id: 1, name: "Test Product" }];
+
+            useInventory.mockReturnValue({
+                ...mockUseInventoryDefaultState,
+                filteredProducts: mockProducts,
+                isLoading: true,
+            });
+
+            render(<InventoryPage />);
+
+            // Verificamos que InventoryTable fue llamado
+            expect(InventoryTable).toHaveBeenCalled();
+
+            // Verificamos las props
+            const callArgs = InventoryTable.mock.calls[0][0];
+            expect(callArgs.products).toEqual(mockProducts);
+            expect(callArgs.isLoading).toBe(true);
+        });
+
+        test("Pagination is rendered with correct props when products exist", () => {
+            const mockGoToPage = jest.fn();
+            const mockGoToNextPage = jest.fn();
+            const mockGoToPrevPage = jest.fn();
+
+            useInventory.mockReturnValue({
+                ...mockUseInventoryDefaultState,
+                totalGeneralProducts: 10,
+                currentPage: 2,
+                totalPages: 5,
+                goToPage: mockGoToPage,
+                goToNextPage: mockGoToNextPage,
+                goToPrevPage: mockGoToPrevPage,
+                hasNextPage: true,
+                hasPrevPage: true,
+                isLoading: false,
+            });
+
+            render(<InventoryPage />);
+
+            // Verificamos que Pagination fue llamado
+            expect(Pagination).toHaveBeenCalled();
+
+            // Verificamos las props
+            const callArgs = Pagination.mock.calls[0][0];
+            expect(callArgs.currentPage).toBe(2);
+            expect(callArgs.totalPages).toBe(5);
+            expect(callArgs.goToPage).toBe(mockGoToPage);
+            expect(callArgs.goToNextPage).toBe(mockGoToNextPage);
+            expect(callArgs.goToPrevPage).toBe(mockGoToPrevPage);
+            expect(callArgs.hasNextPage).toBe(true);
+            expect(callArgs.hasPrevPage).toBe(true);
+            expect(callArgs.isLoading).toBe(false);
+        });
     });
 });

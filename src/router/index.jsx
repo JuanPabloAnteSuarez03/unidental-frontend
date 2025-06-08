@@ -5,6 +5,8 @@ import LoginPage from "../pages/LoginPage";
 import ProtectedRoute from "./ProtectedRoute";
 import ForgotPasswordPage from "../pages/ForgotPasswordPage";
 import ResetPasswordConfirmPage from "../pages/ResetPasswordConfirmPage";
+import MovimientosDeStockPage from "../pages/MovimientosDeStockPage";
+import TransferenciasInternasPage from "../pages/TransferenciasInternasPage";
 
 const AppRouter = () => {
     return (
@@ -19,6 +21,14 @@ const AppRouter = () => {
             {/* Rutas protegidas */}
             <Route element={<ProtectedRoute />}>
                 <Route path="/inventario" element={<InventoryPage />} />
+                <Route
+                    path="/inventario/movimientos"
+                    element={<MovimientosDeStockPage />}
+                />
+                <Route
+                    path="/inventario/transferencias"
+                    element={<TransferenciasInternasPage />}
+                />
             </Route>
         </Routes>
     );
