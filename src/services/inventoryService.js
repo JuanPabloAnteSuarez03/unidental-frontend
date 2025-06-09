@@ -454,7 +454,7 @@ const fetchStockPage = async (url, authToken, signal) => {
     }
 };
 
-// Export as default
+// Export as default and named export
 const inventoryService = {
     getProducts,
     getStockData,
@@ -465,5 +465,8 @@ const inventoryService = {
     getInventoryMovements,
     getStockMap,
 };
+
+// Named export for consistency with other services
+export { inventoryService };
 
 export default inventoryService;

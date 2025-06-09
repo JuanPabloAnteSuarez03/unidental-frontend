@@ -57,7 +57,7 @@ const MainLayout = ({ children }) => {
         ventas: {
             title: "Ventas",
             items: [
-                { name: "Registrar Venta", path: "/ventas/pos" },
+                { name: "Registrar Venta", path: "/ventas" },
                 {
                     name: "Gestión de Devoluciones",
                     path: "/ventas/devoluciones",

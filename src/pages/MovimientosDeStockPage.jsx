@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import inventoryService from "../services/inventoryService";
+import ProductSearchSelector from "../components/Common/ProductSearchSelector";
 
 const MovimientosDeStockPage = () => {
     // Estado para el formulario
@@ -44,12 +45,8 @@ const MovimientosDeStockPage = () => {
         message: "",
     });
 
-    // Estados para la búsqueda de productos
-    const [searchedProducts, setSearchedProducts] = useState([]);
-    const [isSearching, setIsSearching] = useState(false);
-    const [showProductDropdown, setShowProductDropdown] = useState(false);
-    const [searchTerm, setSearchTerm] = useState("");
-    const [selectedIndex, setSelectedIndex] = useState(-1);
+    // Estados simplificados para el producto seleccionado
+    const [selectedProductFromSearch, setSelectedProductFromSearch] = useState(null);
 
     // Estado para el campo de búsqueda simple
     const [productSearchTerm, setProductSearchTerm] = useState("");
@@ -61,182 +58,26 @@ const MovimientosDeStockPage = () => {
     const [searchTotalCount, setSearchTotalCount] = useState(0);
     const [searchHasNext, setSearchHasNext] = useState(false);
     const [searchHasPrev, setSearchHasPrev] = useState(false);
-    const [selectedProductFromSearch, setSelectedProductFromSearch] =
-        useState(null);
-
-    // Refs para manejar el dropdown
-    const productDropdownRef = useRef(null);
-    const productInputRef = useRef(null);
-    const abortControllerRef = useRef(null);
-    const debounceTimeoutRef = useRef(null);
 
     // Obtener el contexto de autenticación
     const { authToken } = useAuth();
 
-    // Función para buscar productos en la base de datos
-    const searchProducts = useCallback(
-        async (term) => {
-            if (!authToken || !term.trim()) {
-                setSearchedProducts([]);
-                setShowProductDropdown(false);
-                return;
-            }
-
-            // Cancelar búsqueda anterior si existe
-            if (abortControllerRef.current) {
-                abortControllerRef.current.abort();
-            }
-
-            // Crear nuevo controlador de cancelación
-            abortControllerRef.current = new AbortController();
-            const { signal } = abortControllerRef.current;
-
-            setIsSearching(true);
-
-            try {
-                // Buscar en toda la base de datos usando el parámetro 'search'
-                const data = await inventoryService.getProducts(
-                    {
-                        search: term.trim(),
-                        page_size: 50, // Obtener hasta 50 resultados
-                    },
-                    authToken,
-                    signal
-                );
-
-                if (signal.aborted) return;
-
-                const products = data.results || [];
-                setSearchedProducts(products);
-                setShowProductDropdown(products.length > 0);
-                setSelectedIndex(-1);
-            } catch (error) {
-                if (error.name === "AbortError") {
-                    console.log("Búsqueda abortada");
-                    return;
-                }
-                console.error("Error al buscar productos:", error);
-                setSearchedProducts([]);
-                setShowProductDropdown(false);
-                setSelectedIndex(-1);
-            } finally {
-                setIsSearching(false);
-            }
-        },
-        [authToken]
-    );
-
-    // Función para manejar la tecla Enter y navegación
-    const handleProductKeyPress = (e) => {
-        if (e.key === "Enter") {
-            e.preventDefault();
-
-            // Si hay un elemento seleccionado en el dropdown, seleccionarlo
-            if (selectedIndex >= 0 && selectedIndex < searchedProducts.length) {
-                selectProduct(searchedProducts[selectedIndex]);
-                return;
-            }
-
-            // Si no hay selección, buscar con el término actual
-            const term = e.target.value.trim();
-            if (term) {
-                searchProducts(term);
-            }
-        } else if (e.key === "ArrowDown") {
-            e.preventDefault();
-            if (showProductDropdown && searchedProducts.length > 0) {
-                setSelectedIndex((prev) =>
-                    prev < searchedProducts.length - 1 ? prev + 1 : prev
-                );
-            }
-        } else if (e.key === "ArrowUp") {
-            e.preventDefault();
-            if (showProductDropdown && searchedProducts.length > 0) {
-                setSelectedIndex((prev) => (prev > 0 ? prev - 1 : -1));
-            }
-        } else if (e.key === "Escape") {
-            e.preventDefault();
-            setShowProductDropdown(false);
-            setSelectedIndex(-1);
-        }
-    };
-
-    // Función para manejar el cambio en el campo de producto
-    const handleProductInputChange = (e) => {
-        const value = e.target.value;
-        setSearchTerm(value);
-
-        // Actualizar el estado del formulario
-        setFormData({
-            ...formData,
-            product: value,
-        });
-
-        // Si el campo está vacío, ocultar el dropdown
-        if (!value.trim()) {
-            setSearchedProducts([]);
-            setShowProductDropdown(false);
-            setSelectedIndex(-1);
-            // Limpiar timeout pendiente
-            if (debounceTimeoutRef.current) {
-                clearTimeout(debounceTimeoutRef.current);
-                debounceTimeoutRef.current = null;
-            }
-            return;
-        }
-
-        // Limpiar timeout anterior
-        if (debounceTimeoutRef.current) {
-            clearTimeout(debounceTimeoutRef.current);
-        }
-
-        // Buscar automáticamente después de un breve retraso
-        debounceTimeoutRef.current = setTimeout(() => {
-            if (value.trim() && value.trim().length >= 2) {
-                searchProducts(value.trim());
-            }
-        }, 500); // Buscar después de 500ms sin escribir
-    };
-
-    // Función para seleccionar un producto del dropdown
-    const selectProduct = (product) => {
-        setFormData({
-            ...formData,
-            product: product.name,
-        });
+    // Función para manejar la selección de producto del nuevo componente
+    const handleProductSelected = useCallback((product) => {
         setSelectedProductFromSearch(product);
-        setSearchTerm(product.name);
-        setShowProductDropdown(false);
-        setSearchedProducts([]);
-        setSelectedIndex(-1);
-    };
-
-    // Función para manejar clics fuera del dropdown
-    useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (
-                productDropdownRef.current &&
-                !productDropdownRef.current.contains(event.target)
-            ) {
-                setShowProductDropdown(false);
-            }
-        };
-
-        document.addEventListener("mousedown", handleClickOutside);
-        return () =>
-            document.removeEventListener("mousedown", handleClickOutside);
+        setFormData(prev => ({
+            ...prev,
+            product: product.name
+        }));
     }, []);
 
-    // Limpiar el controlador de cancelación al desmontar
-    useEffect(() => {
-        return () => {
-            if (abortControllerRef.current) {
-                abortControllerRef.current.abort();
-            }
-            if (debounceTimeoutRef.current) {
-                clearTimeout(debounceTimeoutRef.current);
-            }
-        };
+    // Función para limpiar la selección de producto
+    const handleProductSelectionCleared = useCallback(() => {
+        setSelectedProductFromSearch(null);
+        setFormData(prev => ({
+            ...prev,
+            product: ""
+        }));
     }, []);
 
     // Función para manejar cambios en el formulario
@@ -357,7 +198,6 @@ const MovimientosDeStockPage = () => {
 
         // Limpiar también la selección del producto
         setSelectedProductFromSearch(null);
-        setSearchTerm("");
 
         // Recargar los movimientos de la base de datos para mostrar el nuevo registro
         setTimeout(() => {
@@ -504,16 +344,6 @@ const MovimientosDeStockPage = () => {
         } finally {
             setIsSearchingSimple(false);
         }
-    };
-
-    // Función para limpiar la selección del producto
-    const clearSelectedProduct = () => {
-        setSelectedProductFromSearch(null);
-        setFormData({
-            ...formData,
-            product: "",
-        });
-        setSearchTerm("");
     };
 
     // Función para cargar movimientos de inventario desde la base de datos
@@ -1162,7 +992,7 @@ const MovimientosDeStockPage = () => {
                                         />
                                         <button
                                             type="button"
-                                            onClick={clearSelectedProduct}
+                                            onClick={handleProductSelectionCleared}
                                             style={{
                                                 position: "absolute",
                                                 right: "5px",
@@ -1223,206 +1053,16 @@ const MovimientosDeStockPage = () => {
                                     // Vista normal para búsqueda/edición
                                     <div
                                         style={{ position: "relative" }}
-                                        ref={productDropdownRef}
                                     >
-                                        <input
-                                            type="text"
-                                            id="product"
-                                            name="product"
-                                            value={formData.product}
-                                            onChange={handleProductInputChange}
-                                            onKeyDown={handleProductKeyPress}
-                                            ref={productInputRef}
-                                            style={{
-                                                width: "100%",
-                                                padding: "10px 40px 10px 10px",
-                                                borderRadius: "4px",
-                                                border: "1px solid #ced4da",
-                                                fontSize: "16px",
-                                                boxSizing: "border-box",
-                                            }}
-                                            placeholder="Ej: jeringa, guante, algodón... (presiona Enter para buscar)"
-                                            required
+                                        <ProductSearchSelector
+                                            onProductSelected={handleProductSelected}
+                                            onSelectionCleared={handleProductSelectionCleared}
+                                            placeholder="Ej: jeringa, guante, algodón..."
+                                            maxResults={50}
+                                            showSelectedProduct={false}
+                                            allowClearSelection={false}
+                                            initialProduct={selectedProductFromSearch}
                                         />
-
-                                        {/* Indicador de carga */}
-                                        {isSearching && (
-                                            <div
-                                                style={{
-                                                    position: "absolute",
-                                                    right: "10px",
-                                                    top: "50%",
-                                                    transform:
-                                                        "translateY(-50%)",
-                                                    fontSize: "14px",
-                                                    color: "#6c757d",
-                                                }}
-                                            >
-                                                Buscando...
-                                            </div>
-                                        )}
-
-                                        {/* Dropdown de resultados - resto del código igual */}
-                                        {showProductDropdown &&
-                                            searchedProducts.length > 0 && (
-                                                <div
-                                                    style={{
-                                                        position: "absolute",
-                                                        top: "100%",
-                                                        left: "0",
-                                                        right: "0",
-                                                        backgroundColor:
-                                                            "white",
-                                                        border: "1px solid #ced4da",
-                                                        borderTop: "none",
-                                                        borderRadius:
-                                                            "0 0 4px 4px",
-                                                        maxHeight: "200px",
-                                                        overflowY: "auto",
-                                                        zIndex: 1000,
-                                                        boxShadow:
-                                                            "0 2px 8px rgba(0,0,0,0.1)",
-                                                    }}
-                                                >
-                                                    {searchedProducts.map(
-                                                        (product, index) => (
-                                                            <div
-                                                                key={product.id}
-                                                                onClick={() =>
-                                                                    selectProduct(
-                                                                        product
-                                                                    )
-                                                                }
-                                                                style={{
-                                                                    padding:
-                                                                        "10px",
-                                                                    borderBottom:
-                                                                        index <
-                                                                        searchedProducts.length -
-                                                                            1
-                                                                            ? "1px solid #eee"
-                                                                            : "none",
-                                                                    cursor: "pointer",
-                                                                    backgroundColor:
-                                                                        selectedIndex ===
-                                                                        index
-                                                                            ? "#007bff"
-                                                                            : "white",
-                                                                    color:
-                                                                        selectedIndex ===
-                                                                        index
-                                                                            ? "white"
-                                                                            : "#2c3e50",
-                                                                }}
-                                                                onMouseEnter={(
-                                                                    e
-                                                                ) => {
-                                                                    if (
-                                                                        selectedIndex !==
-                                                                        index
-                                                                    ) {
-                                                                        e.target.style.backgroundColor =
-                                                                            "#f8f9fa";
-                                                                    }
-                                                                }}
-                                                                onMouseLeave={(
-                                                                    e
-                                                                ) => {
-                                                                    if (
-                                                                        selectedIndex !==
-                                                                        index
-                                                                    ) {
-                                                                        e.target.style.backgroundColor =
-                                                                            "white";
-                                                                    }
-                                                                }}
-                                                            >
-                                                                <div
-                                                                    style={{
-                                                                        fontWeight:
-                                                                            "500",
-                                                                    }}
-                                                                >
-                                                                    {
-                                                                        product.name
-                                                                    }
-                                                                </div>
-                                                                {product.category_name && (
-                                                                    <div
-                                                                        style={{
-                                                                            fontSize:
-                                                                                "12px",
-                                                                            color:
-                                                                                selectedIndex ===
-                                                                                index
-                                                                                    ? "rgba(255,255,255,0.8)"
-                                                                                    : "#6c757d",
-                                                                            marginTop:
-                                                                                "2px",
-                                                                        }}
-                                                                    >
-                                                                        Categoría:{" "}
-                                                                        {
-                                                                            product.category_name
-                                                                        }
-                                                                    </div>
-                                                                )}
-                                                                {product.sku && (
-                                                                    <div
-                                                                        style={{
-                                                                            fontSize:
-                                                                                "12px",
-                                                                            color:
-                                                                                selectedIndex ===
-                                                                                index
-                                                                                    ? "rgba(255,255,255,0.8)"
-                                                                                    : "#6c757d",
-                                                                            marginTop:
-                                                                                "2px",
-                                                                        }}
-                                                                    >
-                                                                        SKU:{" "}
-                                                                        {
-                                                                            product.sku
-                                                                        }
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        )
-                                                    )}
-                                                </div>
-                                            )}
-
-                                        {/* Mensaje cuando no hay resultados */}
-                                        {showProductDropdown &&
-                                            searchedProducts.length === 0 &&
-                                            !isSearching &&
-                                            searchTerm.trim() && (
-                                                <div
-                                                    style={{
-                                                        position: "absolute",
-                                                        top: "100%",
-                                                        left: "0",
-                                                        right: "0",
-                                                        backgroundColor:
-                                                            "white",
-                                                        border: "1px solid #ced4da",
-                                                        borderTop: "none",
-                                                        borderRadius:
-                                                            "0 0 4px 4px",
-                                                        padding: "10px",
-                                                        textAlign: "center",
-                                                        color: "#6c757d",
-                                                        fontSize: "14px",
-                                                        zIndex: 1000,
-                                                        boxShadow:
-                                                            "0 2px 8px rgba(0,0,0,0.1)",
-                                                    }}
-                                                >
-                                                    No se encontraron productos
-                                                    con ese término de búsqueda
-                                                </div>
-                                            )}
                                     </div>
                                 )}
                             </div>
@@ -2443,7 +2083,7 @@ const MovimientosDeStockPage = () => {
                                                                     pageNum ===
                                                                     movementsCurrentPage
                                                                         ? "#fff"
-                                                                        : "#2c3e50",
+                                                                    : "#2c3e50",
                                                                 cursor: "pointer",
                                                                 fontSize:
                                                                     "14px",
