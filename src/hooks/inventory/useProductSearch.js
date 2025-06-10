@@ -4,66 +4,31 @@ import inventoryService from "../../services/inventoryService";
 
 /**
  * Hook personalizado para la búsqueda de productos en el inventario
+ * Carga todos los productos una vez y filtra localmente para mejor rendimiento
  * @returns {object} - Estado y funciones para la búsqueda de productos
  */
 const useProductSearch = () => {
     const { authToken } = useAuth();
     const [searchTerm, setSearchTerm] = useState("");
-    const [products, setProducts] = useState([]);
+    const [allProducts, setAllProducts] = useState([]);
     const [filteredProducts, setFilteredProducts] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [loadingMessage, setLoadingMessage] = useState("");
     const [error, setError] = useState(null);
 
     // Referencia para controlar las solicitudes en curso
     const abortControllerRef = useRef(null);
 
-    // Cargar productos iniciales
+    // Cargar todos los productos al inicio
     useEffect(() => {
-        const fetchInitialProducts = async () => {
+        const fetchAllProducts = async () => {
             if (!authToken) return;
-
-            setIsLoading(true);
-            setError(null);
-
-            try {
-                const data = await inventoryService.getProducts({}, authToken);
-                setProducts(data.results || []);
-                setFilteredProducts(data.results || []);
-            } catch (err) {
-                console.error("Error al cargar productos iniciales:", err);
-                setError(
-                    "No se pudieron cargar los productos. Por favor, intente nuevamente."
-                );
-                setProducts([]);
-                setFilteredProducts([]);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        fetchInitialProducts();
-    }, [authToken]);
-
-    // Realizar búsqueda en toda la base de datos cuando cambia el término de búsqueda
-    useEffect(() => {
-        const searchProducts = async () => {
-            if (!authToken) return;
-
-            // Si el término de búsqueda está vacío, mostramos los productos iniciales
-            if (!searchTerm.trim()) {
-                // Si ya tenemos productos cargados, los mantenemos
-                if (products.length > 0) {
-                    setFilteredProducts(products);
-                }
-                return;
-            }
 
             // Cancelar cualquier solicitud previa
             if (abortControllerRef.current) {
                 abortControllerRef.current.abort();
             }
 
-            // Crear un nuevo controlador para esta solicitud
             abortControllerRef.current = new AbortController();
             const { signal } = abortControllerRef.current;
 
@@ -71,42 +36,118 @@ const useProductSearch = () => {
             setError(null);
 
             try {
-                // Usamos el parámetro search para buscar en toda la base de datos
-                const data = await inventoryService.getProducts(
-                    { search: searchTerm, page_size: 100 }, // Aumentamos el tamaño de página para obtener más resultados
-                    authToken,
-                    signal
-                );
-
+                console.log("Cargando todos los productos...");
+                
+                setLoadingMessage("📦 Obteniendo catálogo de productos...");
+                
+                // Obtener productos y stock en paralelo
+                const [products, stockMap] = await Promise.all([
+                    inventoryService.getAllProducts({}, authToken, signal),
+                    (async () => {
+                        setLoadingMessage("📊 Calculando inventario disponible...");
+                        return await inventoryService.getStockMap(authToken, signal);
+                    })()
+                ]);
+                
                 if (signal.aborted) return;
 
-                setFilteredProducts(data.results || []);
-            } catch (err) {
-                if (err.name === "AbortError") {
-                    console.log("Búsqueda abortada");
-                    return;
+                setLoadingMessage("🔗 Combinando datos...");
+                
+                console.log("Productos recibidos en hook:", products);
+                console.log("Stock map recibido:", stockMap);
+                console.log("Tipo de productos:", typeof products);
+                console.log("Es array:", Array.isArray(products));
+
+                // Validación defensiva: asegurar que products sea un array
+                const validProducts = Array.isArray(products) ? products : [];
+                
+                // Log para ver estructura de productos
+                if (validProducts.length > 0) {
+                    console.log("Estructura del primer producto:", validProducts[0]);
+                    console.log("Campos disponibles:", Object.keys(validProducts[0]));
+                    console.log("¿Tiene stock_quantity?", 'stock_quantity' in validProducts[0]);
+                    console.log("¿Tiene stock?", 'stock' in validProducts[0]);
+                    console.log("¿Tiene quantity?", 'quantity' in validProducts[0]);
                 }
 
-                console.error("Error al buscar productos:", err);
+                // Combinar productos con stock
+                const productsWithStock = validProducts.map(product => ({
+                    ...product,
+                    stock_quantity: stockMap[product.id] || 0
+                }));
+                
+                console.log("Productos válidos con stock:", productsWithStock.length);
+                console.log("Ejemplo producto con stock:", productsWithStock[0]);
+                
+                // Mostrar productos inmediatamente
+                setAllProducts(productsWithStock);
+                setFilteredProducts(productsWithStock);
+                
+                // Mostrar mensaje de éxito brevemente y luego ocultar loading
+                setLoadingMessage(`✅ ${productsWithStock.length} productos listos`);
+                
+                setTimeout(() => {
+                    setLoadingMessage("");
+                    setIsLoading(false);
+                }, 800);
+            } catch (err) {
+                if (err.name === "AbortError") {
+                    return;
+                }
+                console.error("Error al cargar productos:", err);
                 setError(
-                    "Error al buscar productos. Por favor, intente nuevamente."
+                    "No se pudieron cargar los productos. Por favor, intente nuevamente."
                 );
-            } finally {
+                setAllProducts([]);
+                setFilteredProducts([]);
+                setLoadingMessage("");
                 setIsLoading(false);
             }
         };
 
-        // Debounce para evitar demasiadas solicitudes mientras el usuario escribe
-        const timeoutId = setTimeout(searchProducts, 300);
+        fetchAllProducts();
 
+        // Cleanup
         return () => {
-            clearTimeout(timeoutId);
-            // Cancelar la solicitud si el componente se desmonta o el término cambia
             if (abortControllerRef.current) {
                 abortControllerRef.current.abort();
             }
         };
-    }, [searchTerm, authToken]);
+    }, [authToken]);
+
+    // Filtrar productos localmente cuando cambia el término de búsqueda
+    useEffect(() => {
+        // Validación defensiva: asegurar que allProducts sea un array
+        const validAllProducts = Array.isArray(allProducts) ? allProducts : [];
+        
+        if (!searchTerm.trim()) {
+            setFilteredProducts(validAllProducts);
+            return;
+        }
+
+        const term = searchTerm.toLowerCase().trim();
+        
+        const filtered = validAllProducts.filter(product => {
+            // Validaciones defensivas para cada campo
+            const name = product?.name || "";
+            const sku = product?.sku || "";
+            const barcode = product?.barcode || "";
+            const description = product?.description || "";
+            const categoryName = product?.category_name || "";
+
+            // Buscar en campos
+            const matchesName = name.toLowerCase().includes(term);
+            const matchesSku = sku.toLowerCase().includes(term);
+            const matchesBarcode = barcode.toLowerCase().includes(term);
+            const matchesDescription = description.toLowerCase().includes(term);
+            const matchesCategory = categoryName.toLowerCase().includes(term);
+
+            return matchesName || matchesSku || matchesBarcode || matchesDescription || matchesCategory;
+        });
+
+        console.log(`Filtrado: ${filtered.length} productos encontrados para "${term}"`);
+        setFilteredProducts(filtered);
+    }, [searchTerm, allProducts]);
 
     // Función para actualizar el término de búsqueda
     const handleSearch = useCallback((term) => {
@@ -118,14 +159,90 @@ const useProductSearch = () => {
         setSearchTerm("");
     }, []);
 
+    // Función para recargar todos los productos
+    const reloadProducts = useCallback(async () => {
+        if (!authToken) return;
+
+        setIsLoading(true);
+        setError(null);
+
+        try {
+            // Obtener productos y stock en paralelo
+            const [products, stockMap] = await Promise.all([
+                inventoryService.getAllProducts({}, authToken),
+                inventoryService.getStockMap(authToken)
+            ]);
+
+            // Validación defensiva
+            const validProducts = Array.isArray(products) ? products : [];
+
+            // Combinar productos con stock
+            const productsWithStock = validProducts.map(product => ({
+                ...product,
+                stock_quantity: stockMap[product.id] || 0
+            }));
+
+            setAllProducts(productsWithStock);
+            
+            // Reapliar el filtro actual
+            if (!searchTerm.trim()) {
+                setFilteredProducts(productsWithStock);
+            }
+        } catch (err) {
+            console.error("Error al recargar productos:", err);
+            setError("No se pudieron recargar los productos.");
+        } finally {
+            setIsLoading(false);
+        }
+    }, [authToken, searchTerm]);
+
+    // Función para actualizar el stock de productos específicos (después de una venta)
+    const updateProductsStock = useCallback((soldItems) => {
+        console.log("Actualizando stock después de venta:", soldItems);
+        
+        setAllProducts(prevProducts => {
+            const updatedProducts = prevProducts.map(product => {
+                const soldItem = soldItems.find(item => item.product_id === product.id);
+                if (soldItem) {
+                    const newStock = Math.max(0, (product.stock_quantity || 0) - soldItem.quantity);
+                    console.log(`Producto ${product.name}: ${product.stock_quantity} → ${newStock}`);
+                    return {
+                        ...product,
+                        stock_quantity: newStock
+                    };
+                }
+                return product;
+            });
+            return updatedProducts;
+        });
+
+        setFilteredProducts(prevFiltered => {
+            const updatedFiltered = prevFiltered.map(product => {
+                const soldItem = soldItems.find(item => item.product_id === product.id);
+                if (soldItem) {
+                    const newStock = Math.max(0, (product.stock_quantity || 0) - soldItem.quantity);
+                    return {
+                        ...product,
+                        stock_quantity: newStock
+                    };
+                }
+                return product;
+            });
+            return updatedFiltered;
+        });
+    }, []);
+
     return {
         searchTerm,
-        products,
+        allProducts,
         filteredProducts,
         isLoading,
+        loadingMessage,
         error,
         handleSearch,
         resetSearch,
+        reloadProducts,
+        updateProductsStock,
     };
 };
 

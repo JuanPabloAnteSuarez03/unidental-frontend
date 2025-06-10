@@ -251,6 +251,7 @@ const CustomerSelector = ({
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 style={{
                                     width: "100%",
+                                    boxSizing: "border-box",
                                     paddingLeft: "35px",
                                     paddingRight: "12px",
                                     paddingTop: "10px",
@@ -442,7 +443,10 @@ const CustomerSelector = ({
                         </div>
                     )}
 
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "15px" }}>
+                    <div 
+                        className="sales-customer-grid"
+                        style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginBottom: "15px" }}
+                    >
                         <div>
                             <label
                                 style={{
@@ -462,6 +466,7 @@ const CustomerSelector = ({
                                 onChange={(e) => handleInputChange("name", e.target.value)}
                                 style={{
                                     width: "100%",
+                                    boxSizing: "border-box",
                                     padding: "8px",
                                     fontSize: "14px",
                                     border: "1px solid #dee2e6",
@@ -492,6 +497,7 @@ const CustomerSelector = ({
                                 title="Solo se permiten números, espacios, guiones, paréntesis y signo más"
                                 style={{
                                     width: "100%",
+                                    boxSizing: "border-box",
                                     padding: "8px",
                                     fontSize: "14px",
                                     border: phoneError ? "1px solid #e74c3c" : "1px solid #dee2e6",
@@ -526,11 +532,12 @@ const CustomerSelector = ({
                             </label>
                             <input
                                 type="email"
-                                placeholder="Ej: usuario@dominio.com"
+                                placeholder="email@ejemplo.com"
                                 value={newCustomerData.email}
                                 onChange={(e) => handleInputChange("email", e.target.value)}
                                 style={{
                                     width: "100%",
+                                    boxSizing: "border-box",
                                     padding: "8px",
                                     fontSize: "14px",
                                     border: emailError ? "1px solid #e74c3c" : "1px solid #dee2e6",
@@ -561,21 +568,23 @@ const CustomerSelector = ({
                                     marginBottom: "4px",
                                 }}
                             >
-                                Notas
+                                Notas (opcional)
                             </label>
                             <textarea
-                                placeholder="Notas adicionales sobre el cliente"
+                                placeholder="Información adicional sobre el cliente..."
                                 value={newCustomerData.notes}
                                 onChange={(e) => handleInputChange("notes", e.target.value)}
-                                rows={2}
+                                rows={3}
                                 style={{
                                     width: "100%",
+                                    boxSizing: "border-box",
                                     padding: "8px",
                                     fontSize: "14px",
                                     border: "1px solid #dee2e6",
                                     borderRadius: "4px",
                                     backgroundColor: "white",
                                     resize: "vertical",
+                                    fontFamily: "inherit",
                                 }}
                             />
                         </div>

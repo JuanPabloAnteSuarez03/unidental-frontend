@@ -77,7 +77,7 @@ export const getSales = async (params = {}, authToken, signal) => {
 /**
  * Create a new sale
  * @param {Object} saleData - Sale data
- * @param {number} saleData.customer - Customer ID (optional)
+ * @param {number} saleData.customer_id - Customer ID (optional)
  * @param {string} saleData.sale_type - Sale type (required)
  * @param {boolean} saleData.should_invoice - Whether sale should be invoiced
  * @param {Array} saleData.items - Array of sale items (required)
@@ -90,27 +90,75 @@ export const createSale = async (saleData, authToken, signal) => {
         throw new Error("No authentication token provided");
     }
 
+    console.log("createSale - saleData received:", saleData);
+
     if (!saleData.items || saleData.items.length === 0) {
+        console.error("No items found in sale data:", saleData);
         throw new Error("Sale must have at least one item");
     }
 
+    console.log("createSale - validation passed, items:", saleData.items);
+
     try {
+        console.log("createSale - sending request to:", API_SALES_URL);
+        
+        const jsonBody = JSON.stringify(saleData);
+        console.log("createSale - JSON body to send:", jsonBody);
+        console.log("createSale - JSON body parsed back:", JSON.parse(jsonBody));
+        
         const response = await fetch(API_SALES_URL, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
                 "Authorization": `Token ${authToken}`,
             },
-            body: JSON.stringify(saleData),
+            body: jsonBody,
             signal,
         });
 
+        console.log("createSale - response status:", response.status);
+
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `Error ${response.status}: ${response.statusText}`);
+            let errorData;
+            try {
+                errorData = await response.json();
+                console.error("createSale - error response JSON:", errorData);
+            } catch (parseError) {
+                console.error("createSale - error parsing response:", parseError);
+                const textResponse = await response.text();
+                console.error("createSale - error response text:", textResponse);
+                errorData = { detail: textResponse };
+            }
+            
+            // Si hay errores de validación, mostrarlos de forma más clara
+            if (errorData && typeof errorData === 'object') {
+                console.error("createSale - validation errors:", JSON.stringify(errorData, null, 2));
+                
+                // Manejar errores específicos de stock
+                if (errorData.items) {
+                    const stockErrors = [];
+                    errorData.items.forEach((itemError, index) => {
+                        if (itemError.quantity && Array.isArray(itemError.quantity)) {
+                            itemError.quantity.forEach(error => {
+                                if (error.includes('stock') || error.includes('inventory') || error.includes('disponible')) {
+                                    stockErrors.push(`Producto ${index + 1}: ${error}`);
+                                }
+                            });
+                        }
+                    });
+                    
+                    if (stockErrors.length > 0) {
+                        throw new Error(`Problemas de stock:\n${stockErrors.join('\n')}`);
+                    }
+                }
+            }
+            
+            throw new Error(errorData.detail || JSON.stringify(errorData) || `Error ${response.status}: ${response.statusText}`);
         }
 
-        return await response.json();
+        const result = await response.json();
+        console.log("createSale - success response:", result);
+        return result;
     } catch (error) {
         console.error("Error creating sale:", error);
         throw error;

@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
-import { inventoryService } from "../../services/inventoryService";
 import { useAuth } from "../../context/AuthContext";
+import useProductSearch from "../../hooks/inventory/useProductSearch";
 
 const ProductSearchSelector = ({
     onProductSelected,
@@ -13,23 +13,32 @@ const ProductSearchSelector = ({
     disabled = false,
     initialProduct = null,
     onSelectionCleared = null,
+    onUpdateProductsStock = null,
     style = {},
     inputStyle = {},
     dropdownStyle = {},
 }) => {
     const { authToken } = useAuth();
-    const [searchTerm, setSearchTerm] = useState("");
-    const [products, setProducts] = useState([]);
-    const [loading, setLoading] = useState(false);
+    const {
+        searchTerm,
+        filteredProducts,
+        isLoading,
+        loadingMessage,
+        error: searchError,
+        handleSearch,
+        resetSearch,
+        updateProductsStock,
+    } = useProductSearch();
+
     const [selectedProduct, setSelectedProduct] = useState(initialProduct);
     const [showDropdown, setShowDropdown] = useState(false);
     const [selectedIndex, setSelectedIndex] = useState(-1);
-    const [error, setError] = useState(null);
+    const [inputValue, setInputValue] = useState("");
 
     // Refs
     const dropdownRef = useRef(null);
     const inputRef = useRef(null);
-    const abortControllerRef = useRef(null);
+    const debounceTimerRef = useRef(null);
 
     // Effect para establecer producto inicial
     useEffect(() => {
@@ -38,107 +47,78 @@ const ProductSearchSelector = ({
         }
     }, [initialProduct]);
 
+    // Función de debounce para la búsqueda
+    const debouncedSearch = useCallback((term) => {
+        if (debounceTimerRef.current) {
+            clearTimeout(debounceTimerRef.current);
+        }
+
+        debounceTimerRef.current = setTimeout(() => {
+            handleSearch(term);
+        }, debounceMs);
+    }, [handleSearch, debounceMs]);
+
     // Effect para búsqueda con debounce
     useEffect(() => {
-        const searchProducts = async () => {
-            if (searchTerm.length < minSearchLength || !authToken) {
-                setProducts([]);
-                setShowDropdown(false);
-                setError(null);
-                return;
-            }
+        if (inputValue.length >= minSearchLength) {
+            debouncedSearch(inputValue);
+            setShowDropdown(true);
+        } else {
+            handleSearch("");
+            setShowDropdown(false);
+        }
 
-            // Cancelar búsqueda anterior
-            if (abortControllerRef.current) {
-                abortControllerRef.current.abort();
-            }
+        setSelectedIndex(-1);
+    }, [inputValue, minSearchLength, debouncedSearch, handleSearch]);
 
-            abortControllerRef.current = new AbortController();
-            const { signal } = abortControllerRef.current;
-
-            try {
-                setLoading(true);
-                setError(null);
-
-                console.log("Buscando productos con término:", searchTerm);
-
-                // Buscar productos usando diferentes parámetros
-                const searchParams = {
-                    search: searchTerm.trim(),
-                    page_size: maxResults,
-                };
-
-                // También intentar búsqueda por nombre, SKU, etc.
-                const response = await inventoryService.getProducts(searchParams, authToken, signal);
-
-                if (signal.aborted) return;
-
-                console.log("Respuesta de búsqueda:", response);
-
-                const foundProducts = response?.results || [];
-                setProducts(foundProducts);
-                setShowDropdown(foundProducts.length > 0);
-                setSelectedIndex(-1);
-
-                if (foundProducts.length === 0 && searchTerm.length >= minSearchLength) {
-                    setError("No se encontraron productos que coincidan con la búsqueda");
-                }
-
-            } catch (error) {
-                if (error.name === "AbortError") {
-                    return;
-                }
-                console.error("Error al buscar productos:", error);
-                setError("Error al buscar productos. Intente nuevamente.");
-                setProducts([]);
-                setShowDropdown(false);
-            } finally {
-                setLoading(false);
+    // Cleanup del timer
+    useEffect(() => {
+        return () => {
+            if (debounceTimerRef.current) {
+                clearTimeout(debounceTimerRef.current);
             }
         };
+    }, []);
 
-        const debounceTimer = setTimeout(searchProducts, debounceMs);
-        return () => clearTimeout(debounceTimer);
-    }, [searchTerm, authToken, maxResults, minSearchLength, debounceMs]);
+    // Obtener productos a mostrar (limitados por maxResults)
+    const displayProducts = Array.isArray(filteredProducts) 
+        ? filteredProducts.slice(0, maxResults) 
+        : [];
 
     // Manejar selección de producto
     const handleProductSelect = useCallback((product) => {
         setSelectedProduct(product);
-        setSearchTerm("");
-        setProducts([]);
+        setInputValue("");
         setShowDropdown(false);
         setSelectedIndex(-1);
-        setError(null);
+        resetSearch();
         
         if (onProductSelected) {
             onProductSelected(product);
         }
-    }, [onProductSelected]);
+    }, [onProductSelected, resetSearch]);
 
     // Limpiar selección
     const handleClearSelection = useCallback(() => {
         setSelectedProduct(null);
-        setSearchTerm("");
-        setProducts([]);
+        setInputValue("");
         setShowDropdown(false);
         setSelectedIndex(-1);
-        setError(null);
+        resetSearch();
         
         if (onSelectionCleared) {
             onSelectionCleared();
         }
-    }, [onSelectionCleared]);
+    }, [onSelectionCleared, resetSearch]);
 
     // Manejar cambio en input
     const handleInputChange = (e) => {
         const value = e.target.value;
-        setSearchTerm(value);
+        setInputValue(value);
         
         if (!value.trim()) {
-            setProducts([]);
             setShowDropdown(false);
             setSelectedIndex(-1);
-            setError(null);
         }
     };
 
@@ -146,19 +126,19 @@ const ProductSearchSelector = ({
     const handleKeyPress = (e) => {
         if (e.key === "Enter") {
             e.preventDefault();
-            if (selectedIndex >= 0 && selectedIndex < products.length) {
-                handleProductSelect(products[selectedIndex]);
+            if (selectedIndex >= 0 && selectedIndex < displayProducts.length) {
+                handleProductSelect(displayProducts[selectedIndex]);
             }
         } else if (e.key === "ArrowDown") {
             e.preventDefault();
-            if (showDropdown && products.length > 0) {
+            if (showDropdown && displayProducts.length > 0) {
                 setSelectedIndex(prev => 
-                    prev < products.length - 1 ? prev + 1 : prev
+                    prev < displayProducts.length - 1 ? prev + 1 : prev
                 );
             }
         } else if (e.key === "ArrowUp") {
             e.preventDefault();
-            if (showDropdown && products.length > 0) {
+            if (showDropdown && displayProducts.length > 0) {
                 setSelectedIndex(prev => prev > 0 ? prev - 1 : -1);
             }
         } else if (e.key === "Escape") {
@@ -180,6 +160,13 @@ const ProductSearchSelector = ({
         document.addEventListener("mousedown", handleClickOutside);
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
+
+    // Effect para exponer la función updateProductsStock al componente padre
+    useEffect(() => {
+        if (onUpdateProductsStock) {
+            onUpdateProductsStock(updateProductsStock);
+        }
+    }, [updateProductsStock, onUpdateProductsStock]);
 
     return (
         <div style={{ position: "relative", ...style }} ref={dropdownRef}>
@@ -244,22 +231,25 @@ const ProductSearchSelector = ({
                         <input
                             ref={inputRef}
                             type="text"
-                            placeholder={placeholder}
-                            value={searchTerm}
+                            placeholder={isLoading && filteredProducts.length === 0 
+                                ? "Cargando productos..." 
+                                : placeholder}
+                            value={inputValue}
                             onChange={handleInputChange}
                             onKeyDown={handleKeyPress}
-                            disabled={disabled}
+                            disabled={disabled || (isLoading && filteredProducts.length === 0)}
                             style={{
                                 width: "100%",
+                                boxSizing: "border-box",
                                 paddingLeft: "35px",
                                 paddingRight: "12px",
                                 paddingTop: "10px",
                                 paddingBottom: "10px",
-                                border: error ? "1px solid #e74c3c" : "1px solid #dee2e6",
+                                border: searchError ? "1px solid #e74c3c" : "1px solid #dee2e6",
                                 borderRadius: "4px",
                                 fontSize: "14px",
-                                backgroundColor: disabled ? "#f8f9fa" : "white",
-                                color: disabled ? "#6c757d" : "#2c3e50",
+                                backgroundColor: (disabled || (isLoading && filteredProducts.length === 0)) ? "#f8f9fa" : "white",
+                                color: (disabled || (isLoading && filteredProducts.length === 0)) ? "#6c757d" : "#2c3e50",
                                 ...inputStyle,
                             }}
                         />
@@ -269,17 +259,73 @@ const ProductSearchSelector = ({
                                 left: "10px",
                                 top: "50%",
                                 transform: "translateY(-50%)",
-                                color: loading ? "#3498db" : "#6c757d",
+                                color: (isLoading && filteredProducts.length === 0) ? "#3498db" : "#6c757d",
                                 fontSize: "14px",
                                 fontWeight: "normal",
                             }}
                         >
-                            {loading ? "⏳" : "⌕"}
+                            {(isLoading && filteredProducts.length === 0) ? "⏳" : "⌕"}
                         </div>
                     </div>
 
+                    {/* Mensaje de carga inicial */}
+                    {isLoading && filteredProducts.length === 0 && (
+                        <div
+                            style={{
+                                marginTop: "8px",
+                                padding: "12px",
+                                backgroundColor: "#e8f4fd",
+                                border: "1px solid #b8daff",
+                                borderRadius: "4px",
+                                color: "#004085",
+                                fontSize: "14px",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px"
+                            }}
+                        >
+                            <div
+                                style={{
+                                    width: "16px",
+                                    height: "16px",
+                                    border: "2px solid #b8daff",
+                                    borderTop: "2px solid #3498db",
+                                    borderRadius: "50%",
+                                    animation: "spin 1s linear infinite"
+                                }}
+                            />
+                            <span>{loadingMessage}</span>
+                            <style>
+                                {`
+                                    @keyframes spin {
+                                        0% { transform: rotate(0deg); }
+                                        100% { transform: rotate(360deg); }
+                                    }
+                                `}
+                            </style>
+                        </div>
+                    )}
+
+                    {/* Mensaje de éxito (menos intrusivo) */}
+                    {isLoading && filteredProducts.length > 0 && loadingMessage.includes("✅") && (
+                        <div
+                            style={{
+                                marginTop: "4px",
+                                padding: "6px 12px",
+                                backgroundColor: "#d4edda",
+                                border: "1px solid #c3e6cb",
+                                borderRadius: "4px",
+                                color: "#155724",
+                                fontSize: "12px",
+                                textAlign: "center"
+                            }}
+                        >
+                            {loadingMessage}
+                        </div>
+                    )}
+
                     {/* Mensaje de error */}
-                    {error && (
+                    {searchError && (
                         <div
                             style={{
                                 marginTop: "8px",
@@ -291,12 +337,12 @@ const ProductSearchSelector = ({
                                 fontSize: "12px",
                             }}
                         >
-                            {error}
+                            {searchError}
                         </div>
                     )}
 
                     {/* Dropdown de resultados */}
-                    {showDropdown && products.length > 0 && (
+                    {showDropdown && displayProducts.length > 0 && (
                         <div
                             style={{
                                 position: "absolute",
@@ -314,7 +360,7 @@ const ProductSearchSelector = ({
                                 ...dropdownStyle,
                             }}
                         >
-                            {products.map((product, index) => (
+                            {displayProducts.map((product, index) => (
                                 <button
                                     key={product.id}
                                     onClick={() => handleProductSelect(product)}
@@ -323,7 +369,7 @@ const ProductSearchSelector = ({
                                         textAlign: "left",
                                         padding: "12px",
                                         border: "none",
-                                        borderBottom: index < products.length - 1 ? "1px solid #f8f9fa" : "none",
+                                        borderBottom: index < displayProducts.length - 1 ? "1px solid #f8f9fa" : "none",
                                         backgroundColor: selectedIndex === index ? "#e8f4fd" : "white",
                                         cursor: "pointer",
                                         transition: "background-color 0.2s ease",
@@ -331,29 +377,80 @@ const ProductSearchSelector = ({
                                     onMouseEnter={() => setSelectedIndex(index)}
                                     onMouseLeave={() => setSelectedIndex(-1)}
                                 >
-                                    <div
-                                        style={{
-                                            fontSize: "14px",
-                                            fontWeight: "600",
-                                            color: "#2c3e50",
-                                            marginBottom: "4px",
-                                        }}
-                                    >
-                                        {product.name}
-                                    </div>
-                                    <div style={{ fontSize: "12px", color: "#6c757d", marginBottom: "2px" }}>
-                                        SKU: {product.sku}
-                                    </div>
-                                    {product.category_name && (
-                                        <div style={{ fontSize: "12px", color: "#6c757d" }}>
-                                            Categoría: {product.category_name}
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                                        <div style={{ flex: 1 }}>
+                                            <div
+                                                style={{
+                                                    fontSize: "14px",
+                                                    fontWeight: "600",
+                                                    color: "#2c3e50",
+                                                    marginBottom: "4px",
+                                                }}
+                                            >
+                                                {product.name}
+                                            </div>
+                                            <div style={{ fontSize: "12px", color: "#6c757d", marginBottom: "2px" }}>
+                                                SKU: {product.sku}
+                                            </div>
+                                            {product.category_name && (
+                                                <div style={{ fontSize: "12px", color: "#6c757d", marginBottom: "2px" }}>
+                                                    Categoría: {product.category_name}
+                                                </div>
+                                            )}
+                                            {product.selling_price && (
+                                                <div style={{ fontSize: "12px", color: "#27ae60", fontWeight: "600" }}>
+                                                    Precio: ${Number(product.selling_price).toLocaleString()}
+                                                </div>
+                                            )}
                                         </div>
-                                    )}
-                                    {product.selling_price && (
-                                        <div style={{ fontSize: "12px", color: "#27ae60", fontWeight: "600" }}>
-                                            Precio: ${Number(product.selling_price).toLocaleString()}
+                                        
+                                        {/* Stock Info */}
+                                        <div style={{ 
+                                            marginLeft: "12px",
+                                            display: "flex",
+                                            flexDirection: "column",
+                                            alignItems: "flex-end"
+                                        }}>
+                                            <div
+                                                style={{
+                                                    fontSize: "11px",
+                                                    color: "#6c757d",
+                                                    marginBottom: "2px",
+                                                    fontWeight: "500"
+                                                }}
+                                            >
+                                                Stock
+                                            </div>
+                                            <div
+                                                style={{
+                                                    fontSize: "13px",
+                                                    fontWeight: "700",
+                                                    padding: "2px 8px",
+                                                    borderRadius: "12px",
+                                                    backgroundColor: (product.stock_quantity || 0) > 0 
+                                                        ? (product.stock_quantity > 10 ? "#d4edda" : "#fff3cd")
+                                                        : "#f8d7da",
+                                                    color: (product.stock_quantity || 0) > 0 
+                                                        ? (product.stock_quantity > 10 ? "#155724" : "#856404")
+                                                        : "#721c24",
+                                                    border: `1px solid ${(product.stock_quantity || 0) > 0 
+                                                        ? (product.stock_quantity > 10 ? "#c3e6cb" : "#ffeaa7")
+                                                        : "#f5c6cb"}`,
+                                                    minWidth: "45px",
+                                                    textAlign: "center"
+                                                }}
+                                            >
+                                                {(product.stock_quantity || 0) > 0 
+                                                    ? `${product.stock_quantity}` 
+                                                    : "Sin stock"}
+                                            </div>
+                                            {(product.stock_quantity || 0) <= 0 && (
+                                                <div style={{ fontSize: "10px", color: "#e74c3c", marginTop: "2px" }}>
+                                                    ⚠️
+                                                </div>
+                                            )}
                                         </div>
-                                    )}
+                                    </div>
                                 </button>
                             ))}
                             
@@ -368,13 +465,13 @@ const ProductSearchSelector = ({
                                     textAlign: "center",
                                 }}
                             >
-                                {products.length} de {maxResults} resultados mostrados
+                                {displayProducts.length} de {maxResults} resultados mostrados
                             </div>
                         </div>
                     )}
 
                     {/* Ayuda de navegación */}
-                    {showDropdown && products.length > 0 && (
+                    {showDropdown && displayProducts.length > 0 && (
                         <div
                             style={{
                                 position: "absolute",

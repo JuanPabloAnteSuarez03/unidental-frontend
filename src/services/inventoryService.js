@@ -2,6 +2,7 @@ import API_CONFIG from "../config/api.js";
 
 // API URLs
 const API_PRODUCTS_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.INVENTORY}`;
+const API_PRODUCTS_ALL_URL = `${API_CONFIG.BASE_URL}/catalogs/products/all/`;
 const API_STOCK_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.STOCK}`;
 const API_STOCK_SUMMARY_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.STOCK_SUMMARY}`;
 const API_CATEGORIES_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.CATEGORIES}`;
@@ -342,6 +343,271 @@ export const getStockMap = async (authToken, signal) => {
     }
 };
 
+/**
+ * Get all products without pagination (for search and filters)
+ * @param {Object} params - Optional filter parameters (name, sku, barcode, category, category_name)
+ * @param {string} authToken - Authentication token
+ * @param {AbortSignal} signal - AbortController signal for request cancellation
+ * @returns {Promise<Array>} - Array of all products
+ */
+export const getAllProducts = async (params = {}, authToken, signal) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    // Build URL with params
+    const url = buildUrlWithParams(API_PRODUCTS_ALL_URL, params);
+
+    try {
+        console.log("Requesting all products from:", url);
+        
+        const response = await fetch(url, {
+            headers: {
+                Authorization: `Token ${authToken}`,
+                "Content-Type": "application/json",
+            },
+            signal,
+        });
+
+        if (!response.ok) {
+            throw new Error(`Error ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        console.log("Raw response from getAllProducts:", data);
+        console.log("Type of response:", typeof data);
+        console.log("Is array:", Array.isArray(data));
+        
+        // Ensure we always return an array
+        if (Array.isArray(data)) {
+            console.log("Returning array with", data.length, "products");
+            return data;
+        } else if (data && Array.isArray(data.results)) {
+            console.log("Returning results array with", data.results.length, "products");
+            return data.results;
+        } else {
+            console.log("No valid array found, returning empty array");
+            return [];
+        }
+    } catch (error) {
+        if (error.name === "AbortError") {
+            console.log("Request was aborted");
+            return [];
+        }
+        console.error("Error fetching all products:", error);
+        throw error;
+    }
+};
+
+/**
+ * Get price information for products (last sale and purchase prices)
+ * @param {Array} productIds - Array of product IDs
+ * @param {string} authToken - Authentication token
+ * @param {AbortSignal} signal - AbortController signal for request cancellation
+ * @returns {Promise<Object>} - Map of product IDs to price information
+ */
+export const getProductPrices = async (productIds = [], authToken, signal) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    try {
+        const pricesMap = {};
+
+        // Para cada producto, obtener sus precios históricos
+        for (const productId of productIds) {
+            try {
+                const priceInfo = await getIntelligentPrice(productId, authToken);
+                pricesMap[productId] = priceInfo;
+            } catch (error) {
+                console.error(`Error obteniendo precios para producto ${productId}:`, error);
+                pricesMap[productId] = { price: 0, source: 'none', source_label: 'Error al obtener precio' };
+            }
+        }
+
+        return pricesMap;
+    } catch (error) {
+        if (error.name === "AbortError") {
+            console.log("Prices request was aborted");
+            return {};
+        }
+        console.error("Error fetching product prices:", error);
+        return {};
+    }
+};
+
+/**
+ * Get intelligent price for a specific product
+ * @param {number} productId - Product ID
+ * @param {string} authToken - Authentication token
+ * @returns {Promise<Object>} - Price information with source
+ */
+export const getIntelligentPrice = async (productId, authToken) => {
+    if (!authToken || !productId) {
+        return { price: 0, source: 'none', source_label: 'Sin precio disponible' };
+    }
+
+    try {
+        // 1. Intentar obtener último precio de venta
+        const lastSalePrice = await getLastSalePrice(productId, authToken);
+        if (lastSalePrice.price > 0) {
+            return {
+                price: lastSalePrice.price,
+                source: 'sale',
+                source_label: 'Último precio de venta'
+            };
+        }
+
+        // 2. Intentar obtener último precio de compra
+        const lastPurchasePrice = await getLastPurchasePrice(productId, authToken);
+        if (lastPurchasePrice.price > 0) {
+            return {
+                price: lastPurchasePrice.price,
+                source: 'purchase',
+                source_label: 'Último precio de compra'
+            };
+        }
+
+        // 3. Usar precios del producto (fallback)
+        return await getProductIntelligentPriceFallback(productId, authToken);
+
+    } catch (error) {
+        console.error("Error fetching intelligent price:", error);
+        return await getProductIntelligentPriceFallback(productId, authToken);
+    }
+};
+
+/**
+ * Get last sale price for a product
+ * @param {number} productId - Product ID
+ * @param {string} authToken - Authentication token
+ * @returns {Promise<Object>} - Price information
+ */
+const getLastSalePrice = async (productId, authToken) => {
+    try {
+        const salesUrl = `${API_CONFIG.BASE_URL}/sales/sale-items/?product=${productId}&ordering=-id&limit=1`;
+        
+        const response = await fetch(salesUrl, {
+            headers: {
+                Authorization: `Token ${authToken}`,
+                "Content-Type": "application/json",
+            },
+        });
+
+        if (!response.ok) {
+            return { price: 0, source: 'none' };
+        }
+
+        const data = await response.json();
+        
+        if (data.results && data.results.length > 0) {
+            const lastSale = data.results[0];
+            return {
+                price: parseFloat(lastSale.unit_price) || 0,
+                source: 'sale',
+                item_id: lastSale.id,
+                date: lastSale.created_at || null
+            };
+        }
+
+        return { price: 0, source: 'none' };
+    } catch (error) {
+        console.error("Error fetching last sale price:", error);
+        return { price: 0, source: 'none' };
+    }
+};
+
+/**
+ * Get last purchase price for a product
+ * @param {number} productId - Product ID
+ * @param {string} authToken - Authentication token
+ * @returns {Promise<Object>} - Price information
+ */
+const getLastPurchasePrice = async (productId, authToken) => {
+    try {
+        // Primero obtenemos purchase items por producto
+        const purchasesUrl = `${API_CONFIG.BASE_URL}/purchases/items/?purchase_option__product=${productId}&ordering=-id&limit=1`;
+        
+        const response = await fetch(purchasesUrl, {
+            headers: {
+                Authorization: `Token ${authToken}`,
+                "Content-Type": "application/json",
+            },
+        });
+
+        if (!response.ok) {
+            return { price: 0, source: 'none' };
+        }
+
+        const data = await response.json();
+        
+        if (data.results && data.results.length > 0) {
+            const lastPurchase = data.results[0];
+            return {
+                price: parseFloat(lastPurchase.unit_price) || 0,
+                source: 'purchase',
+                item_id: lastPurchase.id,
+                date: lastPurchase.created_at || null
+            };
+        }
+
+        return { price: 0, source: 'none' };
+    } catch (error) {
+        console.error("Error fetching last purchase price:", error);
+        return { price: 0, source: 'none' };
+    }
+};
+
+/**
+ * Fallback function to get intelligent price from existing product data
+ * @param {number} productId - Product ID
+ * @param {string} authToken - Authentication token
+ * @returns {Promise<Object>} - Price information with source
+ */
+const getProductIntelligentPriceFallback = async (productId, authToken) => {
+    try {
+        // Obtener el producto individual para usar selling_price o cost_price
+        const productUrl = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.INVENTORY}${productId}/`;
+        
+        const response = await fetch(productUrl, {
+            headers: {
+                Authorization: `Token ${authToken}`,
+                "Content-Type": "application/json",
+            },
+        });
+
+        if (!response.ok) {
+            return { price: 0, source: 'none', source_label: 'Sin precio disponible' };
+        }
+
+        const product = await response.json();
+        
+        // Lógica de fallback: selling_price > cost_price > 0
+        if (product.selling_price && product.selling_price > 0) {
+            return {
+                price: product.selling_price,
+                source: 'suggested',
+                source_label: 'Precio de venta sugerido'
+            };
+        } else if (product.cost_price && product.cost_price > 0) {
+            return {
+                price: product.cost_price,
+                source: 'cost',
+                source_label: 'Precio de costo'
+            };
+        } else {
+            return {
+                price: 0,
+                source: 'none',
+                source_label: 'Sin precio disponible'
+            };
+        }
+    } catch (error) {
+        console.error("Error in price fallback:", error);
+        return { price: 0, source: 'none', source_label: 'Sin precio disponible' };
+    }
+};
+
 // Helper functions
 
 /**
@@ -464,6 +730,9 @@ const inventoryService = {
     getStockSummary,
     getInventoryMovements,
     getStockMap,
+    getAllProducts,
+    getProductPrices,
+    getIntelligentPrice,
 };
 
 // Named export for consistency with other services

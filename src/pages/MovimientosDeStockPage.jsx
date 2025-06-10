@@ -1063,8 +1063,8 @@ const MovimientosDeStockPage = () => {
                                             allowClearSelection={false}
                                             initialProduct={selectedProductFromSearch}
                                         />
-                                    </div>
-                                )}
+                                            </div>
+                                        )}
                             </div>
 
                             {/* Ubicación */}
@@ -2083,7 +2083,7 @@ const MovimientosDeStockPage = () => {
                                                                     pageNum ===
                                                                     movementsCurrentPage
                                                                         ? "#fff"
-                                                                    : "#2c3e50",
+                                                                        : "#2c3e50",
                                                                 cursor: "pointer",
                                                                 fontSize:
                                                                     "14px",

@@ -1,29 +1,127 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef, useImperativeHandle, forwardRef } from "react";
 import ProductSearchSelector from "../Common/ProductSearchSelector";
+import PriceSourceLegend from "./PriceSourceLegend";
+import { useAuth } from "../../context/AuthContext";
+import inventoryService from "../../services/inventoryService";
 
-const ProductSelector = ({ 
+const ProductSelector = forwardRef(({ 
     onProductAdded 
-}) => {
+}, ref) => {
+    const { authToken } = useAuth();
     const [selectedProduct, setSelectedProduct] = useState(null);
     const [quantity, setQuantity] = useState(1);
     const [unitPrice, setUnitPrice] = useState("");
+    const [priceInfo, setPriceInfo] = useState(null);
+    const [loadingPrice, setLoadingPrice] = useState(false);
     const [error, setError] = useState(null);
+    const updateProductsStockRef = useRef(null);
+
+    // Exponer la función updateProductsStock al componente padre
+    useImperativeHandle(ref, () => ({
+        updateProductsStock: (soldItems) => {
+            if (updateProductsStockRef.current) {
+                updateProductsStockRef.current(soldItems);
+            }
+        }
+    }), []);
+
+    // Capturar la función del hook
+    const handleUpdateProductsStock = useCallback((updateFn) => {
+        updateProductsStockRef.current = updateFn;
+    }, []);
 
     // Handle product selection from search
-    const handleProductSelected = useCallback((product) => {
+    const handleProductSelected = useCallback(async (product) => {
         setSelectedProduct(product);
-        setUnitPrice(product.selling_price || ""); // Pre-fill with selling price if available
         setQuantity(1);
         setError(null);
-    }, []);
+        setLoadingPrice(true);
+        setPriceInfo(null);
+
+        try {
+            // Obtener precio inteligente para el producto
+            const intelligentPrice = await inventoryService.getIntelligentPrice(product.id, authToken);
+            
+            console.log("Precio inteligente recibido:", intelligentPrice);
+            
+            setUnitPrice(intelligentPrice.price.toString());
+            setPriceInfo({
+                source: intelligentPrice.source,
+                source_label: intelligentPrice.source_label,
+                price: intelligentPrice.price
+            });
+        } catch (error) {
+            console.error("Error obteniendo precio inteligente:", error);
+            // Fallback: usar selling_price del producto si está disponible
+            const fallbackPrice = product.selling_price || product.cost_price || "";
+            setUnitPrice(fallbackPrice.toString());
+            
+            if (product.selling_price) {
+                setPriceInfo({
+                    source: 'suggested',
+                    source_label: 'Precio de venta sugerido',
+                    price: product.selling_price
+                });
+            } else if (product.cost_price) {
+                setPriceInfo({
+                    source: 'cost',
+                    source_label: 'Precio de costo',
+                    price: product.cost_price
+                });
+            } else {
+                setPriceInfo({
+                    source: 'none',
+                    source_label: 'Sin precio disponible - Ingrese manualmente',
+                    price: 0
+                });
+            }
+        } finally {
+            setLoadingPrice(false);
+        }
+    }, [authToken]);
 
     // Handle clearing product selection
     const handleSelectionCleared = useCallback(() => {
         setSelectedProduct(null);
         setQuantity(1);
         setUnitPrice("");
+        setPriceInfo(null);
         setError(null);
     }, []);
+
+    // Handle manual price change
+    const handlePriceChange = useCallback((newPrice) => {
+        setUnitPrice(newPrice);
+        
+        // Si el usuario cambia el precio manualmente, actualizar el indicador
+        if (priceInfo && newPrice !== priceInfo.price.toString()) {
+            setPriceInfo({
+                source: 'manual',
+                source_label: 'Precio personalizado',
+                price: parseFloat(newPrice) || 0
+            });
+        }
+    }, [priceInfo]);
+
+    // Get price info icon and color based on source
+    const getPriceSourceIcon = (source) => {
+        switch (source) {
+            case 'sale':
+                return { icon: '💰', color: '#27ae60', bgColor: '#d5edda' };
+            case 'purchase':
+                return { icon: '📦', color: '#3498db', bgColor: '#e8f4fd' };
+            case 'suggested':
+                return { icon: '💡', color: '#f39c12', bgColor: '#fef9e7' };
+            case 'cost':
+                return { icon: '🏷️', color: '#9b59b6', bgColor: '#f4ecf7' };
+            case 'manual':
+                return { icon: '✏️', color: '#17a2b8', bgColor: '#e6f9fc' };
+            case 'none':
+                return { icon: '⚠️', color: '#e74c3c', bgColor: '#fdedec' };
+            default:
+                return { icon: '❓', color: '#95a5a6', bgColor: '#f8f9fa' };
+        }
+    };
 
     // Handle adding product to sale
     const handleAddToSale = useCallback(() => {
@@ -41,6 +139,16 @@ const ProductSelector = ({
             setError("La cantidad debe ser mayor a 0");
             return;
         }
+
+        console.log("ProductSelector - handleAddToSale - Valores antes de enviar:", {
+            selectedProduct: selectedProduct.name,
+            quantity: quantity,
+            quantityType: typeof quantity,
+            unitPrice: unitPrice,
+            unitPriceType: typeof unitPrice,
+            parsedUnitPrice: parseFloat(unitPrice),
+            parsedUnitPriceType: typeof parseFloat(unitPrice)
+        });
 
         try {
             onProductAdded(selectedProduct, quantity, parseFloat(unitPrice));
@@ -75,6 +183,9 @@ const ProductSelector = ({
                 </div>
             )}
 
+            {/* Price Source Legend */}
+            <PriceSourceLegend />
+
             {/* Product Search */}
             <div style={{ marginBottom: "20px" }}>
                 <label
@@ -92,6 +203,7 @@ const ProductSelector = ({
                 <ProductSearchSelector
                     onProductSelected={handleProductSelected}
                     onSelectionCleared={handleSelectionCleared}
+                    onUpdateProductsStock={handleUpdateProductsStock}
                     placeholder="Buscar producto por nombre, SKU o código..."
                     maxResults={20}
                     initialProduct={selectedProduct}
@@ -103,7 +215,85 @@ const ProductSelector = ({
             {/* Quantity and Price Inputs - Only show when product is selected */}
             {selectedProduct && (
                 <div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", marginBottom: "15px" }}>
+                    {/* Price Source Indicator */}
+                    {priceInfo && (
+                        <div
+                            style={{
+                                marginBottom: "15px",
+                                padding: "12px",
+                                backgroundColor: getPriceSourceIcon(priceInfo.source).bgColor,
+                                border: `1px solid ${getPriceSourceIcon(priceInfo.source).color}`,
+                                borderRadius: "6px",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                            }}
+                        >
+                            <span style={{ fontSize: "16px" }}>
+                                {getPriceSourceIcon(priceInfo.source).icon}
+                            </span>
+                            <div style={{ flex: 1 }}>
+                                <div
+                                    style={{
+                                        fontSize: "14px",
+                                        fontWeight: "600",
+                                        color: getPriceSourceIcon(priceInfo.source).color,
+                                        marginBottom: "2px",
+                                    }}
+                                >
+                                    {priceInfo.source_label}
+                                </div>
+                                {priceInfo.price > 0 && (
+                                    <div style={{ fontSize: "12px", color: "#6c757d" }}>
+                                        Precio sugerido: ${Number(priceInfo.price).toLocaleString()}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Loading indicator */}
+                    {loadingPrice && (
+                        <div
+                            style={{
+                                marginBottom: "15px",
+                                padding: "12px",
+                                backgroundColor: "#e8f4fd",
+                                border: "1px solid #3498db",
+                                borderRadius: "6px",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                            }}
+                        >
+                            <div
+                                style={{
+                                    width: "16px",
+                                    height: "16px",
+                                    border: "2px solid #b8daff",
+                                    borderTop: "2px solid #3498db",
+                                    borderRadius: "50%",
+                                    animation: "spin 1s linear infinite"
+                                }}
+                            />
+                            <span style={{ fontSize: "14px", color: "#3498db" }}>
+                                Obteniendo mejor precio disponible...
+                            </span>
+                            <style>
+                                {`
+                                    @keyframes spin {
+                                        0% { transform: rotate(0deg); }
+                                        100% { transform: rotate(360deg); }
+                                    }
+                                `}
+                            </style>
+                        </div>
+                    )}
+
+                    <div 
+                        className="sales-product-grid"
+                        style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "15px", marginBottom: "15px" }}
+                    >
                         <div>
                             <label
                                 style={{
@@ -123,6 +313,7 @@ const ProductSelector = ({
                                 onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
                                 style={{
                                     width: "100%",
+                                    boxSizing: "border-box",
                                     padding: "8px",
                                     fontSize: "14px",
                                     border: "1px solid #dee2e6",
@@ -149,10 +340,11 @@ const ProductSelector = ({
                                 step="0.01"
                                 min="0"
                                 value={unitPrice}
-                                onChange={(e) => setUnitPrice(e.target.value)}
+                                onChange={(e) => handlePriceChange(e.target.value)}
                                 placeholder="0.00"
                                 style={{
                                     width: "100%",
+                                    boxSizing: "border-box",
                                     padding: "8px",
                                     fontSize: "14px",
                                     border: "1px solid #dee2e6",
@@ -176,6 +368,7 @@ const ProductSelector = ({
                             </label>
                             <div
                                 style={{
+                                    boxSizing: "border-box",
                                     padding: "8px",
                                     fontSize: "14px",
                                     border: "1px solid #dee2e6",
@@ -192,7 +385,10 @@ const ProductSelector = ({
                     </div>
 
                     {/* Product info display */}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "15px" }}>
+                    <div 
+                        className="sales-product-info-grid"
+                        style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginBottom: "15px" }}
+                    >
                         {selectedProduct.cost_price && (
                             <div>
                                 <label
@@ -208,6 +404,7 @@ const ProductSelector = ({
                                 </label>
                                 <div
                                     style={{
+                                        boxSizing: "border-box",
                                         padding: "8px",
                                         fontSize: "14px",
                                         backgroundColor: "#f8f9fa",
@@ -236,6 +433,7 @@ const ProductSelector = ({
                                 </label>
                                 <div
                                     style={{
+                                        boxSizing: "border-box",
                                         padding: "8px",
                                         fontSize: "14px",
                                         backgroundColor: "#f8f9fa",
@@ -250,6 +448,39 @@ const ProductSelector = ({
                             </div>
                         )}
                     </div>
+
+                    {/* Advertencia de stock bajo */}
+                    {selectedProduct.stock_quantity <= 0 && (
+                        <div
+                            style={{
+                                marginBottom: "15px",
+                                padding: "12px",
+                                backgroundColor: "#f8d7da",
+                                border: "1px solid #f5c6cb",
+                                borderRadius: "4px",
+                                color: "#721c24",
+                                fontSize: "14px",
+                            }}
+                        >
+                            ⚠️ <strong>Sin stock disponible:</strong> Este producto no tiene stock. La venta podría ser rechazada.
+                        </div>
+                    )}
+
+                    {selectedProduct.stock_quantity > 0 && quantity > selectedProduct.stock_quantity && (
+                        <div
+                            style={{
+                                marginBottom: "15px",
+                                padding: "12px",
+                                backgroundColor: "#fff3cd",
+                                border: "1px solid #ffeaa7",
+                                borderRadius: "4px",
+                                color: "#856404",
+                                fontSize: "14px",
+                            }}
+                        >
+                            ⚠️ <strong>Cantidad excede stock:</strong> Solo hay {selectedProduct.stock_quantity} {selectedProduct.unit || 'unidades'} disponibles.
+                        </div>
+                    )}
 
                     {/* Add to Sale Button */}
                     <div style={{ textAlign: "right" }}>
@@ -278,6 +509,6 @@ const ProductSelector = ({
             )}
         </div>
     );
-};
+});
 
 export default ProductSelector; 

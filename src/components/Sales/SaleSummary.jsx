@@ -188,7 +188,7 @@ const SaleSummary = ({
                 </div>
                 {shouldInvoice && (
                     <div style={{ fontSize: "12px", color: "#3498db" }}>
-                        📄 Se generará factura
+                        📄 Se generará factura después del registro
                     </div>
                 )}
             </div>
