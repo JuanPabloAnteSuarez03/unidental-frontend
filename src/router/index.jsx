@@ -2,6 +2,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import InventoryPage from "../pages/InventoryPage";
 import LoginPage from "../pages/LoginPage";
+import SalesPage from "../pages/SalesPage";
 import ProtectedRoute from "./ProtectedRoute";
 import ForgotPasswordPage from "../pages/ForgotPasswordPage";
 import ResetPasswordConfirmPage from "../pages/ResetPasswordConfirmPage";
@@ -29,6 +30,7 @@ const AppRouter = () => {
                     path="/inventario/transferencias"
                     element={<TransferenciasInternasPage />}
                 />
+                <Route path="/ventas" element={<SalesPage />} />
             </Route>
         </Routes>
     );
