@@ -14,6 +14,7 @@ const ProductSearchSelector = ({
     initialProduct = null,
     onSelectionCleared = null,
     onUpdateProductsStock = null,
+    inputId = null,
     style = {},
     inputStyle = {},
     dropdownStyle = {},
@@ -252,6 +253,7 @@ const ProductSearchSelector = ({
                                 color: (disabled || (isLoading && filteredProducts.length === 0)) ? "#6c757d" : "#2c3e50",
                                 ...inputStyle,
                             }}
+                            id={inputId}
                         />
                         <div
                             style={{

@@ -1062,9 +1062,10 @@ const MovimientosDeStockPage = () => {
                                             showSelectedProduct={false}
                                             allowClearSelection={false}
                                             initialProduct={selectedProductFromSearch}
+                                            inputId="product"
                                         />
-                                            </div>
-                                        )}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Ubicación */}
