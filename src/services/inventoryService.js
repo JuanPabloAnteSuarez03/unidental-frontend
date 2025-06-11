@@ -4,6 +4,7 @@ import API_CONFIG from "../config/api.js";
 const API_PRODUCTS_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.INVENTORY}`;
 const API_PRODUCTS_ALL_URL = `${API_CONFIG.BASE_URL}/catalogs/products/all/`;
 const API_STOCK_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.STOCK}`;
+const API_STOCK_ALL_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.STOCK_ALL}`;
 const API_STOCK_SUMMARY_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.STOCK_SUMMARY}`;
 const API_CATEGORIES_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.CATEGORIES}`;
 const API_INVENTORY_MOVEMENTS_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.INVENTORY_MOVEMENTS}`;
@@ -225,6 +226,213 @@ export const getLocations = async (authToken) => {
         return data.results || data || [];
     } catch (error) {
         console.error("Error fetching locations:", error);
+        throw error;
+    }
+};
+
+/**
+ * Get stock data by location for a specific product
+ * Consulta la tabla InventoryStock para obtener stock por ubicación
+ * @param {number} productId - Product ID to get stock for
+ * @param {string} authToken - Authentication token
+ * @param {AbortSignal} signal - AbortController signal for request cancellation
+ * @returns {Promise<Object>} - Map of location IDs to stock quantities for the product
+ */
+/**
+ * NUEVA VERSIÓN RÁPIDA: Get stock for a specific product using the optimized /all/ endpoint
+ * @param {number} productId - Product ID
+ * @param {string} authToken - Authentication token
+ * @param {AbortSignal} signal - AbortController signal for request cancellation
+ * @returns {Promise<Object>} - Map of location IDs to stock quantities
+ */
+export const getStockByLocationFast = async (productId, authToken, signal) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    try {
+        // Iniciar timer para medir performance
+        const timerLabel = `getStockByLocationFast-${productId}`;
+        console.time(timerLabel);
+        
+        // Usar el filtro optimizado ?product=ID que ahora está disponible
+        const params = new URLSearchParams();
+        params.append("product", productId); // ⭐ NUEVO filtro que funciona correctamente
+        
+        const url = `${API_STOCK_ALL_URL}?${params.toString()}`;
+        
+        console.log("⚡ Fast stock search for product:", productId);
+        console.log("URL:", url);
+        
+        const response = await fetch(url, {
+            headers: {
+                Authorization: `Token ${authToken}`,
+                "Content-Type": "application/json",
+            },
+            signal,
+        });
+
+        if (!response.ok) {
+            throw new Error(`Error ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        
+        console.log("Raw stock data from fast endpoint:", data);
+        
+        // Construir mapa de ubicaciones
+        const locationStockMap = {};
+        
+        // Si es un array directo, usarlo; si no, usar data.results
+        const stockData = Array.isArray(data) ? data : data.results;
+        
+        if (Array.isArray(stockData)) {
+            stockData.forEach((stockEntry) => {
+                if (stockEntry.location !== undefined && stockEntry.quantity !== undefined) {
+                    const locationId = stockEntry.location;
+                    const quantity = typeof stockEntry.quantity === "number" 
+                        ? stockEntry.quantity 
+                        : parseInt(stockEntry.quantity, 10) || 0;
+                    
+                    // Incluir tanto stock positivo como cero para mostrar información completa
+                    locationStockMap[locationId] = quantity;
+                    console.log(`⚡ Found stock for product ${productId}: Location ${locationId} = ${quantity} units`);
+                }
+            });
+        }
+        
+        // Finalizar timer y mostrar resultados
+        console.timeEnd(timerLabel);
+        console.log(`✅ FAST stock search completed for product ${productId}:`);
+        console.log(`   📦 Stock entries found: ${Object.keys(locationStockMap).length}`);
+        console.log(`   🏪 Locations with stock: ${Object.keys(locationStockMap).filter(loc => locationStockMap[loc] > 0).length}`);
+        console.log("Final location stock map for product", productId, ":", locationStockMap);
+        
+        return locationStockMap;
+        
+    } catch (error) {
+        // Finalizar timer incluso en caso de error
+        const timerLabel = `getStockByLocationFast-${productId}`;
+        console.timeEnd(timerLabel);
+        
+        if (error.name === "AbortError") {
+            console.log("Fast stock request was aborted");
+            return {};
+        }
+        console.error("Error fetching fast stock by location:", error);
+        throw error;
+    }
+};
+
+/**
+ * VERSIÓN ANTERIOR (FALLBACK): Get stock for a specific product by location using pagination
+ * @param {number} productId - Product ID
+ * @param {string} authToken - Authentication token
+ * @param {AbortSignal} signal - AbortController signal for request cancellation
+ * @returns {Promise<Object>} - Map of location IDs to stock quantities
+ */
+export const getStockByLocation = async (productId, authToken, signal) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    try {
+        // Iniciar timer para medir performance
+        const timerLabel = `getStockByLocation-${productId}`;
+        console.time(timerLabel);
+        
+        // Nota: El backend NO soporta filtro por producto, así que tenemos que buscar en todos los registros
+        // Para optimizar, usamos page_size para reducir tráfico de red
+        const params = new URLSearchParams();
+        params.append("page_size", "100"); // Obtener más registros por página para ser más eficiente
+
+        const url = `${API_STOCK_URL}?${params.toString()}`;
+        
+        console.log("Fetching stock by location for product:", productId);
+        console.log("URL:", url);
+        
+        const locationStockMap = {};
+        let foundEntries = false;
+        let currentUrl = url;
+        let pageCount = 0;
+        const maxPages = 50; // Límite de seguridad más alto para evitar bucles infinitos
+        
+        // Buscar a través de TODAS las páginas hasta encontrar todo el stock del producto
+        while (currentUrl && pageCount < maxPages && !signal?.aborted) {
+            pageCount++;
+            console.log(`Searching page ${pageCount} for product ${productId}`);
+            
+            const response = await fetch(currentUrl, {
+                headers: {
+                    Authorization: `Token ${authToken}`,
+                    "Content-Type": "application/json",
+                },
+                signal,
+            });
+
+            if (!response.ok) {
+                throw new Error(`Error ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            
+            // Buscar el producto en esta página
+            const results = data.results || data;
+            if (Array.isArray(results)) {
+                for (const stockEntry of results) {
+                    // Solo procesar entradas para el producto que buscamos
+                    if (stockEntry.product == productId) {
+                        foundEntries = true;
+                        
+                        if (stockEntry.location !== undefined && stockEntry.quantity !== undefined) {
+                            const locationId = stockEntry.location;
+                            const quantity = typeof stockEntry.quantity === "number" 
+                                ? stockEntry.quantity 
+                                : parseInt(stockEntry.quantity, 10) || 0;
+                            
+                            // Incluir tanto stock positivo como cero para mostrar información completa
+                            locationStockMap[locationId] = quantity;
+                            console.log(`Found stock for product ${productId}: Location ${locationId} = ${quantity} units`);
+                        }
+                    }
+                }
+            }
+            
+            // Continuar a la siguiente página si existe
+            currentUrl = data.next ? convertToProxyUrl(data.next) : null;
+            
+            // Si llegamos al final de las páginas disponibles, terminamos
+            if (!currentUrl) {
+                console.log(`Finished searching all pages for product ${productId}. Found entries: ${foundEntries}`);
+                break;
+            }
+        }
+        
+        // Advertencia si llegamos al límite de páginas sin terminar
+        if (pageCount >= maxPages) {
+            console.warn(`Reached maximum page limit (${maxPages}) while searching for product ${productId}. Some stock data might be missing.`);
+        }
+        
+        // Finalizar timer y mostrar resultados
+        console.timeEnd(timerLabel);
+        console.log(`✅ Stock search completed for product ${productId}:`);
+        console.log(`   📄 Pages searched: ${pageCount}`);
+        console.log(`   📦 Stock entries found: ${foundEntries ? Object.keys(locationStockMap).length : 0}`);
+        console.log(`   🏪 Locations with stock: ${Object.keys(locationStockMap).filter(loc => locationStockMap[loc] > 0).length}`);
+        console.log("Final location stock map for product", productId, ":", locationStockMap);
+        
+        return locationStockMap;
+        
+    } catch (error) {
+        // Finalizar timer incluso en caso de error
+        const timerLabel = `getStockByLocation-${productId}`;
+        console.timeEnd(timerLabel);
+        
+        if (error.name === "AbortError") {
+            console.log("Stock by location request was aborted");
+            return {};
+        }
+        console.error("Error fetching stock by location:", error);
         throw error;
     }
 };
@@ -727,6 +935,8 @@ const inventoryService = {
     getFilteredStock,
     getCategories,
     getLocations,
+    getStockByLocation,
+    getStockByLocationFast,
     getStockSummary,
     getInventoryMovements,
     getStockMap,
