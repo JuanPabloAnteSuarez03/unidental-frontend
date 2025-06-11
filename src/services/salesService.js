@@ -135,7 +135,7 @@ export const createSale = async (saleData, authToken, signal) => {
                 console.error("createSale - validation errors:", JSON.stringify(errorData, null, 2));
                 
                 // Manejar errores específicos de stock
-                if (errorData.items) {
+                if (errorData.items && Array.isArray(errorData.items)) {
                     const stockErrors = [];
                     errorData.items.forEach((itemError, index) => {
                         if (itemError.quantity && Array.isArray(itemError.quantity)) {
@@ -150,6 +150,9 @@ export const createSale = async (saleData, authToken, signal) => {
                     if (stockErrors.length > 0) {
                         throw new Error(`Problemas de stock:\n${stockErrors.join('\n')}`);
                     }
+                } else if (errorData.items) {
+                    // Si items existe pero no es un array, incluirlo en el error general
+                    console.error("Error en items (no es array):", errorData.items);
                 }
             }
             

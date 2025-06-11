@@ -4,6 +4,7 @@ const SaleSummary = ({
     totals, 
     saleType, 
     shouldInvoice, 
+    selectedLocation,
     onSubmit, 
     isLoading, 
     disabled 
@@ -85,6 +86,24 @@ const SaleSummary = ({
                     </span>
                     <span style={{ fontSize: "14px", fontWeight: "600", color: "#2c3e50" }}>
                         {saleType === "cash" ? "💵 Efectivo" : "💳 Crédito"}
+                    </span>
+                </div>
+
+                {/* Location */}
+                <div
+                    style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: "8px 0",
+                        borderBottom: "1px solid #f8f9fa",
+                    }}
+                >
+                    <span style={{ fontSize: "14px", color: "#6c757d" }}>
+                        Sede:
+                    </span>
+                    <span style={{ fontSize: "14px", fontWeight: "600", color: "#2c3e50" }}>
+                        {selectedLocation ? `🏢 ${selectedLocation.name}` : "❌ No seleccionada"}
                     </span>
                 </div>
 
@@ -304,7 +323,9 @@ const SaleSummary = ({
                 }}
             >
                 {disabled ? (
-                    "Agregue productos para continuar"
+                    !selectedLocation 
+                        ? "Seleccione una sede y agregue productos para continuar"
+                        : "Agregue productos para continuar"
                 ) : (
                     "Verifique todos los datos antes de registrar la venta"
                 )}

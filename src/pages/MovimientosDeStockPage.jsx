@@ -1064,8 +1064,8 @@ const MovimientosDeStockPage = () => {
                                             initialProduct={selectedProductFromSearch}
                                             inputId="product"
                                         />
-                                    </div>
-                                )}
+                                            </div>
+                                        )}
                             </div>
 
                             {/* Ubicación */}
