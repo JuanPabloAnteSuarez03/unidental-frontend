@@ -3,6 +3,8 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import InventoryPage from "../pages/InventoryPage";
 import LoginPage from "../pages/LoginPage";
 import SalesPage from "../pages/SalesPage";
+import CustomersListPage from "../pages/CustomersListPage";
+import NewCustomerPage from "../pages/NewCustomerPage";
 import ProtectedRoute from "./ProtectedRoute";
 import ForgotPasswordPage from "../pages/ForgotPasswordPage";
 import ResetPasswordConfirmPage from "../pages/ResetPasswordConfirmPage";
@@ -31,6 +33,9 @@ const AppRouter = () => {
                     element={<TransferenciasInternasPage />}
                 />
                 <Route path="/ventas" element={<SalesPage />} />
+                {/* Rutas de clientes */}
+                <Route path="/clientes/lista" element={<CustomersListPage />} />
+                <Route path="/clientes/nuevo" element={<NewCustomerPage />} />
             </Route>
         </Routes>
     );

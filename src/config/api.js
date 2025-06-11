@@ -21,6 +21,7 @@ const API_CONFIG = {
         INVENTORY: "/catalogs/products/",
         STOCK_SUMMARY: "/inventory/stock/summary/",
         STOCK: "/inventory/stock/",
+        STOCK_ALL: "/inventory/stock/all/",
         CATEGORIES: "/catalogs/categories/",
         INVENTORY_MOVEMENTS: "/inventory/movements/",
         LOCATIONS: "/inventory/locations/",

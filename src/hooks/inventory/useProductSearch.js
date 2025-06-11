@@ -48,7 +48,7 @@ const useProductSearch = () => {
                         return await inventoryService.getStockMap(authToken, signal);
                     })()
                 ]);
-                
+
                 if (signal.aborted) return;
 
                 setLoadingMessage("🔗 Combinando datos...");

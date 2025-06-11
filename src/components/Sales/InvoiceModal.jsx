@@ -6,6 +6,7 @@ const InvoiceModal = ({
     onClose, 
     saleData, 
     customerData, 
+    locationData,
     saleItems, 
     totals 
 }) => {
@@ -341,6 +342,23 @@ const InvoiceModal = ({
                                             color: "#3498db" 
                                         }}>
                                             "{companyConfig.slogan}"
+                                        </div>
+                                    )}
+                                    {locationData && (
+                                        <div style={{ 
+                                            marginTop: "10px", 
+                                            padding: "8px",
+                                            backgroundColor: "#e8f4fd",
+                                            borderRadius: "4px",
+                                            fontSize: "12px",
+                                            color: "#2c3e50" 
+                                        }}>
+                                            <strong>🏢 Sede de Venta:</strong> {locationData.name}
+                                            {locationData.address && (
+                                                <div style={{ marginTop: "2px" }}>
+                                                    📍 {locationData.address}
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </div>

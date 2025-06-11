@@ -1,17 +1,21 @@
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import CustomerSelector from "../components/Sales/CustomerSelector";
 import ProductSelector from "../components/Sales/ProductSelector";
 import SaleItemsList from "../components/Sales/SaleItemsList";
 import SaleSummary from "../components/Sales/SaleSummary";
 import InvoiceModal from "../components/Sales/InvoiceModal";
 import { salesService } from "../services/salesService";
+import { inventoryService } from "../services/inventoryService";
 import { useAuth } from "../context/AuthContext";
 
 const SalesPage = () => {
     const { authToken } = useAuth();
     const [selectedCustomer, setSelectedCustomer] = useState(null);
+    const [selectedLocation, setSelectedLocation] = useState(null);
+    const [locations, setLocations] = useState([]);
+    const [isLoadingLocations, setIsLoadingLocations] = useState(false);
     const [saleItems, setSaleItems] = useState([]);
-    const [saleType, setSaleType] = useState("cash"); // "cash" o "credit"
+    const [saleType, setSaleType] = useState("normal"); // Tipos de venta según backend
     const [shouldInvoice, setShouldInvoice] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     
@@ -21,6 +25,36 @@ const SalesPage = () => {
     
     // Ref para acceder a la función updateProductsStock
     const productSelectorRef = useRef(null);
+
+    // Cargar ubicaciones al iniciar
+    useEffect(() => {
+        const loadLocations = async () => {
+            if (!authToken) return;
+            
+            setIsLoadingLocations(true);
+            try {
+                const data = await inventoryService.getLocations(authToken);
+                // Filtrar solo las sedes (type: "sede")
+                const sedes = data.filter(location => location.type === "sede");
+                setLocations(sedes);
+                
+                // Si solo hay una sede, seleccionarla automáticamente
+                if (sedes.length === 1) {
+                    console.log("Auto-selecting single location:", sedes[0]);
+                    setSelectedLocation(sedes[0]);
+                }
+                
+                console.log("Available locations loaded:", sedes);
+            } catch (error) {
+                console.error("Error al cargar ubicaciones:", error);
+                // En caso de error, mostrar mensaje pero permitir continuar
+            } finally {
+                setIsLoadingLocations(false);
+            }
+        };
+
+        loadLocations();
+    }, [authToken]);
 
     const handleAddProduct = useCallback((product, quantity, unitPrice) => {
         console.log("handleAddProduct - Recibido:", { 
@@ -105,6 +139,11 @@ const SalesPage = () => {
             return;
         }
 
+        if (!selectedLocation) {
+            alert("Por favor seleccione una sede para registrar la venta");
+            return;
+        }
+
         if (!authToken) {
             alert("Error de autenticación");
             return;
@@ -150,7 +189,13 @@ const SalesPage = () => {
                     email: selectedCustomer.email || "",
                     notes: selectedCustomer.notes || ""
                 },
-                sale_type: saleType === "cash" ? "normal" : "normal", // Mapear según sea necesario
+                location: selectedLocation.id,
+                location_details: {
+                    name: selectedLocation.name,
+                    type: selectedLocation.type,
+                    address: selectedLocation.address || ""
+                },
+                sale_type: saleType, // Enviar el tipo de venta directamente
                 should_invoice: shouldInvoice,
                 items: mappedItems
             };
@@ -165,6 +210,7 @@ const SalesPage = () => {
                 setInvoiceData({
                     saleData: response,
                     customerData: selectedCustomer,
+                    locationData: selectedLocation,
                     saleItems: saleItems,
                     totals: totals,
                     saleType: saleType
@@ -182,8 +228,9 @@ const SalesPage = () => {
             // Reset form
             setSelectedCustomer(null);
             setSaleItems([]);
-            setSaleType("cash");
+            setSaleType("normal");
             setShouldInvoice(false);
+            // No resetear la sede seleccionada para facilitar múltiples ventas consecutivas
             
         } catch (error) {
             console.error("Error al registrar venta:", error);
@@ -340,6 +387,99 @@ const SalesPage = () => {
                             />
                         </div>
 
+                        {/* Selector de Sede */}
+                        <div
+                            style={{
+                                backgroundColor: "white",
+                                borderRadius: "8px",
+                                padding: "20px",
+                                boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                                border: "1px solid #dee2e6",
+                            }}
+                        >
+                            <h3
+                                style={{
+                                    color: "#2c3e50",
+                                    fontSize: "18px",
+                                    fontWeight: "600",
+                                    margin: "0 0 15px 0",
+                                }}
+                            >
+                                2. Seleccionar Sede
+                            </h3>
+                            
+                            {isLoadingLocations ? (
+                                <div
+                                    style={{
+                                        padding: "15px",
+                                        textAlign: "center",
+                                        color: "#6c757d",
+                                        fontSize: "14px",
+                                    }}
+                                >
+                                    Cargando sedes...
+                                </div>
+                            ) : (
+                                <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
+                                    {locations.map((location) => (
+                                        <button
+                                            key={location.id}
+                                            onClick={() => {
+                                                console.log("Location selected:", location);
+                                                setSelectedLocation(location);
+                                            }}
+                                            style={{
+                                                padding: "10px 15px",
+                                                border: selectedLocation?.id === location.id 
+                                                    ? "2px solid #3498db" 
+                                                    : "1px solid #dee2e6",
+                                                borderRadius: "6px",
+                                                backgroundColor: selectedLocation?.id === location.id 
+                                                    ? "#e8f4fd" 
+                                                    : "white",
+                                                color: selectedLocation?.id === location.id 
+                                                    ? "#2c3e50" 
+                                                    : "#6c757d",
+                                                cursor: "pointer",
+                                                fontSize: "14px",
+                                                fontWeight: "500",
+                                                transition: "all 0.2s ease",
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: "8px",
+                                            }}
+                                        >
+                                            <span style={{ fontSize: "16px" }}>
+                                                {selectedLocation?.id === location.id ? "🏢" : "🏪"}
+                                            </span>
+                                            {location.name}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                            
+                            {selectedLocation && (
+                                <div
+                                    style={{
+                                        marginTop: "15px",
+                                        padding: "12px",
+                                        backgroundColor: "#d4edda",
+                                        border: "1px solid #c3e6cb",
+                                        borderRadius: "6px",
+                                        fontSize: "14px",
+                                        color: "#155724",
+                                    }}
+                                >
+                                    ✅ <strong>Sede seleccionada:</strong> {selectedLocation.name}
+                                    {selectedLocation.address && (
+                                        <div style={{ marginTop: "4px", fontSize: "12px" }}>
+                                            📍 {selectedLocation.address}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
                         {/* Selector de Productos */}
                         <div
                             style={{
@@ -358,11 +498,13 @@ const SalesPage = () => {
                                     margin: "0 0 15px 0",
                                 }}
                             >
-                                2. Agregar Productos
+                                3. Agregar Productos
                             </h3>
                             <ProductSelector
                                 ref={productSelectorRef}
                                 onProductAdded={handleAddProduct}
+                                selectedLocation={selectedLocation}
+                                availableLocations={locations}
                             />
                         </div>
 
@@ -384,7 +526,7 @@ const SalesPage = () => {
                                     margin: "0 0 15px 0",
                                 }}
                             >
-                                3. Productos en la Venta
+                                4. Productos en la Venta
                             </h3>
                             <SaleItemsList
                                 items={saleItems}
@@ -411,7 +553,7 @@ const SalesPage = () => {
                                     margin: "0 0 15px 0",
                                 }}
                             >
-                                4. Opciones de Pago
+                                5. Opciones de Venta
                             </h3>
                             <div 
                                 className="sales-payment-grid"
@@ -428,7 +570,7 @@ const SalesPage = () => {
                                             marginBottom: "8px",
                                         }}
                                     >
-                                        Tipo de Pago
+                                        Tipo de Venta
                                     </label>
                                     <select
                                         value={saleType}
@@ -444,8 +586,8 @@ const SalesPage = () => {
                                             color: "#2c3e50",
                                         }}
                                     >
-                                        <option value="cash">💵 Efectivo</option>
-                                        <option value="credit">💳 Crédito</option>
+                                        <option value="normal">💵 Venta Normal</option>
+                                        <option value="credit">💳 Venta a Crédito</option>
                                     </select>
                                 </div>
 
@@ -497,9 +639,10 @@ const SalesPage = () => {
                             totals={totals}
                             saleType={saleType}
                             shouldInvoice={shouldInvoice}
+                            selectedLocation={selectedLocation}
                             onSubmit={handleSubmitSale}
                             isLoading={isSubmitting}
-                            disabled={!selectedCustomer || saleItems.length === 0}
+                            disabled={!selectedCustomer || !selectedLocation || saleItems.length === 0}
                         />
                     </div>
                 </div>
@@ -512,6 +655,7 @@ const SalesPage = () => {
                     onClose={handleCloseInvoice}
                     saleData={invoiceData.saleData}
                     customerData={invoiceData.customerData}
+                    locationData={invoiceData.locationData}
                     saleItems={invoiceData.saleItems}
                     totals={invoiceData.totals}
                 />
