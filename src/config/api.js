@@ -41,6 +41,15 @@ const API_CONFIG = {
         SALE_ITEMS: "/sales/sale-items/",
         SALE_ITEMS_BY_ID: "/sales/sale-items/{id}/",
         SALE_ITEMS_TOP_PRODUCTS: "/sales/sale-items/top_products/",
+        
+        // Devoluciones
+        RETURNS: "/sales/returns/",
+        RETURNS_BY_ID: "/sales/returns/{id}/",
+        RETURNS_STATISTICS: "/sales/returns/statistics/",
+        RETURNS_TODAY: "/sales/returns/today/",
+        RETURNS_BY_LOCATION: "/sales/returns/by_location/",
+        RETURN_ITEMS: "/sales/return-items/",
+        RETURN_ITEMS_TOP_PRODUCTS: "/sales/return-items/top_returned_products/",
     },
 };
 

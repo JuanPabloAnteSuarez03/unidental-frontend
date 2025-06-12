@@ -204,14 +204,13 @@ export const getSaleById = async (saleId, authToken, signal) => {
 };
 
 /**
- * Update sale by ID
- * @param {number} saleId - Sale ID
- * @param {Object} saleData - Sale data to update
+ * Update an existing sale
+ * @param {number} saleId - The ID of the sale to update
+ * @param {Object} saleData - The data to update
  * @param {string} authToken - Authentication token
- * @param {AbortSignal} signal - AbortController signal for request cancellation
- * @returns {Promise<Object>} - Updated sale
+ * @returns {Promise<Object>} - The updated sale object
  */
-export const updateSale = async (saleId, saleData, authToken, signal) => {
+export const updateSale = async (saleId, saleData, authToken) => {
     if (!authToken) {
         throw new Error("No authentication token provided");
     }
@@ -222,10 +221,9 @@ export const updateSale = async (saleId, saleData, authToken, signal) => {
             method: "PATCH",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Token ${authToken}`,
+                Authorization: `Token ${authToken}`,
             },
             body: JSON.stringify(saleData),
-            signal,
         });
 
         if (!response.ok) {
@@ -235,7 +233,7 @@ export const updateSale = async (saleId, saleData, authToken, signal) => {
 
         return await response.json();
     } catch (error) {
-        console.error("Error updating sale:", error);
+        console.error(`Error updating sale ${saleId}:`, error);
         throw error;
     }
 };
@@ -407,16 +405,74 @@ export const getTopProducts = async (params = {}, authToken, signal) => {
     }
 };
 
+/**
+ * Update a specific sale item
+ * @param {number} saleItemId - The ID of the sale item to update
+ * @param {Object} itemData - The data to update (e.g., { quantity: 5 })
+ * @param {string} authToken - Authentication token
+ * @returns {Promise<Object>} - The updated sale item object
+ */
+export const updateSaleItem = async (saleItemId, itemData, authToken) => {
+    if (!authToken) throw new Error("No authentication token provided");
+    try {
+        const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.SALE_ITEMS}${saleItemId}/`;
+        const response = await fetch(url, {
+            method: "PATCH",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Token ${authToken}`,
+            },
+            body: JSON.stringify(itemData),
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.detail || `Error ${response.status}: ${response.statusText}`);
+        }
+        return await response.json();
+    } catch (error) {
+        console.error(`Error updating sale item ${saleItemId}:`, error);
+        throw error;
+    }
+};
+
+/**
+ * Delete a specific sale item
+ * @param {number} saleItemId - The ID of the sale item to delete
+ * @param {string} authToken - Authentication token
+ * @returns {Promise<void>}
+ */
+export const deleteSaleItem = async (saleItemId, authToken) => {
+    if (!authToken) throw new Error("No authentication token provided");
+    try {
+        const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.SALE_ITEMS}${saleItemId}/`;
+        const response = await fetch(url, {
+            method: "DELETE",
+            headers: {
+                Authorization: `Token ${authToken}`,
+            },
+        });
+        if (response.status !== 204) { // 204 No Content on success
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.detail || `Error ${response.status}: ${response.statusText}`);
+        }
+    } catch (error) {
+        console.error(`Error deleting sale item ${saleItemId}:`, error);
+        throw error;
+    }
+};
+
 // Export all functions as a service object
 export const salesService = {
     getSales,
     createSale,
-    getSaleById,
     updateSale,
+    getSaleById,
     deleteSale,
     getSalesStatistics,
     getTodaySales,
     getTopProducts,
+    updateSaleItem,
+    deleteSaleItem,
 };
 
 // Default export

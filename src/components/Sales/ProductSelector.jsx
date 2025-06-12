@@ -102,24 +102,10 @@ const ProductSelector = forwardRef(({
             // Obtener precio inteligente
             const intelligentPrice = await inventoryService.getIntelligentPrice(product.id, authToken);
             
-            // 🚀 Intentar función rápida primero, con fallback a la versión anterior
-            let locationStockMap = {};
-            try {
-                console.log("Trying fast stock search for product:", product.id);
-                locationStockMap = await inventoryService.getStockByLocationFast(product.id, authToken);
-                console.log("Fast stock search result:", locationStockMap);
-                
-                // Si el resultado está vacío, intentar con la versión anterior
-                if (!locationStockMap || Object.keys(locationStockMap).length === 0) {
-                    console.log("Fast search returned empty, trying fallback method...");
-                    locationStockMap = await inventoryService.getStockByLocation(product.id, authToken);
-                    console.log("Fallback stock search result:", locationStockMap);
-                }
-            } catch (error) {
-                console.error("Fast stock search failed, using fallback:", error);
-                locationStockMap = await inventoryService.getStockByLocation(product.id, authToken);
-                console.log("Fallback stock search result:", locationStockMap);
-            }
+            // Usar solo la función rápida de stock
+            console.log("Getting stock for product:", product.id);
+            const locationStockMap = await inventoryService.getStockByLocationFast(product.id, authToken);
+            console.log("Stock search result:", locationStockMap);
             
             console.log("Location stock map:", locationStockMap);
             

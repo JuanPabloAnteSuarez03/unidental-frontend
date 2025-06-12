@@ -658,6 +658,7 @@ const SalesPage = () => {
                     locationData={invoiceData.locationData}
                     saleItems={invoiceData.saleItems}
                     totals={invoiceData.totals}
+                    saleType={invoiceData.saleType}
                 />
             )}
         </>
