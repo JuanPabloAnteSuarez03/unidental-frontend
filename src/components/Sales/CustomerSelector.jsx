@@ -1,16 +1,23 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { customersService } from "../../services/customersService";
 import { useAuth } from "../../context/AuthContext";
+import { useCustomers } from "../../context/CustomersContext";
 
 const CustomerSelector = ({ 
     selectedCustomer, 
     onCustomerSelected 
 }) => {
     const { authToken } = useAuth();
+    const { 
+        searchCustomers, 
+        addCustomerToCache, 
+        isLoading: customersLoading, 
+        isInitialized,
+        getCacheInfo 
+    } = useCustomers();
+    
     const [searchTerm, setSearchTerm] = useState("");
-    const [customers, setCustomers] = useState([]);
     const [filteredCustomers, setFilteredCustomers] = useState([]);
-    const [loading, setLoading] = useState(false);
     const [showNewCustomerForm, setShowNewCustomerForm] = useState(false);
     const [newCustomerData, setNewCustomerData] = useState({
         name: "",
@@ -23,29 +30,17 @@ const CustomerSelector = ({
     const [phoneError, setPhoneError] = useState(null);
     const [emailError, setEmailError] = useState(null);
 
-    // Load customers when search term changes
+    // Search customers in cache when search term changes
     useEffect(() => {
-        const searchCustomers = async () => {
-            if (searchTerm.length < 2 || !authToken) {
-                setFilteredCustomers([]);
-                return;
-            }
+        if (searchTerm.length < 2) {
+            setFilteredCustomers([]);
+            return;
+        }
 
-            try {
-                setLoading(true);
-                const response = await customersService.searchCustomers({ search: searchTerm }, authToken);
-                setFilteredCustomers(response.results || []);
-            } catch (error) {
-                console.error("Error searching customers:", error);
-                setFilteredCustomers([]);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        const debounceTimer = setTimeout(searchCustomers, 300);
-        return () => clearTimeout(debounceTimer);
-    }, [searchTerm, authToken]);
+        // Use cached search
+        const results = searchCustomers(searchTerm);
+        setFilteredCustomers(results);
+    }, [searchTerm, searchCustomers]);
 
     // Handle customer selection
     const handleCustomerSelect = useCallback((customer) => {
@@ -112,7 +107,12 @@ const CustomerSelector = ({
 
             const createdCustomer = await customersService.createCustomer(newCustomerData, authToken);
             
+            // Add the new customer to cache
+            addCustomerToCache(createdCustomer);
+            
             onCustomerSelected(createdCustomer);
+            
+            console.log("New customer created and added to cache:", createdCustomer);
             
             // Reset form
             setNewCustomerData({
@@ -230,6 +230,44 @@ const CustomerSelector = ({
             {/* Customer Search */}
             {!selectedCustomer && (
                 <div>
+                    {/* Loading indicator */}
+                    {customersLoading && !isInitialized && (
+                        <div
+                            style={{
+                                marginBottom: "15px",
+                                padding: "12px",
+                                backgroundColor: "#e8f4fd",
+                                border: "1px solid #b8daff",
+                                borderRadius: "6px",
+                                fontSize: "14px",
+                                color: "#004085",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                            }}
+                        >
+                            <div
+                                style={{
+                                    width: "16px",
+                                    height: "16px",
+                                    border: "2px solid #b8daff",
+                                    borderTop: "2px solid #3498db",
+                                    borderRadius: "50%",
+                                    animation: "spin 1s linear infinite"
+                                }}
+                            />
+                            <span>Cargando clientes...</span>
+                            <style>
+                                {`
+                                    @keyframes spin {
+                                        0% { transform: rotate(0deg); }
+                                        100% { transform: rotate(360deg); }
+                                    }
+                                `}
+                            </style>
+                        </div>
+                    )}
+
                     {/* Search Input */}
                     <div style={{ marginBottom: "15px" }}>
                         <label
@@ -246,9 +284,10 @@ const CustomerSelector = ({
                         <div style={{ position: "relative" }}>
                             <input
                                 type="text"
-                                placeholder="Buscar por nombre, teléfono o email..."
+                                placeholder={isInitialized ? "Buscar por nombre, teléfono o email..." : "Cargando clientes..."}
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
+                                disabled={!isInitialized}
                                 style={{
                                     width: "100%",
                                     boxSizing: "border-box",
@@ -259,7 +298,8 @@ const CustomerSelector = ({
                                     border: "1px solid #dee2e6",
                                     borderRadius: "4px",
                                     fontSize: "14px",
-                                    backgroundColor: "white",
+                                    backgroundColor: isInitialized ? "white" : "#f8f9fa",
+                                    cursor: isInitialized ? "text" : "not-allowed",
                                 }}
                             />
                             <div
@@ -273,26 +313,13 @@ const CustomerSelector = ({
                                     fontWeight: "normal",
                                 }}
                             >
-                                ⌕
+                                {isInitialized ? "⌕" : "⏳"}
                             </div>
                         </div>
                     </div>
 
                     {/* Customer List */}
-                    {loading && (
-                        <div
-                            style={{
-                                textAlign: "center",
-                                padding: "20px",
-                                color: "#6c757d",
-                            }}
-                        >
-                            <div style={{ fontSize: "16px", marginBottom: "8px" }}>⏳</div>
-                            <p style={{ margin: 0, fontSize: "14px" }}>Buscando clientes...</p>
-                        </div>
-                    )}
-
-                    {searchTerm.length >= 2 && !loading && (
+                    {searchTerm.length >= 2 && isInitialized && (
                         <div
                             style={{
                                 marginBottom: "15px",

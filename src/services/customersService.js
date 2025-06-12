@@ -259,9 +259,55 @@ export const getCustomerSalesHistory = async (customerId, authToken, signal) => 
     }
 };
 
+/**
+ * Get all customers without pagination limits (for caching)
+ * @param {string} authToken - Authentication token
+ * @param {AbortSignal} signal - AbortController signal for request cancellation
+ * @returns {Promise<Array>} - Array of all customers
+ */
+export const getAllCustomers = async (authToken, signal) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    try {
+        let allCustomers = [];
+        let page = 1;
+        let hasMore = true;
+        const pageSize = 100; // Load in chunks of 100
+
+        while (hasMore) {
+            const response = await getCustomers({
+                page,
+                page_size: pageSize,
+                ordering: 'name' // Order by name for consistent results
+            }, authToken, signal);
+
+            const customers = response.results || [];
+            allCustomers = [...allCustomers, ...customers];
+
+            // Check if there's a next page
+            hasMore = response.next !== null;
+            page++;
+
+            // Safety limit to prevent infinite loops
+            if (page > 50) {
+                console.warn("Reached maximum pages limit while loading customers");
+                break;
+            }
+        }
+
+        return allCustomers;
+    } catch (error) {
+        console.error("Error fetching all customers:", error);
+        throw error;
+    }
+};
+
 // Export all functions as a service object
 export const customersService = {
     getCustomers,
+    getAllCustomers,
     createCustomer,
     getCustomerById,
     updateCustomer,

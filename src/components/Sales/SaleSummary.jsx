@@ -85,7 +85,7 @@ const SaleSummary = ({
                         Tipo de pago:
                     </span>
                     <span style={{ fontSize: "14px", fontWeight: "600", color: "#2c3e50" }}>
-                        {saleType === "cash" ? "💵 Efectivo" : "💳 Crédito"}
+                        {saleType === "normal" ? "💵 Normal" : "💳 Crédito"}
                     </span>
                 </div>
 
@@ -200,10 +200,10 @@ const SaleSummary = ({
                 }}
             >
                 <div style={{ fontSize: "24px", marginBottom: "8px" }}>
-                    {saleType === "cash" ? "💵" : "💳"}
+                    {saleType === "normal" ? "💵" : "💳"}
                 </div>
                 <div style={{ fontSize: "14px", fontWeight: "600", color: "#2c3e50", marginBottom: "4px" }}>
-                    {saleType === "cash" ? "Pago en Efectivo" : "Pago con Crédito"}
+                    {saleType === "normal" ? "Pago Normal" : "Pago con Crédito"}
                 </div>
                 {shouldInvoice && (
                     <div style={{ fontSize: "12px", color: "#3498db" }}>
@@ -266,7 +266,7 @@ const SaleSummary = ({
                     ${totals.total}
                 </div>
                 <div style={{ fontSize: "12px", opacity: "0.8", marginTop: "4px" }}>
-                    {saleType === "cash" ? "Pago en efectivo" : "Pago con crédito"}
+                    {saleType === "normal" ? "Pago normal" : "Pago con crédito"}
                 </div>
             </div>
 
