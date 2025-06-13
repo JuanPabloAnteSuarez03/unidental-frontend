@@ -1429,6 +1429,8 @@ const inventoryService = {
 };
 
 export default inventoryService;
+export { inventoryService };
+
 
 /**
  * Build URL with parameters
