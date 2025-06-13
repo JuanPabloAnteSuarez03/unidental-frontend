@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
-import inventoryService from "../services/inventoryService";
+import { inventoryService } from "../services/inventoryService";
 import { useAuth } from "./AuthContext";
 
 const ProductsContext = createContext();
