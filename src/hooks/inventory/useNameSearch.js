@@ -1,46 +1,73 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 
 /**
- * Hook personalizado para la funcionalidad de búsqueda por nombre en el inventario
- * @param {function} resetPage - Función para resetear la paginación a la primera página
- * @param {function} clearCache - Función para limpiar la caché y forzar nueva búsqueda
- * @returns {object} - Estado y funciones para la búsqueda por nombre
+ * ✨ OPTIMIZADO: Hook para manejar la búsqueda por nombre con debouncing
+ * @param {Function} resetPage - Función para resetear la página
+ * @param {Function} clearCache - Función para limpiar la caché
+ * @returns {Object} - Estados y funciones para la búsqueda por nombre
  */
 const useNameSearch = (resetPage, clearCache) => {
-    // Estado para almacenar el término de búsqueda actual
     const [nameFilter, setNameFilter] = useState("");
+    const [debouncedNameFilter, setDebouncedNameFilter] = useState("");
+    const debounceTimeoutRef = useRef(null);
+
+    // ✨ OPTIMIZACIÓN: Implementar debouncing para evitar llamadas excesivas
+    useEffect(() => {
+        // Limpiar timeout anterior si existe
+        if (debounceTimeoutRef.current) {
+            clearTimeout(debounceTimeoutRef.current);
+        }
+
+        // Configurar nuevo timeout
+        debounceTimeoutRef.current = setTimeout(() => {
+            setDebouncedNameFilter(nameFilter);
+        }, 300); // 300ms de delay
+
+        // Cleanup function
+        return () => {
+            if (debounceTimeoutRef.current) {
+                clearTimeout(debounceTimeoutRef.current);
+            }
+        };
+    }, [nameFilter]);
 
     /**
-     * Función para buscar productos por nombre
-     * @param {string} name - Nombre o término a buscar
+     * Actualiza el filtro de nombre con debouncing
+     * @param {string} name - Nombre a buscar
      */
     const searchByName = useCallback(
         (name) => {
-            // Actualizamos el filtro de nombre
-            setNameFilter(name);
+            const trimmedName = name ? name.trim() : "";
+            console.log("Setting name filter:", trimmedName);
 
-            // Reiniciamos a la primera página
-            if (resetPage) {
+            setNameFilter(trimmedName);
+
+            // Solo resetear página y caché si hay un cambio real
+            if (trimmedName !== nameFilter) {
                 resetPage();
-            }
-
-            // Limpiamos la caché para forzar una nueva búsqueda
-            if (clearCache) {
                 clearCache();
             }
         },
-        [resetPage, clearCache]
+        [resetPage, clearCache, nameFilter]
     );
 
     /**
-     * Función para limpiar el filtro de nombre
+     * Resetea el filtro de nombre
      */
     const resetNameFilter = useCallback(() => {
+        console.log("Resetting name filter");
         setNameFilter("");
+        setDebouncedNameFilter("");
+
+        // Limpiar timeout pendiente
+        if (debounceTimeoutRef.current) {
+            clearTimeout(debounceTimeoutRef.current);
+            debounceTimeoutRef.current = null;
+        }
     }, []);
 
     return {
-        nameFilter,
+        nameFilter: debouncedNameFilter, // Retornar el valor con debouncing
         searchByName,
         resetNameFilter,
     };

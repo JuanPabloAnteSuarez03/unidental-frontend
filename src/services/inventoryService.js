@@ -9,6 +9,9 @@ const API_STOCK_SUMMARY_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.STOC
 const API_CATEGORIES_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.CATEGORIES}`;
 const API_INVENTORY_MOVEMENTS_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.INVENTORY_MOVEMENTS}`;
 const API_LOCATIONS_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.LOCATIONS}`;
+const API_SKU_GENERATE_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.SKU_GENERATE}`;
+const API_SKU_VALIDATE_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.SKU_VALIDATE}`;
+const API_SKU_SYSTEM_INFO_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.SKU_SYSTEM_INFO}`;
 
 /**
  * Convert absolute backend URLs to relative URLs for proxy in development
@@ -17,17 +20,18 @@ const API_LOCATIONS_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.LOCATION
  */
 const convertToProxyUrl = (url) => {
     if (!url) return url;
-    
+
     // If already a relative URL, return as is
-    if (url.startsWith('/')) return url;
-    
+    if (url.startsWith("/")) return url;
+
     // If it's an absolute URL from our backend, convert to relative
-    const backendBaseUrl = 'https://unidental-backend-production.up.railway.app';
+    const backendBaseUrl =
+        "https://unidental-backend-production.up.railway.app";
     if (url.startsWith(backendBaseUrl)) {
         // Remove the base URL, keep the path starting with /api
-        return url.replace(backendBaseUrl, '');
+        return url.replace(backendBaseUrl, "");
     }
-    
+
     // For any other absolute URL, return as is (shouldn't happen in our case)
     return url;
 };
@@ -72,7 +76,7 @@ export const getProducts = async (params = {}, authToken, signal) => {
 };
 
 /**
- * Get stock data for products
+ * ✨ OPTIMIZADO: Get stock data for products with better batch handling
  * @param {Array} productIds - Optional array of product IDs to filter
  * @param {string} authToken - Authentication token
  * @param {AbortSignal} signal - AbortController signal for request cancellation
@@ -87,29 +91,49 @@ export const getStockData = async (productIds = [], authToken, signal) => {
     const stockMap = {};
 
     try {
-        // Build initial URL, filtering by product IDs if provided
-        let url = API_STOCK_URL;
+        // ✨ OPTIMIZACIÓN: Usar múltiples filtros por lotes para mejorar rendimiento
         if (productIds.length > 0) {
-            const params = new URLSearchParams();
-            params.append("product__in", productIds.join(","));
-            url = `${url}?${params.toString()}`;
-        }
+            // Para listas específicas de productos, usar filtrado por lotes
+            const BATCH_SIZE = 50; // Procesar en lotes de 50 productos
+            const batches = [];
 
-        // Get first page of results
-        let stockData = await fetchStockPage(url, authToken, signal);
+            for (let i = 0; i < productIds.length; i += BATCH_SIZE) {
+                const batch = productIds.slice(i, i + BATCH_SIZE);
+                batches.push(batch);
+            }
 
-        if (!stockData) return {};
+            console.log(`Processing ${batches.length} batches of stock data`);
 
-        // Process first page of results
-        processStockData(stockData.results, stockMap);
+            // Procesar lotes en paralelo (máximo 3 a la vez para no sobrecargar)
+            const MAX_CONCURRENT = 3;
+            for (let i = 0; i < batches.length; i += MAX_CONCURRENT) {
+                const currentBatches = batches.slice(i, i + MAX_CONCURRENT);
 
-        // Get additional pages if they exist
-        while (stockData.next && !signal?.aborted) {
-            // Convert absolute URL to relative URL for proxy
-            const nextUrl = convertToProxyUrl(stockData.next);
-            stockData = await fetchStockPage(nextUrl, authToken, signal);
-            if (!stockData) break;
-            processStockData(stockData.results, stockMap);
+                const batchPromises = currentBatches.map(async (batch) => {
+                    const params = new URLSearchParams();
+                    params.append("product__in", batch.join(","));
+                    const url = `${API_STOCK_URL}?${params.toString()}`;
+
+                    return await fetchAllStockPages(url, authToken, signal);
+                });
+
+                const results = await Promise.all(batchPromises);
+
+                // Combinar resultados de todos los lotes
+                results.forEach((batchStockMap) => {
+                    Object.assign(stockMap, batchStockMap);
+                });
+
+                if (signal?.aborted) break;
+            }
+        } else {
+            // Para obtener todo el stock, usar la función original pero optimizada
+            const allStock = await fetchAllStockPages(
+                API_STOCK_URL,
+                authToken,
+                signal
+            );
+            Object.assign(stockMap, allStock);
         }
 
         return stockMap;
@@ -119,6 +143,140 @@ export const getStockData = async (productIds = [], authToken, signal) => {
             return {};
         }
         console.error("Error fetching stock data:", error);
+        throw error;
+    }
+};
+
+/**
+ * ✨ OPTIMIZADA: Fetch all stock pages with PARALLELIZATION
+ * @param {string} url - Base URL for stock API
+ * @param {string} authToken - Authentication token
+ * @param {AbortSignal} signal - AbortController signal
+ * @returns {Promise<Object>} - Complete stock map
+ */
+const fetchAllStockPages = async (url, authToken, signal) => {
+    const stockMap = {};
+
+    // ✨ OPTIMIZACIÓN 1: Obtener primera página para conocer el total
+    console.log("🚀 Starting optimized stock loading...");
+    const startTime = performance.now();
+
+    const firstPage = await fetchStockPage(url, authToken, signal);
+    if (!firstPage || signal?.aborted) return stockMap;
+
+    // Procesar primera página
+    processStockData(firstPage.results, stockMap);
+
+    // ✨ OPTIMIZACIÓN 2: Si hay más páginas, cargar en paralelo
+    if (firstPage.next) {
+        const totalCount = firstPage.count || 0;
+        const pageSize = firstPage.results?.length || 25;
+        const totalPages = Math.ceil(totalCount / pageSize);
+
+        console.log(
+            `📊 Loading ${totalPages} pages in parallel (${totalCount} items)`
+        );
+
+        // Crear URLs para todas las páginas restantes
+        const pageUrls = [];
+        for (let page = 2; page <= totalPages; page++) {
+            const pageUrl = url.includes("?")
+                ? `${url}&page=${page}`
+                : `${url}?page=${page}`;
+            pageUrls.push(pageUrl);
+        }
+
+        // ✨ OPTIMIZACIÓN 3: Cargar páginas en paralelo (batches de 10)
+        const PARALLEL_BATCH_SIZE = 10;
+        for (let i = 0; i < pageUrls.length; i += PARALLEL_BATCH_SIZE) {
+            if (signal?.aborted) break;
+
+            const batch = pageUrls.slice(i, i + PARALLEL_BATCH_SIZE);
+            const batchPromises = batch.map((pageUrl) =>
+                fetchStockPage(pageUrl, authToken, signal)
+            );
+
+            try {
+                const batchResults = await Promise.all(batchPromises);
+
+                // Procesar resultados del batch
+                batchResults.forEach((pageData) => {
+                    if (pageData?.results) {
+                        processStockData(pageData.results, stockMap);
+                    }
+                });
+
+                console.log(
+                    `✅ Processed batch ${
+                        Math.floor(i / PARALLEL_BATCH_SIZE) + 1
+                    }/${Math.ceil(pageUrls.length / PARALLEL_BATCH_SIZE)}`
+                );
+            } catch (error) {
+                console.warn("⚠️ Error in batch, continuing...", error);
+            }
+        }
+    }
+
+    const endTime = performance.now();
+    console.log(
+        `🏁 Stock loading completed in ${Math.round(endTime - startTime)}ms`
+    );
+
+    return stockMap;
+};
+
+/**
+ * ✨ SUPER-OPTIMIZADA: Get ALL stock data with multiple acceleration strategies
+ * @param {string} authToken - Authentication token
+ * @param {AbortSignal} signal - AbortController signal for request cancellation
+ * @returns {Promise<Object>} - Complete map of product IDs to stock quantities
+ */
+export const getAllStock = async (authToken, signal) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    console.log("🚀 Loading complete stock data with optimizations...");
+    const overallStart = performance.now();
+
+    try {
+        // ✨ ESTRATEGIA 1: Intentar con page_size grande primero
+        const optimizedUrl = `${API_STOCK_URL}?page_size=1000`; // Intentar páginas más grandes
+
+        try {
+            const completeStockMap = await fetchAllStockPages(
+                optimizedUrl,
+                authToken,
+                signal
+            );
+
+            const overallEnd = performance.now();
+            console.log(
+                `🎉 ULTRA-FAST stock loading completed! ${
+                    Object.keys(completeStockMap).length
+                } products in ${Math.round(overallEnd - overallStart)}ms`
+            );
+
+            return completeStockMap;
+        } catch (error) {
+            console.warn(
+                "⚠️ Large page size failed, falling back to standard method"
+            );
+
+            // ✨ ESTRATEGIA 2: Fallback a método estándar optimizado
+            const completeStockMap = await getStockData([], authToken, signal);
+
+            const overallEnd = performance.now();
+            console.log(
+                `✅ Standard stock loading completed: ${
+                    Object.keys(completeStockMap).length
+                } products in ${Math.round(overallEnd - overallStart)}ms`
+            );
+
+            return completeStockMap;
+        }
+    } catch (error) {
+        console.error("🚨 Error loading complete stock:", error);
         throw error;
     }
 };
@@ -203,7 +361,6 @@ export const getLocations = async (authToken) => {
     }
 
     try {
-        console.log("Haciendo petición a:", API_LOCATIONS_URL);
         const response = await fetch(API_LOCATIONS_URL, {
             headers: {
                 Authorization: `Token ${authToken}`,
@@ -211,21 +368,40 @@ export const getLocations = async (authToken) => {
             },
         });
 
-        console.log(
-            "Respuesta del servidor:",
-            response.status,
-            response.statusText
-        );
-
         if (!response.ok) {
-            throw new Error(`Error ${response.status}: ${response.statusText}`);
+            const status = response.status;
+            if (status === 401 || status === 403) {
+                throw new Error(
+                    "No tiene permisos para acceder a las ubicaciones"
+                );
+            } else if (status === 404) {
+                throw new Error(
+                    "El recurso de ubicaciones no fue encontrado en el servidor"
+                );
+            } else if (status >= 500) {
+                throw new Error("Error del servidor al obtener ubicaciones");
+            } else {
+                throw new Error(
+                    `Error ${response.status}: ${response.statusText}`
+                );
+            }
         }
 
         const data = await response.json();
-        console.log("Datos de ubicaciones:", data);
         return data.results || data || [];
     } catch (error) {
         console.error("Error fetching locations:", error);
+
+        // Mejora manejo de errores de red
+        if (
+            error.name === "TypeError" &&
+            error.message.includes("Failed to fetch")
+        ) {
+            throw new Error(
+                "Error de conexión: No se pudo conectar al servidor. Verifique su conexión a internet."
+            );
+        }
+
         throw error;
     }
 };
@@ -491,62 +667,321 @@ export const getInventoryMovements = async (params = {}, authToken, signal) => {
         });
 
         if (!response.ok) {
-            throw new Error(`Error ${response.status}: ${response.statusText}`);
+            const status = response.status;
+
+            // Mejorar mensajes de error según el código
+            if (status === 401 || status === 403) {
+                throw new Error(
+                    "No tiene permisos para acceder a los movimientos de inventario"
+                );
+            } else if (status === 404) {
+                throw new Error(
+                    "El recurso de movimientos no fue encontrado en el servidor"
+                );
+            } else if (status >= 500) {
+                throw new Error(
+                    "Error del servidor al obtener movimientos de inventario"
+                );
+            } else {
+                throw new Error(
+                    `Error ${response.status}: ${response.statusText}`
+                );
+            }
         }
 
-        return await response.json();
+        const data = await response.json();
+
+        // Asegurar que la estructura de respuesta sea consistente
+        return {
+            results: data.results || [],
+            count: data.count || 0,
+            next: data.next || null,
+            previous: data.previous || null,
+        };
     } catch (error) {
         if (error.name === "AbortError") {
             console.log("Inventory movements request was aborted");
             return null;
         }
+
+        // Mejorar manejo de errores de red
+        if (
+            error.name === "TypeError" &&
+            error.message.includes("Failed to fetch")
+        ) {
+            throw new Error(
+                "Error de conexión: No se pudo conectar al servidor. Verifique su conexión a internet."
+            );
+        }
+
         console.error("Error fetching inventory movements:", error);
         throw error;
     }
 };
 
 /**
- * Get stock map for all products
+ * Create a new inventory movement
+ * @param {Object} movementData - Movement data to create
  * @param {string} authToken - Authentication token
- * @param {AbortSignal} signal - AbortController signal for request cancellation
- * @returns {Promise<Object>} - Map of product IDs to stock quantities
+ * @returns {Promise<Object>} - Created movement data
+ */
+export const createInventoryMovement = async (movementData, authToken) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    try {
+        const response = await fetch(API_INVENTORY_MOVEMENTS_URL, {
+            method: "POST",
+            headers: {
+                Authorization: `Token ${authToken}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(movementData),
+        });
+
+        if (!response.ok) {
+            // Try to get error details from response
+            let errorMessage = `Error ${response.status}: ${response.statusText}`;
+            try {
+                const errorData = await response.json();
+                if (errorData.detail) {
+                    errorMessage = errorData.detail;
+                } else if (errorData.error) {
+                    errorMessage = errorData.error;
+                } else if (typeof errorData === "object") {
+                    // Handle field-specific errors
+                    const fieldErrors = Object.entries(errorData)
+                        .map(
+                            ([field, errors]) =>
+                                `${field}: ${
+                                    Array.isArray(errors)
+                                        ? errors.join(", ")
+                                        : errors
+                                }`
+                        )
+                        .join("; ");
+                    if (fieldErrors) {
+                        errorMessage = fieldErrors;
+                    }
+                }
+            } catch (e) {
+                // If we can't parse the error response, use the default message
+                console.warn("No se pudo parsear el mensaje de error", e);
+            }
+            throw new Error(errorMessage);
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error("Error creating inventory movement:", error);
+
+        // Mejorar manejo de errores de red
+        if (
+            error.name === "TypeError" &&
+            error.message.includes("Failed to fetch")
+        ) {
+            throw new Error(
+                "Error de conexión: No se pudo conectar al servidor. Verifique su conexión a internet."
+            );
+        }
+
+        throw error;
+    }
+};
+
+/**
+ * ✨ OPTIMIZADO: Get comprehensive stock map with better error handling
+ * @param {string} authToken - Authentication token
+ * @param {AbortSignal} signal - AbortController signal
+ * @returns {Promise<Object>} - Complete stock map
  */
 export const getStockMap = async (authToken, signal) => {
     if (!authToken) {
         throw new Error("No authentication token provided");
     }
 
-    // Object to store accumulated stock by product
-    const stockMap = {};
-
     try {
-        // Build initial URL without filtering
-        let url = API_STOCK_URL;
+        console.log("Fetching comprehensive stock map");
 
-        // Get first page of results
-        let stockData = await fetchStockPage(url, authToken, signal);
+        // ✨ OPTIMIZACIÓN: Usar la nueva función optimizada
+        const stockMap = await fetchAllStockPages(
+            API_STOCK_URL,
+            authToken,
+            signal
+        );
 
-        if (!stockData) return {};
-
-        // Process first page of results
-        processStockData(stockData.results, stockMap);
-
-        // Get additional pages if they exist
-        while (stockData.next && !signal?.aborted) {
-            // Convert absolute URL to relative URL for proxy
-            const nextUrl = convertToProxyUrl(stockData.next);
-            stockData = await fetchStockPage(nextUrl, authToken, signal);
-            if (!stockData) break;
-            processStockData(stockData.results, stockMap);
+        if (signal?.aborted) {
+            console.log("Stock map request was aborted");
+            return {};
         }
+
+        console.log(
+            `Stock map created with ${Object.keys(stockMap).length} products`
+        );
 
         return stockMap;
     } catch (error) {
         if (error.name === "AbortError") {
-            console.log("Stock request was aborted");
+            console.log("Stock map request was aborted");
             return {};
         }
-        console.error("Error fetching stock data:", error);
+        console.error("Error creating stock map:", error);
+        throw error;
+    }
+};
+
+/**
+ * Generate next SKU
+ * @param {string} authToken - Authentication token
+ * @param {Object} generateData - Optional data for SKU generation (category, name, brand, etc.)
+ * @returns {Promise<Object>} - Generated SKU data
+ */
+export const generateNextSku = async (authToken, generateData = {}) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    try {
+        const requestBody =
+            Object.keys(generateData).length > 0 ? generateData : undefined;
+
+        const response = await fetch(API_SKU_GENERATE_URL, {
+            method: "POST",
+            headers: {
+                Authorization: `Token ${authToken}`,
+                "Content-Type": "application/json",
+            },
+            ...(requestBody && { body: JSON.stringify(requestBody) }),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Error ${response.status}: ${response.statusText}`);
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error("Error generating SKU:", error);
+        throw error;
+    }
+};
+
+/**
+ * Validate SKU
+ * @param {string} sku - SKU to validate
+ * @param {string} authToken - Authentication token
+ * @returns {Promise<Object>} - Validation result
+ */
+export const validateSku = async (sku, authToken) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    try {
+        const response = await fetch(API_SKU_VALIDATE_URL, {
+            method: "POST",
+            headers: {
+                Authorization: `Token ${authToken}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ sku }),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Error ${response.status}: ${response.statusText}`);
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error("Error validating SKU:", error);
+        throw error;
+    }
+};
+
+/**
+ * Get SKU system information
+ * @param {string} authToken - Authentication token
+ * @returns {Promise<Object>} - SKU system information
+ */
+export const getSkuSystemInfo = async (authToken) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    try {
+        const response = await fetch(API_SKU_SYSTEM_INFO_URL, {
+            headers: {
+                Authorization: `Token ${authToken}`,
+                "Content-Type": "application/json",
+            },
+        });
+
+        if (!response.ok) {
+            throw new Error(`Error ${response.status}: ${response.statusText}`);
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error("Error fetching SKU system info:", error);
+        throw error;
+    }
+};
+
+/**
+ * Create a new product
+ * @param {Object} productData - Product data to create
+ * @param {string} authToken - Authentication token
+ * @returns {Promise<Object>} - Created product data
+ */
+export const createProduct = async (productData, authToken) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    try {
+        const response = await fetch(API_PRODUCTS_URL, {
+            method: "POST",
+            headers: {
+                Authorization: `Token ${authToken}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(productData),
+        });
+
+        if (!response.ok) {
+            // Try to get error details from response
+            let errorMessage = `Error ${response.status}: ${response.statusText}`;
+            try {
+                const errorData = await response.json();
+                if (errorData.detail) {
+                    errorMessage = errorData.detail;
+                } else if (errorData.error) {
+                    errorMessage = errorData.error;
+                } else if (typeof errorData === "object") {
+                    // Handle field-specific errors
+                    const fieldErrors = Object.entries(errorData)
+                        .map(
+                            ([field, errors]) =>
+                                `${field}: ${
+                                    Array.isArray(errors)
+                                        ? errors.join(", ")
+                                        : errors
+                                }`
+                        )
+                        .join("; ");
+                    if (fieldErrors) {
+                        errorMessage = fieldErrors;
+                    }
+                }
+            } catch (e) {
+                // If we can't parse the error response, use the default message
+            }
+            throw new Error(errorMessage);
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error("Error creating product:", error);
         throw error;
     }
 };
@@ -568,7 +1003,7 @@ export const getAllProducts = async (params = {}, authToken, signal) => {
 
     try {
         console.log("Requesting all products from:", url);
-        
+
         const response = await fetch(url, {
             headers: {
                 Authorization: `Token ${authToken}`,
@@ -585,13 +1020,17 @@ export const getAllProducts = async (params = {}, authToken, signal) => {
         console.log("Raw response from getAllProducts:", data);
         console.log("Type of response:", typeof data);
         console.log("Is array:", Array.isArray(data));
-        
+
         // Ensure we always return an array
         if (Array.isArray(data)) {
             console.log("Returning array with", data.length, "products");
             return data;
         } else if (data && Array.isArray(data.results)) {
-            console.log("Returning results array with", data.results.length, "products");
+            console.log(
+                "Returning results array with",
+                data.results.length,
+                "products"
+            );
             return data.results;
         } else {
             console.log("No valid array found, returning empty array");
@@ -625,11 +1064,21 @@ export const getProductPrices = async (productIds = [], authToken, signal) => {
         // Para cada producto, obtener sus precios históricos
         for (const productId of productIds) {
             try {
-                const priceInfo = await getIntelligentPrice(productId, authToken);
+                const priceInfo = await getIntelligentPrice(
+                    productId,
+                    authToken
+                );
                 pricesMap[productId] = priceInfo;
             } catch (error) {
-                console.error(`Error obteniendo precios para producto ${productId}:`, error);
-                pricesMap[productId] = { price: 0, source: 'none', source_label: 'Error al obtener precio' };
+                console.error(
+                    `Error obteniendo precios para producto ${productId}:`,
+                    error
+                );
+                pricesMap[productId] = {
+                    price: 0,
+                    source: "none",
+                    source_label: "Error al obtener precio",
+                };
             }
         }
 
@@ -652,7 +1101,11 @@ export const getProductPrices = async (productIds = [], authToken, signal) => {
  */
 export const getIntelligentPrice = async (productId, authToken) => {
     if (!authToken || !productId) {
-        return { price: 0, source: 'none', source_label: 'Sin precio disponible' };
+        return {
+            price: 0,
+            source: "none",
+            source_label: "Sin precio disponible",
+        };
     }
 
     try {
@@ -661,24 +1114,26 @@ export const getIntelligentPrice = async (productId, authToken) => {
         if (lastSalePrice.price > 0) {
             return {
                 price: lastSalePrice.price,
-                source: 'sale',
-                source_label: 'Último precio de venta'
+                source: "sale",
+                source_label: "Último precio de venta",
             };
         }
 
         // 2. Intentar obtener último precio de compra
-        const lastPurchasePrice = await getLastPurchasePrice(productId, authToken);
+        const lastPurchasePrice = await getLastPurchasePrice(
+            productId,
+            authToken
+        );
         if (lastPurchasePrice.price > 0) {
             return {
                 price: lastPurchasePrice.price,
-                source: 'purchase',
-                source_label: 'Último precio de compra'
+                source: "purchase",
+                source_label: "Último precio de compra",
             };
         }
 
         // 3. Usar precios del producto (fallback)
         return await getProductIntelligentPriceFallback(productId, authToken);
-
     } catch (error) {
         console.error("Error fetching intelligent price:", error);
         return await getProductIntelligentPriceFallback(productId, authToken);
@@ -694,7 +1149,7 @@ export const getIntelligentPrice = async (productId, authToken) => {
 const getLastSalePrice = async (productId, authToken) => {
     try {
         const salesUrl = `${API_CONFIG.BASE_URL}/sales/sale-items/?product=${productId}&ordering=-id&limit=1`;
-        
+
         const response = await fetch(salesUrl, {
             headers: {
                 Authorization: `Token ${authToken}`,
@@ -703,25 +1158,25 @@ const getLastSalePrice = async (productId, authToken) => {
         });
 
         if (!response.ok) {
-            return { price: 0, source: 'none' };
+            return { price: 0, source: "none" };
         }
 
         const data = await response.json();
-        
+
         if (data.results && data.results.length > 0) {
             const lastSale = data.results[0];
             return {
                 price: parseFloat(lastSale.unit_price) || 0,
-                source: 'sale',
+                source: "sale",
                 item_id: lastSale.id,
-                date: lastSale.created_at || null
+                date: lastSale.created_at || null,
             };
         }
 
-        return { price: 0, source: 'none' };
+        return { price: 0, source: "none" };
     } catch (error) {
         console.error("Error fetching last sale price:", error);
-        return { price: 0, source: 'none' };
+        return { price: 0, source: "none" };
     }
 };
 
@@ -735,7 +1190,7 @@ const getLastPurchasePrice = async (productId, authToken) => {
     try {
         // Primero obtenemos purchase items por producto
         const purchasesUrl = `${API_CONFIG.BASE_URL}/purchases/items/?purchase_option__product=${productId}&ordering=-id&limit=1`;
-        
+
         const response = await fetch(purchasesUrl, {
             headers: {
                 Authorization: `Token ${authToken}`,
@@ -744,25 +1199,25 @@ const getLastPurchasePrice = async (productId, authToken) => {
         });
 
         if (!response.ok) {
-            return { price: 0, source: 'none' };
+            return { price: 0, source: "none" };
         }
 
         const data = await response.json();
-        
+
         if (data.results && data.results.length > 0) {
             const lastPurchase = data.results[0];
             return {
                 price: parseFloat(lastPurchase.unit_price) || 0,
-                source: 'purchase',
+                source: "purchase",
                 item_id: lastPurchase.id,
-                date: lastPurchase.created_at || null
+                date: lastPurchase.created_at || null,
             };
         }
 
-        return { price: 0, source: 'none' };
+        return { price: 0, source: "none" };
     } catch (error) {
         console.error("Error fetching last purchase price:", error);
-        return { price: 0, source: 'none' };
+        return { price: 0, source: "none" };
     }
 };
 
@@ -776,7 +1231,7 @@ const getProductIntelligentPriceFallback = async (productId, authToken) => {
     try {
         // Obtener el producto individual para usar selling_price o cost_price
         const productUrl = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.INVENTORY}${productId}/`;
-        
+
         const response = await fetch(productUrl, {
             headers: {
                 Authorization: `Token ${authToken}`,
@@ -785,38 +1240,197 @@ const getProductIntelligentPriceFallback = async (productId, authToken) => {
         });
 
         if (!response.ok) {
-            return { price: 0, source: 'none', source_label: 'Sin precio disponible' };
+            return {
+                price: 0,
+                source: "none",
+                source_label: "Sin precio disponible",
+            };
         }
 
         const product = await response.json();
-        
+
         // Lógica de fallback: selling_price > cost_price > 0
         if (product.selling_price && product.selling_price > 0) {
             return {
                 price: product.selling_price,
-                source: 'suggested',
-                source_label: 'Precio de venta sugerido'
+                source: "suggested",
+                source_label: "Precio de venta sugerido",
             };
         } else if (product.cost_price && product.cost_price > 0) {
             return {
                 price: product.cost_price,
-                source: 'cost',
-                source_label: 'Precio de costo'
+                source: "cost",
+                source_label: "Precio de costo",
             };
         } else {
             return {
                 price: 0,
-                source: 'none',
-                source_label: 'Sin precio disponible'
+                source: "none",
+                source_label: "Sin precio disponible",
             };
         }
     } catch (error) {
         console.error("Error in price fallback:", error);
-        return { price: 0, source: 'none', source_label: 'Sin precio disponible' };
+        return {
+            price: 0,
+            source: "none",
+            source_label: "Sin precio disponible",
+        };
     }
 };
 
-// Helper functions
+/**
+ * Get stock for a specific product at a specific location
+ * @param {number} productId - Product ID
+ * @param {number} locationId - Location ID
+ * @param {string} authToken - Authentication token
+ * @returns {Promise<number>} - Available stock quantity
+ */
+export const getProductStockAtLocation = async (
+    productId,
+    locationId,
+    authToken
+) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    try {
+        const params = {
+            product: productId,
+            location: locationId,
+        };
+
+        const response = await getFilteredStock(params, authToken);
+
+        if (response && response.results && response.results.length > 0) {
+            // Sumar todas las cantidades para este producto en esta ubicación
+            const totalStock = response.results.reduce((total, item) => {
+                return total + (parseInt(item.quantity, 10) || 0);
+            }, 0);
+
+            return totalStock;
+        }
+
+        return 0; // No stock found
+    } catch (error) {
+        console.error("Error fetching product stock at location:", error);
+        throw error;
+    }
+};
+
+/**
+ * Get stock breakdown by location for a specific product
+ * @param {number} productId - Product ID
+ * @param {string} authToken - Authentication token
+ * @returns {Promise<Array>} - Array of stock by location with location details
+ */
+export const getProductStockByLocations = async (productId, authToken) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    try {
+        // Get all locations and stock data for this product in parallel
+        const [locations, stockResponse] = await Promise.all([
+            getLocations(authToken),
+            getFilteredStock({ product: productId }, authToken),
+        ]);
+
+        // Create a map of location ID to location details
+        const locationMap = {};
+        locations.forEach((location) => {
+            locationMap[location.id] = {
+                id: location.id,
+                name: location.name,
+                stock: 0,
+            };
+        });
+
+        // Process stock data and accumulate by location
+        if (stockResponse && stockResponse.results) {
+            stockResponse.results.forEach((stockItem) => {
+                if (stockItem.location && locationMap[stockItem.location]) {
+                    locationMap[stockItem.location].stock +=
+                        parseInt(stockItem.quantity, 10) || 0;
+                }
+            });
+        }
+
+        // Convert to array and sort by stock descending
+        const stockByLocation = Object.values(locationMap).sort(
+            (a, b) => b.stock - a.stock
+        );
+
+        return stockByLocation;
+    } catch (error) {
+        console.error("Error fetching product stock by locations:", error);
+        throw error;
+    }
+};
+
+/**
+ * Validate if there's enough stock for a transfer
+ * @param {number} productId - Product ID
+ * @param {number} locationId - Origin location ID
+ * @param {number} requestedQuantity - Requested quantity
+ * @param {string} authToken - Authentication token
+ * @returns {Promise<Object>} - Validation result with available stock
+ */
+export const validateStockForTransfer = async (
+    productId,
+    locationId,
+    requestedQuantity,
+    authToken
+) => {
+    try {
+        const availableStock = await getProductStockAtLocation(
+            productId,
+            locationId,
+            authToken
+        );
+
+        const isValid = availableStock >= requestedQuantity;
+
+        return {
+            isValid,
+            availableStock,
+            requestedQuantity,
+            shortfall: isValid ? 0 : requestedQuantity - availableStock,
+        };
+    } catch (error) {
+        console.error("Error validating stock for transfer:", error);
+        throw error;
+    }
+};
+
+// Export as default
+const inventoryService = {
+    getProducts,
+    getStockData,
+    getAllStock,
+    getFilteredStock,
+    getCategories,
+    getLocations,
+    getStockSummary,
+    getInventoryMovements,
+    createInventoryMovement,
+    getStockMap,
+    generateNextSku,
+    validateSku,
+    getSkuSystemInfo,
+    createProduct,
+    getAllProducts,
+    getProductPrices,
+    getIntelligentPrice,
+    getProductStockAtLocation,
+    getProductStockByLocations,
+    validateStockForTransfer,
+};
+
+export default inventoryService;
+export { inventoryService };
+
 
 /**
  * Build URL with parameters
@@ -860,46 +1474,37 @@ const buildUrlWithParams = (baseUrl, params = {}) => {
 };
 
 /**
- * Process stock data and update the stock map
+ * ✨ ULTRA-OPTIMIZADO: Process stock data without performance-killing logs
  * @param {Array} results - Stock data results
  * @param {Object} stockMap - Map to update with stock data
  */
 const processStockData = (results, stockMap) => {
-    if (Array.isArray(results)) {
-        results.forEach((item) => {
-            if (item.product) {
-                // Convert quantity to a number, handle null, undefined, or string values
-                const quantity =
-                    typeof item.quantity === "number"
-                        ? item.quantity
-                        : parseInt(item.quantity, 10) || 0;
-
-                // If an entry already exists for this product, add the quantity
-                if (stockMap[item.product] !== undefined) {
-                    stockMap[item.product] += quantity;
-                    console.log(
-                        `Added ${quantity} to product ${
-                            item.product
-                        }, new total: ${stockMap[item.product]}`
-                    );
-                } else {
-                    // If this is the first time we see this product, initialize with its quantity
-                    stockMap[item.product] = quantity;
-                    console.log(
-                        `Initialized product ${item.product} with quantity: ${quantity}`
-                    );
-                }
-            } else {
-                console.warn("Stock item missing product ID:", item);
-            }
-        });
-    } else {
+    if (!Array.isArray(results)) {
         console.warn("Stock results is not an array:", results);
+        return;
     }
+
+    results.forEach((item) => {
+        if (!item.product) return;
+
+        // Convert quantity to a number, handle null, undefined, or string values
+        const quantity =
+            typeof item.quantity === "number"
+                ? item.quantity
+                : parseInt(item.quantity, 10) || 0;
+
+        // If an entry already exists for this product, add the quantity
+        if (stockMap[item.product] !== undefined) {
+            stockMap[item.product] += quantity;
+        } else {
+            // If this is the first time we see this product, initialize with its quantity
+            stockMap[item.product] = quantity;
+        }
+    });
 };
 
 /**
- * Fetch a page of stock data
+ * ✨ OPTIMIZADO: Fetch a page of stock data with better error handling
  * @param {string} url - URL to fetch
  * @param {string} authToken - Authentication token
  * @param {AbortSignal} signal - AbortController signal
@@ -924,28 +1529,8 @@ const fetchStockPage = async (url, authToken, signal) => {
         return await response.json();
     } catch (error) {
         if (error.name === "AbortError") return null;
+        console.error("Error fetching stock page:", error);
         throw error;
     }
 };
 
-// Export as default and named export
-const inventoryService = {
-    getProducts,
-    getStockData,
-    getFilteredStock,
-    getCategories,
-    getLocations,
-    getStockByLocation,
-    getStockByLocationFast,
-    getStockSummary,
-    getInventoryMovements,
-    getStockMap,
-    getAllProducts,
-    getProductPrices,
-    getIntelligentPrice,
-};
-
-// Named export for consistency with other services
-export { inventoryService };
-
-export default inventoryService;
