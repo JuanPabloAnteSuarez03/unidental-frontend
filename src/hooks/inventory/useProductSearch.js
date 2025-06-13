@@ -22,9 +22,13 @@ const useProductSearch = () => {
     const [searchTerm, setSearchTerm] = useState("");
     const [filteredProducts, setFilteredProducts] = useState([]);
     const [error, setError] = useState(null);
+    const [allProducts, setAllProducts] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [loadingMessage, setLoadingMessage] = useState("");
 
     // Referencia para el cache local de stock
     const localStockCacheRef = useRef(new Map());
+    const abortControllerRef = useRef(null);
 
     // Search products using cache when search term changes
     useEffect(() => {
@@ -37,6 +41,9 @@ const useProductSearch = () => {
         const results = searchProducts(searchTerm);
         setFilteredProducts(results);
     }, [searchTerm, searchProducts]);
+
+    // Cargar todos los productos al montar el componente
+    useEffect(() => {
         const fetchAllProducts = async () => {
             if (!authToken) return;
 
@@ -216,7 +223,7 @@ const useProductSearch = () => {
             return;
         }
 
-        console.log("Updating stock after sale:", soldItems);
+        console.log("Actualizando stock después de venta:", soldItems);
         
         // Update stock in the products context
         updateStockAfterSale(soldItems);
@@ -233,47 +240,9 @@ const useProductSearch = () => {
                 
                 console.log(`Updated local stock for product ${productId}: ${currentStock} -> ${newStock}`);
             }
-    // Función para recargar todos los productos
-    const reloadProducts = useCallback(async () => {
-        if (!authToken) return;
+        });
 
-        setIsLoading(true);
-        setError(null);
-
-        try {
-            // Obtener productos y stock en paralelo
-            const [products, stockMap] = await Promise.all([
-                inventoryService.getAllProducts({}, authToken),
-                inventoryService.getStockMap(authToken),
-            ]);
-
-            // Validación defensiva
-            const validProducts = Array.isArray(products) ? products : [];
-
-            // Combinar productos con stock
-            const productsWithStock = validProducts.map((product) => ({
-                ...product,
-                stock_quantity: stockMap[product.id] || 0,
-            }));
-
-            setAllProducts(productsWithStock);
-
-            // Reapliar el filtro actual
-            if (!searchTerm.trim()) {
-                setFilteredProducts(productsWithStock);
-            }
-        } catch (err) {
-            console.error("Error al recargar productos:", err);
-            setError("No se pudieron recargar los productos.");
-        } finally {
-            setIsLoading(false);
-        }
-    }, [authToken, searchTerm]);
-
-    // Función para actualizar el stock de productos específicos (después de una venta)
-    const updateProductsStock = useCallback((soldItems) => {
-        console.log("Actualizando stock después de venta:", soldItems);
-
+        // Update both allProducts and filteredProducts
         setAllProducts((prevProducts) => {
             const updatedProducts = prevProducts.map((product) => {
                 const soldItem = soldItems.find(
@@ -318,15 +287,42 @@ const useProductSearch = () => {
         });
     }, [updateStockAfterSale]);
 
-    // Determinar el estado de carga y mensaje
-    const isLoading = productsLoading && !isInitialized;
-    
-    const loadingMessage = (() => {
-        if (isLoading) {
-            return "Cargando productos...";
+    // Función para recargar todos los productos
+    const reloadProducts = useCallback(async () => {
+        if (!authToken) return;
+
+        setIsLoading(true);
+        setError(null);
+
+        try {
+            // Obtener productos y stock en paralelo
+            const [products, stockMap] = await Promise.all([
+                inventoryService.getAllProducts({}, authToken),
+                inventoryService.getStockMap(authToken),
+            ]);
+
+            // Validación defensiva
+            const validProducts = Array.isArray(products) ? products : [];
+
+            // Combinar productos con stock
+            const productsWithStock = validProducts.map((product) => ({
+                ...product,
+                stock_quantity: stockMap[product.id] || 0,
+            }));
+
+            setAllProducts(productsWithStock);
+
+            // Reapliar el filtro actual
+            if (!searchTerm.trim()) {
+                setFilteredProducts(productsWithStock);
+            }
+        } catch (err) {
+            console.error("Error al recargar productos:", err);
+            setError("No se pudieron recargar los productos.");
+        } finally {
+            setIsLoading(false);
         }
-        return "";
-    })();
+    }, [authToken, searchTerm]);
 
     return {
         searchTerm,
@@ -337,6 +333,7 @@ const useProductSearch = () => {
         handleSearch,
         resetSearch,
         updateProductsStock,
+        reloadProducts,
         // Additional cache info
         cacheInfo: getCacheInfo(),
         isInitialized
