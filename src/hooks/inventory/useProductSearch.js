@@ -37,22 +37,27 @@ const useProductSearch = () => {
 
             try {
                 console.log("Cargando todos los productos...");
-                
+
                 setLoadingMessage("📦 Obteniendo catálogo de productos...");
-                
+
                 // Obtener productos y stock en paralelo
                 const [products, stockMap] = await Promise.all([
                     inventoryService.getAllProducts({}, authToken, signal),
                     (async () => {
-                        setLoadingMessage("📊 Calculando inventario disponible...");
-                        return await inventoryService.getStockMap(authToken, signal);
-                    })()
+                        setLoadingMessage(
+                            "📊 Calculando inventario disponible..."
+                        );
+                        return await inventoryService.getStockMap(
+                            authToken,
+                            signal
+                        );
+                    })(),
                 ]);
-                
+
                 if (signal.aborted) return;
 
                 setLoadingMessage("🔗 Combinando datos...");
-                
+
                 console.log("Productos recibidos en hook:", products);
                 console.log("Stock map recibido:", stockMap);
                 console.log("Tipo de productos:", typeof products);
@@ -60,32 +65,52 @@ const useProductSearch = () => {
 
                 // Validación defensiva: asegurar que products sea un array
                 const validProducts = Array.isArray(products) ? products : [];
-                
+
                 // Log para ver estructura de productos
                 if (validProducts.length > 0) {
-                    console.log("Estructura del primer producto:", validProducts[0]);
-                    console.log("Campos disponibles:", Object.keys(validProducts[0]));
-                    console.log("¿Tiene stock_quantity?", 'stock_quantity' in validProducts[0]);
-                    console.log("¿Tiene stock?", 'stock' in validProducts[0]);
-                    console.log("¿Tiene quantity?", 'quantity' in validProducts[0]);
+                    console.log(
+                        "Estructura del primer producto:",
+                        validProducts[0]
+                    );
+                    console.log(
+                        "Campos disponibles:",
+                        Object.keys(validProducts[0])
+                    );
+                    console.log(
+                        "¿Tiene stock_quantity?",
+                        "stock_quantity" in validProducts[0]
+                    );
+                    console.log("¿Tiene stock?", "stock" in validProducts[0]);
+                    console.log(
+                        "¿Tiene quantity?",
+                        "quantity" in validProducts[0]
+                    );
                 }
 
                 // Combinar productos con stock
-                const productsWithStock = validProducts.map(product => ({
+                const productsWithStock = validProducts.map((product) => ({
                     ...product,
-                    stock_quantity: stockMap[product.id] || 0
+                    stock_quantity: stockMap[product.id] || 0,
                 }));
-                
-                console.log("Productos válidos con stock:", productsWithStock.length);
-                console.log("Ejemplo producto con stock:", productsWithStock[0]);
-                
+
+                console.log(
+                    "Productos válidos con stock:",
+                    productsWithStock.length
+                );
+                console.log(
+                    "Ejemplo producto con stock:",
+                    productsWithStock[0]
+                );
+
                 // Mostrar productos inmediatamente
                 setAllProducts(productsWithStock);
                 setFilteredProducts(productsWithStock);
-                
+
                 // Mostrar mensaje de éxito brevemente y luego ocultar loading
-                setLoadingMessage(`✅ ${productsWithStock.length} productos listos`);
-                
+                setLoadingMessage(
+                    `✅ ${productsWithStock.length} productos listos`
+                );
+
                 setTimeout(() => {
                     setLoadingMessage("");
                     setIsLoading(false);
@@ -119,15 +144,15 @@ const useProductSearch = () => {
     useEffect(() => {
         // Validación defensiva: asegurar que allProducts sea un array
         const validAllProducts = Array.isArray(allProducts) ? allProducts : [];
-        
+
         if (!searchTerm.trim()) {
             setFilteredProducts(validAllProducts);
             return;
         }
 
         const term = searchTerm.toLowerCase().trim();
-        
-        const filtered = validAllProducts.filter(product => {
+
+        const filtered = validAllProducts.filter((product) => {
             // Validaciones defensivas para cada campo
             const name = product?.name || "";
             const sku = product?.sku || "";
@@ -142,10 +167,18 @@ const useProductSearch = () => {
             const matchesDescription = description.toLowerCase().includes(term);
             const matchesCategory = categoryName.toLowerCase().includes(term);
 
-            return matchesName || matchesSku || matchesBarcode || matchesDescription || matchesCategory;
+            return (
+                matchesName ||
+                matchesSku ||
+                matchesBarcode ||
+                matchesDescription ||
+                matchesCategory
+            );
         });
 
-        console.log(`Filtrado: ${filtered.length} productos encontrados para "${term}"`);
+        console.log(
+            `Filtrado: ${filtered.length} productos encontrados para "${term}"`
+        );
         setFilteredProducts(filtered);
     }, [searchTerm, allProducts]);
 
@@ -170,20 +203,20 @@ const useProductSearch = () => {
             // Obtener productos y stock en paralelo
             const [products, stockMap] = await Promise.all([
                 inventoryService.getAllProducts({}, authToken),
-                inventoryService.getStockMap(authToken)
+                inventoryService.getStockMap(authToken),
             ]);
 
             // Validación defensiva
             const validProducts = Array.isArray(products) ? products : [];
 
             // Combinar productos con stock
-            const productsWithStock = validProducts.map(product => ({
+            const productsWithStock = validProducts.map((product) => ({
                 ...product,
-                stock_quantity: stockMap[product.id] || 0
+                stock_quantity: stockMap[product.id] || 0,
             }));
 
             setAllProducts(productsWithStock);
-            
+
             // Reapliar el filtro actual
             if (!searchTerm.trim()) {
                 setFilteredProducts(productsWithStock);
@@ -199,16 +232,23 @@ const useProductSearch = () => {
     // Función para actualizar el stock de productos específicos (después de una venta)
     const updateProductsStock = useCallback((soldItems) => {
         console.log("Actualizando stock después de venta:", soldItems);
-        
-        setAllProducts(prevProducts => {
-            const updatedProducts = prevProducts.map(product => {
-                const soldItem = soldItems.find(item => item.product_id === product.id);
+
+        setAllProducts((prevProducts) => {
+            const updatedProducts = prevProducts.map((product) => {
+                const soldItem = soldItems.find(
+                    (item) => item.product_id === product.id
+                );
                 if (soldItem) {
-                    const newStock = Math.max(0, (product.stock_quantity || 0) - soldItem.quantity);
-                    console.log(`Producto ${product.name}: ${product.stock_quantity} → ${newStock}`);
+                    const newStock = Math.max(
+                        0,
+                        (product.stock_quantity || 0) - soldItem.quantity
+                    );
+                    console.log(
+                        `Producto ${product.name}: ${product.stock_quantity} → ${newStock}`
+                    );
                     return {
                         ...product,
-                        stock_quantity: newStock
+                        stock_quantity: newStock,
                     };
                 }
                 return product;
@@ -216,14 +256,19 @@ const useProductSearch = () => {
             return updatedProducts;
         });
 
-        setFilteredProducts(prevFiltered => {
-            const updatedFiltered = prevFiltered.map(product => {
-                const soldItem = soldItems.find(item => item.product_id === product.id);
+        setFilteredProducts((prevFiltered) => {
+            const updatedFiltered = prevFiltered.map((product) => {
+                const soldItem = soldItems.find(
+                    (item) => item.product_id === product.id
+                );
                 if (soldItem) {
-                    const newStock = Math.max(0, (product.stock_quantity || 0) - soldItem.quantity);
+                    const newStock = Math.max(
+                        0,
+                        (product.stock_quantity || 0) - soldItem.quantity
+                    );
                     return {
                         ...product,
-                        stock_quantity: newStock
+                        stock_quantity: newStock,
                     };
                 }
                 return product;

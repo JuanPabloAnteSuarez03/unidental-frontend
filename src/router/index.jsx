@@ -2,12 +2,13 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import InventoryPage from "../pages/InventoryPage";
 import LoginPage from "../pages/LoginPage";
-import SalesPage from "../pages/SalesPage";
 import ProtectedRoute from "./ProtectedRoute";
+import SalesPage from "../pages/SalesPage";
 import ForgotPasswordPage from "../pages/ForgotPasswordPage";
 import ResetPasswordConfirmPage from "../pages/ResetPasswordConfirmPage";
 import MovimientosDeStockPage from "../pages/MovimientosDeStockPage";
 import TransferenciasInternasPage from "../pages/TransferenciasInternasPage";
+import NuevoProductoPage from "../pages/NuevoProductoPage";
 
 const AppRouter = () => {
     return (
@@ -29,6 +30,10 @@ const AppRouter = () => {
                 <Route
                     path="/inventario/transferencias"
                     element={<TransferenciasInternasPage />}
+                />
+                <Route
+                    path="/inventario/nuevo-producto"
+                    element={<NuevoProductoPage />}
                 />
                 <Route path="/ventas" element={<SalesPage />} />
             </Route>
