@@ -6,8 +6,10 @@ const InvoiceModal = ({
     onClose, 
     saleData, 
     customerData, 
+    locationData,
     saleItems, 
-    totals 
+    totals,
+    saleType 
 }) => {
     if (!isOpen) return null;
 
@@ -343,6 +345,23 @@ const InvoiceModal = ({
                                             "{companyConfig.slogan}"
                                         </div>
                                     )}
+                                    {locationData && (
+                                        <div style={{ 
+                                            marginTop: "10px", 
+                                            padding: "8px",
+                                            backgroundColor: "#e8f4fd",
+                                            borderRadius: "4px",
+                                            fontSize: "12px",
+                                            color: "#2c3e50" 
+                                        }}>
+                                            <strong>🏢 Sede de Venta:</strong> {locationData.name}
+                                            {locationData.address && (
+                                                <div style={{ marginTop: "2px" }}>
+                                                    📍 {locationData.address}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
@@ -369,7 +388,7 @@ const InvoiceModal = ({
                                     <div style={{ fontSize: "14px", color: "#6c757d", lineHeight: 1.5 }}>
                                         <div><strong>Número:</strong> {getInvoiceNumber(saleData.id)}</div>
                                         <div><strong>Fecha:</strong> {currentDate}</div>
-                                        <div><strong>Tipo:</strong> {saleData.sale_type === "cash" ? "Efectivo" : "Crédito"}</div>
+                                        <div><strong>Tipo:</strong> {saleType === "normal" ? "Normal" : "Crédito"}</div>
                                     </div>
                                 </div>
                             </div>
@@ -524,7 +543,7 @@ const InvoiceModal = ({
                                     <div style={{ fontSize: "14px", color: "#6c757d", lineHeight: 1.5 }}>
                                         <div>• Total de productos: {totals.itemCount}</div>
                                         <div>• Cantidad total: {totals.totalQuantity} unidades</div>
-                                        <div>• Forma de pago: {saleData.sale_type === "cash" ? "Efectivo" : "Crédito"}</div>
+                                        <div>• Forma de pago: {saleType === "normal" ? "Normal" : "Crédito"}</div>
                                         <div>• Estado: Venta registrada</div>
                                     </div>
                                 </div>

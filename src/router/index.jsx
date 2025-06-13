@@ -2,8 +2,11 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import InventoryPage from "../pages/InventoryPage";
 import LoginPage from "../pages/LoginPage";
-import ProtectedRoute from "./ProtectedRoute";
 import SalesPage from "../pages/SalesPage";
+import ReturnsPage from "../pages/ReturnsPage";
+import CustomersListPage from "../pages/CustomersListPage";
+import NewCustomerPage from "../pages/NewCustomerPage";
+import ProtectedRoute from "./ProtectedRoute";
 import ForgotPasswordPage from "../pages/ForgotPasswordPage";
 import ResetPasswordConfirmPage from "../pages/ResetPasswordConfirmPage";
 import MovimientosDeStockPage from "../pages/MovimientosDeStockPage";
@@ -36,6 +39,10 @@ const AppRouter = () => {
                     element={<NuevoProductoPage />}
                 />
                 <Route path="/ventas" element={<SalesPage />} />
+                <Route path="/ventas/devoluciones" element={<ReturnsPage />} />
+                {/* Rutas de clientes */}
+                <Route path="/clientes/lista" element={<CustomersListPage />} />
+                <Route path="/clientes/nuevo" element={<NewCustomerPage />} />
             </Route>
         </Routes>
     );

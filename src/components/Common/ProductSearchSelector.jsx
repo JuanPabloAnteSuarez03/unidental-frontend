@@ -251,6 +251,7 @@ const ProductSearchSelector = ({
                                 fontSize: "14px",
                                 backgroundColor: (disabled || (isLoading && filteredProducts.length === 0)) ? "#f8f9fa" : "white",
                                 color: (disabled || (isLoading && filteredProducts.length === 0)) ? "#6c757d" : "#2c3e50",
+                                cursor: (disabled || (isLoading && filteredProducts.length === 0)) ? "not-allowed" : "text",
                                 ...inputStyle,
                             }}
                             id={inputId}
@@ -270,7 +271,7 @@ const ProductSearchSelector = ({
                         </div>
                     </div>
 
-                    {/* Mensaje de carga inicial */}
+                    {/* Loading and status indicators */}
                     {isLoading && filteredProducts.length === 0 && (
                         <div
                             style={{
@@ -296,7 +297,7 @@ const ProductSearchSelector = ({
                                     animation: "spin 1s linear infinite"
                                 }}
                             />
-                            <span>{loadingMessage}</span>
+                            <span>Cargando productos...</span>
                             <style>
                                 {`
                                     @keyframes spin {
@@ -305,24 +306,6 @@ const ProductSearchSelector = ({
                                     }
                                 `}
                             </style>
-                        </div>
-                    )}
-
-                    {/* Mensaje de éxito (menos intrusivo) */}
-                    {isLoading && filteredProducts.length > 0 && loadingMessage.includes("✅") && (
-                        <div
-                            style={{
-                                marginTop: "4px",
-                                padding: "6px 12px",
-                                backgroundColor: "#d4edda",
-                                border: "1px solid #c3e6cb",
-                                borderRadius: "4px",
-                                color: "#155724",
-                                fontSize: "12px",
-                                textAlign: "center"
-                            }}
-                        >
-                            {loadingMessage}
                         </div>
                     )}
 
@@ -469,6 +452,30 @@ const ProductSearchSelector = ({
                             >
                                 {displayProducts.length} de {maxResults} resultados mostrados
                             </div>
+                        </div>
+                    )}
+
+                    {/* No results message */}
+                    {showDropdown && displayProducts.length === 0 && inputValue.length >= minSearchLength && !isLoading && (
+                        <div
+                            style={{
+                                position: "absolute",
+                                top: "100%",
+                                left: 0,
+                                right: 0,
+                                zIndex: 1000,
+                                marginTop: "4px",
+                                backgroundColor: "white",
+                                border: "1px solid #dee2e6",
+                                borderRadius: "4px",
+                                boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+                                padding: "20px",
+                                textAlign: "center",
+                                color: "#6c757d",
+                                fontSize: "14px",
+                            }}
+                        >
+                            No se encontraron productos con "{inputValue}"
                         </div>
                     )}
 
