@@ -2,7 +2,11 @@
 import React, { useMemo } from "react";
 import TableRow from "./TableRow";
 
-const InventoryTable = ({ products = [], isLoading = false }) => {
+const InventoryTable = ({
+    products = [],
+    isLoading = false,
+    isStockLoading = false,
+}) => {
     // Estilos memoizados para mejorar rendimiento
     const styles = useMemo(
         () => ({
@@ -10,6 +14,9 @@ const InventoryTable = ({ products = [], isLoading = false }) => {
                 overflowX: "auto",
                 marginTop: "15px",
                 position: "relative",
+                borderRadius: "12px",
+                border: "1px solid #e9ecef",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
             },
             emptyState: {
                 textAlign: "center",
@@ -27,16 +34,18 @@ const InventoryTable = ({ products = [], isLoading = false }) => {
                 width: "100%",
                 borderCollapse: "collapse",
                 minWidth: "1000px",
-                tableLayout: "fixed", // Ayuda a distribuir mejor las columnas
+                backgroundColor: "#fff",
             },
             thead: {
-                backgroundColor: "#2c3e50",
+                background: "linear-gradient(135deg, #2c3e50 0%, #34495e 100%)",
                 color: "white",
             },
             header: {
-                border: "1px solid #34495e",
-                padding: "12px 8px",
+                padding: "16px 12px",
                 fontWeight: "600",
+                fontSize: "14px",
+                letterSpacing: "0.5px",
+                textTransform: "uppercase",
                 textAlign: "center",
                 verticalAlign: "middle",
                 height: "50px",
@@ -60,31 +69,61 @@ const InventoryTable = ({ products = [], isLoading = false }) => {
             priceColumn: { width: "8%" },
             marginColumn: { width: "8%" },
             supplierColumn: { width: "13%" },
-            loadingOverlay: {
-                position: "absolute",
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                backgroundColor: "rgba(255, 255, 255, 0.7)",
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                zIndex: 10,
-                borderRadius: "8px",
+            // ✨ Loading completo para productos iniciales
+            fullLoadingContainer: {
+                textAlign: "center",
+                padding: "50px 20px",
+                backgroundColor: "#f8f9fa",
+                borderRadius: "12px",
+                border: "1px solid #e9ecef",
+                marginTop: "15px",
+                boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
             },
             loadingSpinner: {
-                width: "60px",
-                height: "60px",
-                border: "5px solid #f3f3f3",
-                borderTop: "5px solid #3498db",
+                width: "40px",
+                height: "40px",
+                border: "3px solid #e9ecef",
+                borderTop: "3px solid #007bff",
                 borderRadius: "50%",
                 animation: "spin 1s linear infinite",
+                margin: "0 auto 16px auto",
             },
             loadingText: {
-                marginTop: "15px",
+                marginTop: "8px",
                 fontWeight: "600",
-                color: "#3498db",
+                color: "#007bff",
+                fontSize: "16px",
+                marginBottom: "8px",
+            },
+            loadingSubtext: {
+                color: "#6c757d",
+                fontSize: "14px",
+                margin: 0,
+            },
+            // ✨ Indicador de carga de stock sobre la tabla - UNIFICADO
+            stockLoadingBanner: {
+                backgroundColor: "#f8f9fa",
+                border: "1px solid #e9ecef",
+                borderRadius: "12px",
+                padding: "16px 20px",
+                marginBottom: "15px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "12px",
+                color: "#007bff",
+                fontSize: "16px",
+                fontWeight: "600",
+                boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+                textAlign: "center",
+            },
+            stockLoadingSpinner: {
+                width: "20px",
+                height: "20px",
+                border: "2px solid #e9ecef",
+                borderTop: "2px solid #007bff",
+                borderRadius: "50%",
+                animation: "spin 1s linear infinite",
             },
         }),
         []
@@ -106,15 +145,16 @@ const InventoryTable = ({ products = [], isLoading = false }) => {
             {/* Estilo para la animación */}
             <style>{spinnerKeyframes}</style>
 
-            {/* Loading Overlay */}
-            {isLoading && hasProducts && (
-                <div style={styles.loadingOverlay}>
-                    <div>
-                        <div style={styles.loadingSpinner}></div>
-                        <div style={styles.loadingText}>
-                            Cargando datos de stock...
-                        </div>
+            {/* ✨ Loading completo cuando se cargan productos inicialmente */}
+            {isLoading && !hasProducts && (
+                <div style={styles.fullLoadingContainer}>
+                    <div style={styles.loadingSpinner}></div>
+                    <div style={styles.loadingText}>
+                        Cargando productos del inventario...
                     </div>
+                    <p style={styles.loadingSubtext}>
+                        Por favor espere mientras obtenemos los datos
+                    </p>
                 </div>
             )}
 
@@ -128,15 +168,15 @@ const InventoryTable = ({ products = [], isLoading = false }) => {
                 </div>
             )}
 
-            {/* Mensaje de carga cuando no hay productos aún */}
-            {!hasProducts && isLoading && (
-                <div style={styles.emptyState}>
-                    <div style={styles.loadingSpinner}></div>
-                    <p style={styles.loadingText}>Cargando productos...</p>
+            {/* ✨ Indicador de carga de stock - UNIFICADO */}
+            {isStockLoading && (
+                <div style={styles.stockLoadingBanner}>
+                    <div style={styles.stockLoadingSpinner}></div>
+                    <span>Actualizando información de stock...</span>
                 </div>
             )}
 
-            {/* Tabla de productos */}
+            {/* Tabla de productos - se muestra inmediatamente cuando hay productos */}
             {hasProducts && (
                 <table style={styles.table}>
                     <thead>
@@ -234,11 +274,10 @@ const InventoryTable = ({ products = [], isLoading = false }) => {
                         </tr>
                     </thead>
                     <tbody>
-                        {products.map((item, index) => (
+                        {products.map((product, index) => (
                             <TableRow
-                                key={item.id || `unique-${index}`}
-                                item={item}
-                                index={index}
+                                key={product.id || index}
+                                product={product}
                             />
                         ))}
                     </tbody>

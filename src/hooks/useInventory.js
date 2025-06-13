@@ -37,7 +37,10 @@ const useInventory = () => {
     // Estado para los productos de la página actual
     const [products, setProducts] = useState([]);
 
-    // Estado para productos combinados con stock (para evitar el flasheo de stock 0)
+    // Estado para productos con placeholder de stock (para mostrar inmediatamente)
+    const [productsWithPlaceholder, setProductsWithPlaceholder] = useState([]);
+
+    // Estado para productos combinados con stock real
     const [combinedProducts, setCombinedProducts] = useState([]);
 
     // Obtenemos el token de autenticación del contexto
@@ -47,20 +50,24 @@ const useInventory = () => {
     const [count, setCount] = useState(0); // Total de productos en la BD
 
     // Estados de carga y error
-    const [isLoading, setIsLoading] = useState(false);
+    const [isLoadingProducts, setIsLoadingProducts] = useState(false);
     const [isStockLoading, setIsStockLoading] = useState(false);
     const [error, setError] = useState(null);
 
     // Estado adicional para mantener el total general de productos (sin filtros)
     const [totalCount, setTotalCount] = useState(0);
 
-    // Estado para almacenar información de stock
-    const [stockData, setStockData] = useState({});
+    // ✨ NUEVO: Estado para almacenar TODO el stock (no solo de la página actual)
+    const [allStockData, setAllStockData] = useState({});
+    const [isStockFullyLoaded, setIsStockFullyLoaded] = useState(false);
 
     // Caché para evitar llamadas repetidas a la API
     const cache = useRef(new Map());
+    const stockCache = useRef(new Map());
     // Tiempo de la última actualización del total de productos
     const lastTotalFetch = useRef(0);
+    // ✨ NUEVO: Tiempo de la última carga completa de stock
+    const lastStockFetch = useRef(0);
     // AbortController para cancelar peticiones cuando cambian los filtros
     const abortControllerRef = useRef(null);
     // Ref para guardar el último abortController de stock
@@ -69,62 +76,109 @@ const useInventory = () => {
     // Función optimizada para convertir URLs absolutas a URLs relativas para el proxy
     const convertToProxyUrl = useCallback((url) => {
         if (!url) return null;
-        
+
         // If already a relative URL, return as is
-        if (url.startsWith('/')) return url;
-        
+        if (url.startsWith("/")) return url;
+
         // If it's an absolute URL from our backend, convert to relative
-        const backendBaseUrl = 'https://unidental-backend-production.up.railway.app';
+        const backendBaseUrl =
+            "https://unidental-backend-production.up.railway.app";
         if (url.startsWith(backendBaseUrl)) {
             // Remove the base URL, keep the path starting with /api
-            return url.replace(backendBaseUrl, '');
+            return url.replace(backendBaseUrl, "");
         }
-        
+
         // For any other absolute URL, return as is (shouldn't happen in our case)
         return url;
     }, []);
 
-    // Función para combinar los datos de productos con la información de stock
-    const mergeProductsWithStock = useCallback((products, stockMap) => {
+    // ✨ NUEVA FUNCIÓN: Cargar TODO el stock una sola vez
+    const loadAllStock = useCallback(async () => {
+        console.log("🚀 Loading ALL stock data...");
+
+        // Verificar si ya tenemos stock reciente en caché
+        const now = Date.now();
+        if (
+            isStockFullyLoaded &&
+            now - lastStockFetch.current < CACHE_DURATION
+        ) {
+            console.log("✅ Using cached complete stock data");
+            return;
+        }
+
+        setIsStockLoading(true);
+
+        try {
+            // Cargar TODO el stock de una vez
+            const completeStockMap = await inventoryService.getAllStock(
+                authToken
+            );
+
+            console.log(
+                "📥 Complete stock loaded:",
+                Object.keys(completeStockMap).length,
+                "products"
+            );
+
+            setAllStockData(completeStockMap);
+            setIsStockFullyLoaded(true);
+            lastStockFetch.current = now;
+        } catch (error) {
+            console.error("🚨 Error loading complete stock:", error);
+        } finally {
+            setIsStockLoading(false);
+        }
+    }, [authToken]);
+
+    // ✨ FUNCIÓN OPTIMIZADA: Crear productos sin dependencias problemáticas
+    const createProductsWithPlaceholder = useCallback((products) => {
         if (!products || !Array.isArray(products)) {
             console.warn("Products is not a valid array:", products);
             return [];
         }
 
-        if (!stockMap || typeof stockMap !== "object") {
-            console.warn("Stock map is not a valid object:", stockMap);
-            return products;
-        }
+        // Solo devolver los productos base, el stock se combina después
+        return products.map((product) => ({
+            ...product,
+            stock: undefined, // Se asigna después en mergeProductsWithStock
+            stockLoading: true, // Siempre true inicialmente
+        }));
+    }, []); // Sin dependencias para evitar ciclos
 
-        console.log("Merging products with stock data");
-
-        return products.map((product) => {
-            // Crear una copia del producto para no mutar el original
-            const enrichedProduct = { ...product };
-
-            // Añadir información de stock si existe
-            // Buscar el stock por el ID del producto
-            if (product.id && stockMap[product.id] !== undefined) {
-                // Ensure stock is a number
-                enrichedProduct.stock =
-                    typeof stockMap[product.id] === "number"
-                        ? stockMap[product.id]
-                        : parseInt(stockMap[product.id], 10) || 0;
-
-                console.log(
-                    `Product ${product.id} (${product.name}) has stock: ${enrichedProduct.stock}`
-                );
-            } else {
-                // Si no hay información de stock, establecer a 0
-                enrichedProduct.stock = 0;
-                console.log(
-                    `No stock data found for product ${product.id} (${product.name})`
-                );
+    // Función para combinar los datos de productos con la información de stock
+    const mergeProductsWithStock = useCallback(
+        (products, globalStockMap = {}) => {
+            if (!products || !Array.isArray(products)) {
+                console.warn("Products is not a valid array:", products);
+                return [];
             }
 
-            return enrichedProduct;
-        });
-    }, []);
+            console.log("🔍 Merging products with global stock data");
+
+            return products.map((product) => {
+                // Crear una copia del producto para no mutar el original
+                const enrichedProduct = { ...product };
+
+                // ✨ OPTIMIZADO: Usar stock del estado global
+                const stockValue = globalStockMap[product.id];
+
+                if (stockValue !== undefined) {
+                    enrichedProduct.stock =
+                        typeof stockValue === "number"
+                            ? stockValue
+                            : parseInt(stockValue, 10) || 0;
+                    enrichedProduct.stockLoading = false;
+                } else {
+                    // Si no hay stock aún, mostrar como cargando solo si el stock global no está listo
+                    enrichedProduct.stock = 0;
+                    enrichedProduct.stockLoading = !isStockFullyLoaded;
+                }
+
+                return enrichedProduct;
+            });
+        },
+        [isStockFullyLoaded]
+    );
 
     // Función para obtener productos de la API con soporte para caché y cancelación
     const fetchProducts = useCallback(
@@ -134,7 +188,7 @@ const useInventory = () => {
                     "No hay token de autenticación. Inicie sesión nuevamente."
                 );
                 setProducts([]);
-                setIsLoading(false);
+                setIsLoadingProducts(false);
                 return;
             }
 
@@ -154,12 +208,16 @@ const useInventory = () => {
 
             if (cachedData && now - cachedData.timestamp < CACHE_DURATION) {
                 console.log("Usando datos en caché para", params);
-                setProducts(cachedData.data.results || []);
+                const products = cachedData.data.results || [];
+                setProducts(products);
                 setCount(
                     typeof cachedData.data.count === "number"
                         ? cachedData.data.count
                         : parseInt(cachedData.data.count, 10) || 0
                 );
+
+                // Crear productos con placeholder inmediatamente
+                setProductsWithPlaceholder(products);
 
                 // Actualizar el estado de paginación
                 const pageCount = calculateRealisticPageCount(
@@ -186,10 +244,12 @@ const useInventory = () => {
                     convertToProxyUrl(cachedData.data.previous)
                 );
 
+                // ✨ YA NO cargar stock aquí - usamos el stock global
+
                 return;
             }
 
-            setIsLoading(true);
+            setIsLoadingProducts(true);
             setError(null);
 
             try {
@@ -212,13 +272,20 @@ const useInventory = () => {
 
                 console.log("Productos recibidos:", data);
 
+                const products = data.results || [];
+
                 // Actualizar el estado con los datos recibidos
-                setProducts(data.results || []);
+                setProducts(products);
                 setCount(
                     typeof data.count === "number"
                         ? data.count
                         : parseInt(data.count, 10) || 0
                 );
+
+                // ✨ OPTIMIZACIÓN: Mostrar productos inmediatamente
+                const productsWithPlaceholder =
+                    createProductsWithPlaceholder(products);
+                setProductsWithPlaceholder(productsWithPlaceholder);
 
                 // Calcular número de páginas
                 const pageCount = calculateRealisticPageCount(
@@ -261,109 +328,31 @@ const useInventory = () => {
                             ? data.count
                             : parseInt(data.count, 10) || 0
                     );
-                    lastTotalFetch.current = now;
+                    lastTotalFetch.current = Date.now();
                 }
-            } catch (err) {
+
+                // ✨ YA NO cargar stock aquí - usamos el stock global
+            } catch (error) {
                 if (signal.aborted) {
                     console.log("Fetch aborted, not updating error state");
                     return;
                 }
 
-                console.error("Error al obtener productos:", err);
+                console.error("Error al obtener productos:", error);
                 setError(
-                    err.message ||
+                    error.message ||
                         "Error al cargar productos. Intente de nuevo."
                 );
                 setProducts([]);
+                setProductsWithPlaceholder([]);
             } finally {
                 if (!signal.aborted) {
-                    setIsLoading(false);
+                    setIsLoadingProducts(false);
                 }
             }
         },
-        [authToken, convertToProxyUrl]
+        [authToken, convertToProxyUrl, createProductsWithPlaceholder]
     );
-
-    // Función para cargar el stock de todos los productos
-    const fetchStockData = useCallback(async () => {
-        if (!authToken) {
-            console.warn("No authentication token available for stock fetch");
-            return;
-        }
-
-        // Cancelar cualquier solicitud previa
-        if (stockAbortControllerRef.current) {
-            stockAbortControllerRef.current.abort();
-        }
-
-        // Crear un nuevo controlador para esta solicitud
-        stockAbortControllerRef.current = new AbortController();
-        const { signal } = stockAbortControllerRef.current;
-
-        setIsStockLoading(true);
-
-        const MAX_RETRIES = 2;
-        let retries = 0;
-        let success = false;
-
-        while (retries <= MAX_RETRIES && !success && !signal.aborted) {
-            try {
-                console.log(`Fetching stock data (attempt ${retries + 1})`);
-                const stockMap = await inventoryService.getStockMap(
-                    authToken,
-                    signal
-                );
-
-                if (signal.aborted) {
-                    console.log("Stock fetch was aborted");
-                    break;
-                }
-
-                console.log(
-                    "Stock data received:",
-                    Object.keys(stockMap).length,
-                    "products"
-                );
-
-                // Validate stock data
-                if (!stockMap || typeof stockMap !== "object") {
-                    throw new Error("Invalid stock data received");
-                }
-
-                setStockData(stockMap);
-                success = true;
-            } catch (err) {
-                if (signal.aborted) {
-                    console.log("Stock fetch aborted during error handling");
-                    break;
-                }
-
-                retries++;
-                console.error(
-                    `Error al obtener datos de stock (intento ${retries}):`,
-                    err
-                );
-
-                if (retries <= MAX_RETRIES) {
-                    console.log(
-                        `Retrying stock fetch in ${retries * 1000}ms...`
-                    );
-                    await new Promise((resolve) =>
-                        setTimeout(resolve, retries * 1000)
-                    );
-                }
-            } finally {
-                if (!signal.aborted) {
-                    setIsStockLoading(false);
-                }
-            }
-        }
-
-        if (!success && !signal.aborted) {
-            console.error("Failed to fetch stock data after all retries");
-            setIsStockLoading(false);
-        }
-    }, [authToken]);
 
     // Función para resetear la página actual a la primera página
     const resetPage = useCallback(() => {
@@ -373,6 +362,7 @@ const useInventory = () => {
     // Función para limpiar la caché y forzar nueva búsqueda
     const clearCache = useCallback(() => {
         cache.current = new Map();
+        stockCache.current = new Map();
     }, []);
 
     // Utilizamos el hook personalizado para la paginación
@@ -433,7 +423,7 @@ const useInventory = () => {
         abortControllerRef.current = new AbortController();
         const { signal } = abortControllerRef.current;
 
-        setIsLoading(true);
+        setIsLoadingProducts(true);
         setError(null);
 
         // Decidir qué función del servicio utilizar
@@ -455,13 +445,20 @@ const useInventory = () => {
                     return;
                 }
 
+                const products = data.results || [];
+
                 // Actualizar el estado con los datos recibidos
-                setProducts(data.results || []);
+                setProducts(products);
                 setCount(
                     typeof data.count === "number"
                         ? data.count
                         : parseInt(data.count, 10) || 0
                 );
+
+                // ✨ OPTIMIZACIÓN: Mostrar productos inmediatamente
+                const productsWithPlaceholder =
+                    createProductsWithPlaceholder(products);
+                setProductsWithPlaceholder(productsWithPlaceholder);
 
                 // Calcular número de páginas
                 const pageCount = calculateRealisticPageCount(
@@ -490,6 +487,8 @@ const useInventory = () => {
                     );
                     lastTotalFetch.current = Date.now();
                 }
+
+                // ✨ Ya no necesitamos cargar stock aquí - se carga por separado
             } catch (err) {
                 if (signal.aborted) {
                     console.log("Fetch aborted, not updating error state");
@@ -502,9 +501,10 @@ const useInventory = () => {
                         "Error al cargar productos. Intente de nuevo."
                 );
                 setProducts([]);
+                setProductsWithPlaceholder([]);
             } finally {
                 if (!signal.aborted) {
-                    setIsLoading(false);
+                    setIsLoadingProducts(false);
                 }
             }
         };
@@ -516,29 +516,36 @@ const useInventory = () => {
         selectedCategories,
         authToken,
         convertToProxyUrl,
+        createProductsWithPlaceholder,
     ]);
 
-    // Efecto para combinar productos con datos de stock
+    // Efecto para combinar productos con datos de stock de forma optimizada
     useEffect(() => {
-        if (products.length > 0 && Object.keys(stockData).length > 0) {
-            // Combinamos los productos con su información de stock
-            const enriched = mergeProductsWithStock(products, stockData);
+        if (productsWithPlaceholder.length > 0) {
+            // Siempre actualizar combinedProducts cuando cambia stock o productos
+            const enriched = mergeProductsWithStock(
+                productsWithPlaceholder,
+                allStockData
+            );
             setCombinedProducts(enriched);
-        } else if (products.length > 0 && !isStockLoading) {
-            // Si hay productos pero no hay datos de stock y ya no estamos cargando stock,
-            // actualizamos con lo que tenemos (puede ser que no haya stock disponible)
-            const enriched = mergeProductsWithStock(products, stockData);
-            setCombinedProducts(enriched);
-        } else if (products.length === 0) {
-            // Si no hay productos, limpiamos también los combinados
+        } else {
+            // Si no hay productos, limpiar también los combinados
             setCombinedProducts([]);
         }
-    }, [products, stockData, isStockLoading, mergeProductsWithStock]);
+    }, [productsWithPlaceholder, allStockData, mergeProductsWithStock]);
 
-    // Efecto para cargar productos al iniciar y cuando cambia el token
+    // ✨ NUEVO: Efecto para cargar TODO el stock una sola vez al inicio
+    useEffect(() => {
+        if (authToken && !isStockFullyLoaded) {
+            console.log("🚀 Iniciando carga completa de stock...");
+            loadAllStock();
+        }
+    }, [authToken, isStockFullyLoaded, loadAllStock]);
+
+    // Efecto para cargar datos iniciales cuando cambia el token
     useEffect(() => {
         if (authToken) {
-            console.log("Cargando productos iniciales");
+            console.log("Cargando datos iniciales");
 
             // Verificar si hay parámetros en la URL que debamos procesar
             try {
@@ -564,10 +571,10 @@ const useInventory = () => {
                 console.error("Error al procesar parámetros de URL:", error);
             }
 
+            // Solo cargar productos inicialmente - el stock se carga por separado
             fetchProducts();
-            fetchStockData();
         }
-    }, [authToken, fetchProducts, fetchStockData]);
+    }, [authToken, fetchProducts]);
 
     return {
         // Datos procesados y estados
@@ -575,7 +582,8 @@ const useInventory = () => {
         totalGeneralProducts: totalCount,
 
         // Estado de carga y errores
-        isLoading: isLoading || isStockLoading || isCategoriesLoading,
+        isLoading: isLoadingProducts || isStockLoading || isCategoriesLoading,
+        isStockLoading,
         error: error || categoriesError,
 
         // Funciones y estado de paginación
