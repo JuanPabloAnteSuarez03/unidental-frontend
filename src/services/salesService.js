@@ -11,17 +11,17 @@ const API_SALE_ITEMS_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.SALE_IT
  */
 const convertToProxyUrl = (url) => {
     if (!url) return url;
-    
+
     // If already a relative URL, return as is
-    if (url.startsWith('/')) return url;
-    
+    if (url.startsWith("/")) return url;
+
     // If it's an absolute URL from our backend, convert to relative
-    const backendBaseUrl = 'https://unidental-backend-production.up.railway.app';
+    const backendBaseUrl = "https://unidental-backend.onrender.com";
     if (url.startsWith(backendBaseUrl)) {
         // Remove the base URL, keep the path starting with /api
-        return url.replace(backendBaseUrl, '');
+        return url.replace(backendBaseUrl, "");
     }
-    
+
     // For any other absolute URL, return as is (shouldn't happen in our case)
     return url;
 };
@@ -43,30 +43,34 @@ export const getSales = async (params = {}, authToken, signal) => {
     try {
         // Build URL with query parameters
         const url = new URL(API_SALES_URL, window.location.origin);
-        
-        if (params.ordering) url.searchParams.append('ordering', params.ordering);
-        if (params.page) url.searchParams.append('page', params.page);
+
+        if (params.ordering)
+            url.searchParams.append("ordering", params.ordering);
+        if (params.page) url.searchParams.append("page", params.page);
 
         const response = await fetch(url.toString(), {
             method: "GET",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Token ${authToken}`,
+                Authorization: `Token ${authToken}`,
             },
             signal,
         });
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `Error ${response.status}: ${response.statusText}`);
+            throw new Error(
+                errorData.detail ||
+                    `Error ${response.status}: ${response.statusText}`
+            );
         }
 
         const data = await response.json();
-        
+
         // Convert URLs for pagination
         if (data.next) data.next = convertToProxyUrl(data.next);
         if (data.previous) data.previous = convertToProxyUrl(data.previous);
-        
+
         return data;
     } catch (error) {
         console.error("Error fetching sales:", error);
@@ -101,16 +105,19 @@ export const createSale = async (saleData, authToken, signal) => {
 
     try {
         console.log("createSale - sending request to:", API_SALES_URL);
-        
+
         const jsonBody = JSON.stringify(saleData);
         console.log("createSale - JSON body to send:", jsonBody);
-        console.log("createSale - JSON body parsed back:", JSON.parse(jsonBody));
-        
+        console.log(
+            "createSale - JSON body parsed back:",
+            JSON.parse(jsonBody)
+        );
+
         const response = await fetch(API_SALES_URL, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Token ${authToken}`,
+                Authorization: `Token ${authToken}`,
             },
             body: jsonBody,
             signal,
@@ -124,39 +131,66 @@ export const createSale = async (saleData, authToken, signal) => {
                 errorData = await response.json();
                 console.error("createSale - error response JSON:", errorData);
             } catch (parseError) {
-                console.error("createSale - error parsing response:", parseError);
+                console.error(
+                    "createSale - error parsing response:",
+                    parseError
+                );
                 const textResponse = await response.text();
-                console.error("createSale - error response text:", textResponse);
+                console.error(
+                    "createSale - error response text:",
+                    textResponse
+                );
                 errorData = { detail: textResponse };
             }
-            
+
             // Si hay errores de validación, mostrarlos de forma más clara
-            if (errorData && typeof errorData === 'object') {
-                console.error("createSale - validation errors:", JSON.stringify(errorData, null, 2));
-                
+            if (errorData && typeof errorData === "object") {
+                console.error(
+                    "createSale - validation errors:",
+                    JSON.stringify(errorData, null, 2)
+                );
+
                 // Manejar errores específicos de stock
                 if (errorData.items && Array.isArray(errorData.items)) {
                     const stockErrors = [];
                     errorData.items.forEach((itemError, index) => {
-                        if (itemError.quantity && Array.isArray(itemError.quantity)) {
-                            itemError.quantity.forEach(error => {
-                                if (error.includes('stock') || error.includes('inventory') || error.includes('disponible')) {
-                                    stockErrors.push(`Producto ${index + 1}: ${error}`);
+                        if (
+                            itemError.quantity &&
+                            Array.isArray(itemError.quantity)
+                        ) {
+                            itemError.quantity.forEach((error) => {
+                                if (
+                                    error.includes("stock") ||
+                                    error.includes("inventory") ||
+                                    error.includes("disponible")
+                                ) {
+                                    stockErrors.push(
+                                        `Producto ${index + 1}: ${error}`
+                                    );
                                 }
                             });
                         }
                     });
-                    
+
                     if (stockErrors.length > 0) {
-                        throw new Error(`Problemas de stock:\n${stockErrors.join('\n')}`);
+                        throw new Error(
+                            `Problemas de stock:\n${stockErrors.join("\n")}`
+                        );
                     }
                 } else if (errorData.items) {
                     // Si items existe pero no es un array, incluirlo en el error general
-                    console.error("Error en items (no es array):", errorData.items);
+                    console.error(
+                        "Error en items (no es array):",
+                        errorData.items
+                    );
                 }
             }
-            
-            throw new Error(errorData.detail || JSON.stringify(errorData) || `Error ${response.status}: ${response.statusText}`);
+
+            throw new Error(
+                errorData.detail ||
+                    JSON.stringify(errorData) ||
+                    `Error ${response.status}: ${response.statusText}`
+            );
         }
 
         const result = await response.json();
@@ -186,14 +220,17 @@ export const getSaleById = async (saleId, authToken, signal) => {
             method: "GET",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Token ${authToken}`,
+                Authorization: `Token ${authToken}`,
             },
             signal,
         });
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `Error ${response.status}: ${response.statusText}`);
+            throw new Error(
+                errorData.detail ||
+                    `Error ${response.status}: ${response.statusText}`
+            );
         }
 
         return await response.json();
@@ -228,7 +265,10 @@ export const updateSale = async (saleId, saleData, authToken) => {
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `Error ${response.status}: ${response.statusText}`);
+            throw new Error(
+                errorData.detail ||
+                    `Error ${response.status}: ${response.statusText}`
+            );
         }
 
         return await response.json();
@@ -255,14 +295,17 @@ export const deleteSale = async (saleId, authToken, signal) => {
         const response = await fetch(url, {
             method: "DELETE",
             headers: {
-                "Authorization": `Token ${authToken}`,
+                Authorization: `Token ${authToken}`,
             },
             signal,
         });
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `Error ${response.status}: ${response.statusText}`);
+            throw new Error(
+                errorData.detail ||
+                    `Error ${response.status}: ${response.statusText}`
+            );
         }
 
         return true;
@@ -286,22 +329,28 @@ export const getSalesStatistics = async (params = {}, authToken, signal) => {
     }
 
     try {
-        const url = new URL(`${API_SALES_URL}statistics/`, window.location.origin);
-        
-        if (params.days) url.searchParams.append('days', params.days);
+        const url = new URL(
+            `${API_SALES_URL}statistics/`,
+            window.location.origin
+        );
+
+        if (params.days) url.searchParams.append("days", params.days);
 
         const response = await fetch(url.toString(), {
             method: "GET",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Token ${authToken}`,
+                Authorization: `Token ${authToken}`,
             },
             signal,
         });
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `Error ${response.status}: ${response.statusText}`);
+            throw new Error(
+                errorData.detail ||
+                    `Error ${response.status}: ${response.statusText}`
+            );
         }
 
         return await response.json();
@@ -327,30 +376,34 @@ export const getTodaySales = async (params = {}, authToken, signal) => {
 
     try {
         const url = new URL(`${API_SALES_URL}today/`, window.location.origin);
-        
-        if (params.ordering) url.searchParams.append('ordering', params.ordering);
-        if (params.page) url.searchParams.append('page', params.page);
+
+        if (params.ordering)
+            url.searchParams.append("ordering", params.ordering);
+        if (params.page) url.searchParams.append("page", params.page);
 
         const response = await fetch(url.toString(), {
             method: "GET",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Token ${authToken}`,
+                Authorization: `Token ${authToken}`,
             },
             signal,
         });
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `Error ${response.status}: ${response.statusText}`);
+            throw new Error(
+                errorData.detail ||
+                    `Error ${response.status}: ${response.statusText}`
+            );
         }
 
         const data = await response.json();
-        
+
         // Convert URLs for pagination
         if (data.next) data.next = convertToProxyUrl(data.next);
         if (data.previous) data.previous = convertToProxyUrl(data.previous);
-        
+
         return data;
     } catch (error) {
         console.error("Error fetching today's sales:", error);
@@ -373,31 +426,37 @@ export const getTopProducts = async (params = {}, authToken, signal) => {
     }
 
     try {
-        const url = new URL(`${API_SALE_ITEMS_URL}top_products/`, window.location.origin);
-        
-        if (params.days) url.searchParams.append('days', params.days);
-        if (params.limit) url.searchParams.append('limit', params.limit);
+        const url = new URL(
+            `${API_SALE_ITEMS_URL}top_products/`,
+            window.location.origin
+        );
+
+        if (params.days) url.searchParams.append("days", params.days);
+        if (params.limit) url.searchParams.append("limit", params.limit);
 
         const response = await fetch(url.toString(), {
             method: "GET",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Token ${authToken}`,
+                Authorization: `Token ${authToken}`,
             },
             signal,
         });
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `Error ${response.status}: ${response.statusText}`);
+            throw new Error(
+                errorData.detail ||
+                    `Error ${response.status}: ${response.statusText}`
+            );
         }
 
         const data = await response.json();
-        
+
         // Convert URLs for pagination
         if (data.next) data.next = convertToProxyUrl(data.next);
         if (data.previous) data.previous = convertToProxyUrl(data.previous);
-        
+
         return data;
     } catch (error) {
         console.error("Error fetching top products:", error);
@@ -426,7 +485,10 @@ export const updateSaleItem = async (saleItemId, itemData, authToken) => {
         });
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `Error ${response.status}: ${response.statusText}`);
+            throw new Error(
+                errorData.detail ||
+                    `Error ${response.status}: ${response.statusText}`
+            );
         }
         return await response.json();
     } catch (error) {
@@ -451,9 +513,13 @@ export const deleteSaleItem = async (saleItemId, authToken) => {
                 Authorization: `Token ${authToken}`,
             },
         });
-        if (response.status !== 204) { // 204 No Content on success
+        if (response.status !== 204) {
+            // 204 No Content on success
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `Error ${response.status}: ${response.statusText}`);
+            throw new Error(
+                errorData.detail ||
+                    `Error ${response.status}: ${response.statusText}`
+            );
         }
     } catch (error) {
         console.error(`Error deleting sale item ${saleItemId}:`, error);
@@ -476,4 +542,4 @@ export const salesService = {
 };
 
 // Default export
-export default salesService; 
+export default salesService;

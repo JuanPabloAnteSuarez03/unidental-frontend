@@ -14,17 +14,17 @@ const API_RETURNS_TODAY_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.RETU
  */
 const convertToProxyUrl = (url) => {
     if (!url) return url;
-    
+
     // If already a relative URL, return as is
-    if (url.startsWith('/')) return url;
-    
+    if (url.startsWith("/")) return url;
+
     // If it's an absolute URL from our backend, convert to relative
-    const backendBaseUrl = 'https://unidental-backend-production.up.railway.app';
+    const backendBaseUrl = "https://unidental-backend.onrender.com";
     if (url.startsWith(backendBaseUrl)) {
         // Remove the base URL, keep the path starting with /api
-        return url.replace(backendBaseUrl, '');
+        return url.replace(backendBaseUrl, "");
     }
-    
+
     // For any other absolute URL, return as is (shouldn't happen in our case)
     return url;
 };
@@ -46,31 +46,38 @@ export const searchSalesForReturns = async (params = {}, authToken, signal) => {
     try {
         // Build URL with query parameters
         const url = new URL(API_SALES_URL, window.location.origin);
-        
-        if (params.search) url.searchParams.append('search', params.search);
-        if (params.page) url.searchParams.append('page', params.page);
-        if (params.ordering) url.searchParams.append('ordering', params.ordering || '-created_at');
+
+        if (params.search) url.searchParams.append("search", params.search);
+        if (params.page) url.searchParams.append("page", params.page);
+        if (params.ordering)
+            url.searchParams.append(
+                "ordering",
+                params.ordering || "-created_at"
+            );
 
         const response = await fetch(url.toString(), {
             method: "GET",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Token ${authToken}`,
+                Authorization: `Token ${authToken}`,
             },
             signal,
         });
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `Error ${response.status}: ${response.statusText}`);
+            throw new Error(
+                errorData.detail ||
+                    `Error ${response.status}: ${response.statusText}`
+            );
         }
 
         const data = await response.json();
-        
+
         // Convert URLs for pagination
         if (data.next) data.next = convertToProxyUrl(data.next);
         if (data.previous) data.previous = convertToProxyUrl(data.previous);
-        
+
         return data;
     } catch (error) {
         console.error("Error searching sales for returns:", error);
@@ -97,14 +104,17 @@ export const getSaleForReturn = async (saleId, authToken, signal) => {
             method: "GET",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Token ${authToken}`,
+                Authorization: `Token ${authToken}`,
             },
             signal,
         });
 
         if (!saleResponse.ok) {
             const errorData = await saleResponse.json().catch(() => ({}));
-            throw new Error(errorData.detail || `Error ${saleResponse.status}: ${saleResponse.statusText}`);
+            throw new Error(
+                errorData.detail ||
+                    `Error ${saleResponse.status}: ${saleResponse.statusText}`
+            );
         }
 
         const saleData = await saleResponse.json();
@@ -144,22 +154,25 @@ export const createReturn = async (returnData, authToken, signal) => {
             customer: parseInt(returnData.customer_id),
             location: parseInt(returnData.location_id),
             reason: returnData.reason,
-            notes: returnData.notes || '',
-            items: returnData.items.map(item => ({
+            notes: returnData.notes || "",
+            items: returnData.items.map((item) => ({
                 sale_item: item.sale_item_id || null, // If available from original sale
                 product: parseInt(item.product_id),
                 quantity_returned: parseInt(item.quantity),
-                unit_price: parseFloat(item.unit_price)
-            }))
+                unit_price: parseFloat(item.unit_price),
+            })),
         };
 
-        console.log("Sending return data to API:", JSON.stringify(returnPayload, null, 2));
+        console.log(
+            "Sending return data to API:",
+            JSON.stringify(returnPayload, null, 2)
+        );
 
         const response = await fetch(API_RETURNS_URL, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Token ${authToken}`,
+                Authorization: `Token ${authToken}`,
             },
             body: JSON.stringify(returnPayload),
             signal,
@@ -168,37 +181,49 @@ export const createReturn = async (returnData, authToken, signal) => {
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
             console.error("Return creation failed:", response.status);
-            console.error("Full error data:", JSON.stringify(errorData, null, 2));
-            
+            console.error(
+                "Full error data:",
+                JSON.stringify(errorData, null, 2)
+            );
+
             // Provide more detailed error information for 400 errors
             if (response.status === 400) {
                 const errorMessages = [];
                 if (errorData.non_field_errors) {
                     errorMessages.push(...errorData.non_field_errors);
                 }
-                Object.keys(errorData).forEach(field => {
-                    if (field !== 'non_field_errors') {
+                Object.keys(errorData).forEach((field) => {
+                    if (field !== "non_field_errors") {
                         if (Array.isArray(errorData[field])) {
-                            errorMessages.push(`${field}: ${errorData[field].join(', ')}`);
-                        } else if (typeof errorData[field] === 'object') {
-                            errorMessages.push(`${field}: ${JSON.stringify(errorData[field])}`);
+                            errorMessages.push(
+                                `${field}: ${errorData[field].join(", ")}`
+                            );
+                        } else if (typeof errorData[field] === "object") {
+                            errorMessages.push(
+                                `${field}: ${JSON.stringify(errorData[field])}`
+                            );
                         } else {
                             errorMessages.push(`${field}: ${errorData[field]}`);
                         }
                     }
                 });
-                
+
                 if (errorMessages.length > 0) {
-                    throw new Error(`Errores de validación: ${errorMessages.join('. ')}`);
+                    throw new Error(
+                        `Errores de validación: ${errorMessages.join(". ")}`
+                    );
                 }
             }
-            
-            throw new Error(errorData.detail || `Error ${response.status}: ${response.statusText}`);
+
+            throw new Error(
+                errorData.detail ||
+                    `Error ${response.status}: ${response.statusText}`
+            );
         }
 
         const result = await response.json();
         console.log("Return created successfully:", result);
-        
+
         return result;
     } catch (error) {
         console.error("Error creating return:", error);
@@ -222,35 +247,38 @@ export const getReturnHistory = async (params = {}, authToken, signal) => {
 
     try {
         const url = new URL(API_RETURNS_URL, window.location.origin);
-        
+
         // Append all params to the URL for filtering (e.g., original_sale)
-        Object.keys(params).forEach(key => {
+        Object.keys(params).forEach((key) => {
             if (params[key] !== undefined && params[key] !== null) {
                 url.searchParams.append(key, params[key]);
             }
         });
-        
+
         // Ensure ordering is set if not provided
         if (!params.ordering) {
-            url.searchParams.append('ordering', '-return_date');
+            url.searchParams.append("ordering", "-return_date");
         }
 
         const response = await fetch(url.toString(), {
             method: "GET",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Token ${authToken}`,
+                Authorization: `Token ${authToken}`,
             },
             signal,
         });
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `Error ${response.status}: ${response.statusText}`);
+            throw new Error(
+                errorData.detail ||
+                    `Error ${response.status}: ${response.statusText}`
+            );
         }
 
         const data = await response.json();
-        
+
         // Convert URLs for pagination
         if (data.next) data.next = convertToProxyUrl(data.next);
         if (data.previous) data.previous = convertToProxyUrl(data.previous);
@@ -278,14 +306,17 @@ export const getReturnStatistics = async (authToken, signal) => {
             method: "GET",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Token ${authToken}`,
+                Authorization: `Token ${authToken}`,
             },
             signal,
         });
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `Error ${response.status}: ${response.statusText}`);
+            throw new Error(
+                errorData.detail ||
+                    `Error ${response.status}: ${response.statusText}`
+            );
         }
 
         return await response.json();
@@ -311,14 +342,17 @@ export const getTodayReturns = async (authToken, signal) => {
             method: "GET",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Token ${authToken}`,
+                Authorization: `Token ${authToken}`,
             },
             signal,
         });
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `Error ${response.status}: ${response.statusText}`);
+            throw new Error(
+                errorData.detail ||
+                    `Error ${response.status}: ${response.statusText}`
+            );
         }
 
         return await response.json();
@@ -343,12 +377,12 @@ export const updateReturn = async (returnId, updateData, authToken, signal) => {
 
     try {
         const returnUrl = `${API_RETURNS_URL}${returnId}/`;
-        
+
         const response = await fetch(returnUrl, {
             method: "PATCH",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Token ${authToken}`,
+                Authorization: `Token ${authToken}`,
             },
             body: JSON.stringify(updateData),
             signal,
@@ -356,7 +390,10 @@ export const updateReturn = async (returnId, updateData, authToken, signal) => {
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `Error ${response.status}: ${response.statusText}`);
+            throw new Error(
+                errorData.detail ||
+                    `Error ${response.status}: ${response.statusText}`
+            );
         }
 
         return await response.json();
@@ -378,4 +415,4 @@ export const returnsService = {
 };
 
 // Default export
-export default returnsService; 
+export default returnsService;

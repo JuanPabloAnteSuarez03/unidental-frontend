@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
+import { useProducts } from "../context/ProductsContext";
 import transfersService from "../services/transfersService";
 import TransferHeader from "../components/Transfers/TransferHeader";
 import TransferNotification from "../components/Transfers/TransferNotification";
@@ -13,6 +14,7 @@ import TransferPersistenceInfo from "../components/Transfers/TransferPersistence
 
 const TransferenciasInternasPage = () => {
     const { authToken } = useAuth();
+    const { refreshCache } = useProducts();
 
     // Estados para los filtros del historial
     const [filters, setFilters] = useState({
@@ -266,6 +268,11 @@ const TransferenciasInternasPage = () => {
             // Recargar transferencias
             loadTransfers(1);
 
+            // Actualizar cache de productos si hubo movimientos de stock
+            if (formData.tipoTransferencia === "push") {
+                setTimeout(() => refreshCache(), 500);
+            }
+
             // Mostrar notificación
             setNotification({
                 show: true,
@@ -360,6 +367,14 @@ const TransferenciasInternasPage = () => {
             if (transferActualizada) {
                 // Recargar transferencias para reflejar el cambio
                 loadTransfers(currentPage);
+
+                // Actualizar cache de productos si hubo movimientos de stock
+                if (
+                    nuevoEstado === "Aprobada" ||
+                    nuevoEstado === "Completada"
+                ) {
+                    setTimeout(() => refreshCache(), 500);
+                }
 
                 // Actualizar también la transferencia seleccionada si existe
                 if (selectedTransferencia && selectedTransferencia.id === id) {

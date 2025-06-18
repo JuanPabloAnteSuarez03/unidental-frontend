@@ -10,15 +10,15 @@ import inventoryService from "../../services/inventoryService";
  */
 const useProductSearch = () => {
     const { authToken } = useAuth();
-    const { 
-        productsCache, 
-        searchProducts, 
-        isLoading: productsLoading, 
+    const {
+        productsCache,
+        searchProducts,
+        isLoading: productsLoading,
         isInitialized,
         getCacheInfo,
-        updateStockAfterSale 
+        updateStockAfterSale,
     } = useProducts();
-    
+
     const [searchTerm, setSearchTerm] = useState("");
     const [filteredProducts, setFilteredProducts] = useState([]);
     const [error, setError] = useState(null);
@@ -217,75 +217,83 @@ const useProductSearch = () => {
     }, []);
 
     // Función para actualizar stock local después de ventas
-    const updateProductsStock = useCallback((soldItems) => {
-        if (!Array.isArray(soldItems)) {
-            console.warn("updateProductsStock: soldItems should be an array");
-            return;
-        }
-
-        console.log("Actualizando stock después de venta:", soldItems);
-        
-        // Update stock in the products context
-        updateStockAfterSale(soldItems);
-        
-        // Also update local cache for consistency
-        soldItems.forEach(item => {
-            const productId = item.product_id;
-            const quantitySold = item.quantity;
-            
-            if (productId && quantitySold > 0) {
-                const currentStock = localStockCacheRef.current.get(productId) || 0;
-                const newStock = Math.max(0, currentStock - quantitySold);
-                localStockCacheRef.current.set(productId, newStock);
-                
-                console.log(`Updated local stock for product ${productId}: ${currentStock} -> ${newStock}`);
+    const updateProductsStock = useCallback(
+        (soldItems) => {
+            if (!Array.isArray(soldItems)) {
+                console.warn(
+                    "updateProductsStock: soldItems should be an array"
+                );
+                return;
             }
-        });
 
-        // Update both allProducts and filteredProducts
-        setAllProducts((prevProducts) => {
-            const updatedProducts = prevProducts.map((product) => {
-                const soldItem = soldItems.find(
-                    (item) => item.product_id === product.id
-                );
-                if (soldItem) {
-                    const newStock = Math.max(
-                        0,
-                        (product.stock_quantity || 0) - soldItem.quantity
-                    );
+            console.log("Actualizando stock después de venta:", soldItems);
+
+            // Update stock in the products context
+            updateStockAfterSale(soldItems);
+
+            // Also update local cache for consistency
+            soldItems.forEach((item) => {
+                const productId = item.product_id;
+                const quantitySold = item.quantity;
+
+                if (productId && quantitySold > 0) {
+                    const currentStock =
+                        localStockCacheRef.current.get(productId) || 0;
+                    const newStock = Math.max(0, currentStock - quantitySold);
+                    localStockCacheRef.current.set(productId, newStock);
+
                     console.log(
-                        `Producto ${product.name}: ${product.stock_quantity} → ${newStock}`
+                        `Updated local stock for product ${productId}: ${currentStock} -> ${newStock}`
                     );
-                    return {
-                        ...product,
-                        stock_quantity: newStock,
-                    };
                 }
-                return product;
             });
-            return updatedProducts;
-        });
 
-        setFilteredProducts((prevFiltered) => {
-            const updatedFiltered = prevFiltered.map((product) => {
-                const soldItem = soldItems.find(
-                    (item) => item.product_id === product.id
-                );
-                if (soldItem) {
-                    const newStock = Math.max(
-                        0,
-                        (product.stock_quantity || 0) - soldItem.quantity
+            // Update both allProducts and filteredProducts
+            setAllProducts((prevProducts) => {
+                const updatedProducts = prevProducts.map((product) => {
+                    const soldItem = soldItems.find(
+                        (item) => item.product_id === product.id
                     );
-                    return {
-                        ...product,
-                        stock_quantity: newStock,
-                    };
-                }
-                return product;
+                    if (soldItem) {
+                        const newStock = Math.max(
+                            0,
+                            (product.stock_quantity || 0) - soldItem.quantity
+                        );
+                        console.log(
+                            `Producto ${product.name}: ${product.stock_quantity} → ${newStock}`
+                        );
+                        return {
+                            ...product,
+                            stock_quantity: newStock,
+                        };
+                    }
+                    return product;
+                });
+                return updatedProducts;
             });
-            return updatedFiltered;
-        });
-    }, [updateStockAfterSale]);
+
+            setFilteredProducts((prevFiltered) => {
+                const updatedFiltered = prevFiltered.map((product) => {
+                    const soldItem = soldItems.find(
+                        (item) => item.product_id === product.id
+                    );
+                    if (soldItem) {
+                        const newStock = Math.max(
+                            0,
+                            (product.stock_quantity || 0) - soldItem.quantity
+                        );
+                        return {
+                            ...product,
+                            stock_quantity: newStock,
+                        };
+                    }
+                    return product;
+                });
+                return updatedFiltered;
+            });
+        },
+        [updateStockAfterSale]
+    );
 
     // Función para recargar todos los productos
     const reloadProducts = useCallback(async () => {
@@ -336,7 +344,7 @@ const useProductSearch = () => {
         reloadProducts,
         // Additional cache info
         cacheInfo: getCacheInfo(),
-        isInitialized
+        isInitialized,
     };
 };
 
