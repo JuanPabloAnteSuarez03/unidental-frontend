@@ -1,12 +1,8 @@
 // src/components/Table/TableRow.jsx
-import React, { useMemo, useState, useRef } from "react";
-import StockByLocationDropdown from "../Inventory/StockByLocationDropdown";
+import React, { useMemo } from "react";
+import StockCell from "./StockCell";
 
 const TableRow = ({ product, index }) => {
-    // Estados para el desplegable de stock
-    const [showStockDropdown, setShowStockDropdown] = useState(false);
-    const stockCellRef = useRef(null);
-
     // Extraer información del producto y calcular valores derivados
     const { margen, stockBajo, stockCritico, styles, extractedInfo } =
         useMemo(() => {
@@ -99,7 +95,6 @@ const TableRow = ({ product, index }) => {
                 stockCell: {
                     textAlign: "center",
                     fontWeight: "600",
-                    cursor: "pointer",
                     position: "relative",
                 },
                 stockIndicator: {
@@ -237,18 +232,11 @@ const TableRow = ({ product, index }) => {
             return "Cargando información de stock...";
         }
         if (stockCritico) {
-            return `Stock crítico (${extractedInfo.totalStock}): Se requiere reposición urgente (Menos de 5 unidades). Haz clic para ver distribución por sede.`;
+            return `Stock crítico (${extractedInfo.totalStock}): Se requiere reposición urgente (Menos de 5 unidades).`;
         } else if (stockBajo) {
-            return `Stock bajo (${extractedInfo.totalStock}): Considerar reposición próximamente (Menos de 10 unidades). Haz clic para ver distribución por sede.`;
+            return `Stock bajo (${extractedInfo.totalStock}): Considerar reposición próximamente (Menos de 10 unidades).`;
         }
-        return `Stock disponible: ${extractedInfo.totalStock} unidades. Haz clic para ver distribución por sede.`;
-    };
-
-    // Manejar clic en el stock
-    const handleStockClick = () => {
-        if (!extractedInfo.isStockLoading && product.id) {
-            setShowStockDropdown(true);
-        }
+        return `Stock disponible: ${extractedInfo.totalStock} unidades.`;
     };
 
     // Mostrar stock total con mejores indicadores visuales y skeleton loading
@@ -282,117 +270,78 @@ const TableRow = ({ product, index }) => {
             <span
                 style={{
                     ...styles.stockIndicator,
-                    ...(showStockDropdown ? {} : {}),
                     position: "relative",
                 }}
                 title={getStockTooltip()}
-                onClick={handleStockClick}
-                onMouseEnter={(e) => {
-                    e.target.style.transform = "scale(1.05)";
-                    e.target.style.boxShadow = "0 2px 4px rgba(0,0,0,0.1)";
-                }}
-                onMouseLeave={(e) => {
-                    e.target.style.transform = "scale(1)";
-                    e.target.style.boxShadow = "none";
-                }}
             >
                 {extractedInfo.totalStock} {stockCritico && "⚠️"}
-                {/* Indicador visual de que es clickeable */}
-                <span
-                    style={{
-                        marginLeft: "4px",
-                        fontSize: "10px",
-                        opacity: 0.7,
-                    }}
-                >
-                    📊
-                </span>
             </span>
         );
     };
 
     return (
-        <>
-            <tr style={styles.row}>
-                <td style={{ ...styles.cell, ...styles.codeCell }}>
-                    {product.sku}
-                </td>
-                <td style={{ ...styles.cell, ...styles.nameCell }}>
-                    {product.name}
-                    {product.barcode && (
-                        <span
-                            style={styles.barcodeBadge}
-                            title="Código de barras"
-                        >
-                            {product.barcode}
-                        </span>
-                    )}
-                </td>
-                <td style={{ ...styles.cell, ...styles.brandCell }}>
-                    {product.brand}
-                </td>
-                <td style={styles.cell}>
-                    <span style={styles.categoryBadge}>
-                        {product.category_name ||
-                            product.category ||
-                            "Sin categoría"}
+        <tr style={styles.row}>
+            <td style={{ ...styles.cell, ...styles.codeCell }}>
+                {product.sku}
+            </td>
+            <td style={{ ...styles.cell, ...styles.nameCell }}>
+                {product.name}
+                {product.barcode && (
+                    <span style={styles.barcodeBadge} title="Código de barras">
+                        {product.barcode}
                     </span>
-                </td>
-                <td style={{ ...styles.cell, ...styles.unitCell }}>
-                    {product.unit_of_measure ||
-                        product.unit ||
-                        product.unit_name ||
-                        "N/A"}
-                </td>
-                <td
-                    ref={stockCellRef}
-                    style={{ ...styles.cell, ...styles.stockCell }}
-                >
-                    {renderStockInfo()}
-                </td>
-                <td style={{ ...styles.cell, ...styles.priceCell }}>
-                    $
-                    {Number(product.purchase_price || 0).toLocaleString(
-                        "es-CO"
-                    )}
-                </td>
-                <td
-                    style={{
-                        ...styles.cell,
-                        ...styles.priceCell,
-                        ...styles.salePriceCell,
-                    }}
-                >
-                    ${Number(product.sale_price || 0).toLocaleString("es-CO")}
-                </td>
-                <td style={{ ...styles.cell, ...styles.marginCell }}>
-                    <span style={styles.marginValue}>
-                        {margen > 0 ? `${margen.toFixed(1)}%` : "N/A"}
+                )}
+            </td>
+            <td style={{ ...styles.cell, ...styles.brandCell }}>
+                {product.brand}
+            </td>
+            <td style={styles.cell}>
+                <span style={styles.categoryBadge}>
+                    {product.category_name ||
+                        product.category ||
+                        "Sin categoría"}
+                </span>
+            </td>
+            <td style={{ ...styles.cell, ...styles.unitCell }}>
+                {product.unit_of_measure ||
+                    product.unit ||
+                    product.unit_name ||
+                    "N/A"}
+            </td>
+            <td style={{ ...styles.cell, ...styles.stockCell }}>
+                {/* Mostrar el StockCell con datos reales del producto */}
+                <StockCell product={product} />
+            </td>
+            <td style={{ ...styles.cell, ...styles.priceCell }}>
+                ${Number(product.purchase_price || 0).toLocaleString("es-CO")}
+            </td>
+            <td
+                style={{
+                    ...styles.cell,
+                    ...styles.priceCell,
+                    ...styles.salePriceCell,
+                }}
+            >
+                ${Number(product.sale_price || 0).toLocaleString("es-CO")}
+            </td>
+            <td style={{ ...styles.cell, ...styles.marginCell }}>
+                <span style={styles.marginValue}>
+                    {margen > 0 ? `${margen.toFixed(1)}%` : "N/A"}
+                </span>
+            </td>
+            <td style={{ ...styles.cell, ...styles.supplierCell }}>
+                {supplierInfo ? (
+                    <span
+                        style={styles.supplierBadge}
+                        title={`Proveedor: ${supplierInfo}`}
+                    >
+                        {supplierInfo}
                     </span>
-                </td>
-                <td style={{ ...styles.cell, ...styles.supplierCell }}>
-                    {supplierInfo ? (
-                        <span
-                            style={styles.supplierBadge}
-                            title={`Proveedor: ${supplierInfo}`}
-                        >
-                            {supplierInfo}
-                        </span>
-                    ) : (
-                        "No especificado"
-                    )}
-                </td>
-            </tr>
-
-            {/* Dropdown de stock por sede */}
-            <StockByLocationDropdown
-                productId={product.id}
-                isOpen={showStockDropdown}
-                onClose={() => setShowStockDropdown(false)}
-                anchorRef={stockCellRef}
-                totalStock={extractedInfo.totalStock}
-            />
-        </>
+                ) : (
+                    "No especificado"
+                )}
+            </td>
+        </tr>
     );
 };
 

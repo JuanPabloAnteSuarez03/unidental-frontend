@@ -1,43 +1,233 @@
-import React, { useState, useCallback, useMemo, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import "./Pagination.css";
 
 const Pagination = ({
-  currentPage,
-  totalPages,
-  goToPage,
-  goToNextPage,
-  goToPrevPage,
-  hasNextPage,
-  hasPrevPage,
-  isLoading,
-  totalItems,
+    currentPage,
+    totalPages,
+    goToPage,
+    goToNextPage,
+    goToPrevPage,
+    hasNextPage,
+    hasPrevPage,
+    isLoading,
+    totalItems,
 }) => {
-  // Estado para almacenar el valor del input
-  const [pageInputValue, setPageInputValue] = useState(currentPage);
-  // Estado para almacenar el valor máximo de página válido
-  const [maxValidPage, setMaxValidPage] = useState(totalPages);
+    const [pageInputValue, setPageInputValue] = useState(currentPage);
+    const itemsPerPage = 25;
 
-  // Actualizar el valor del input cuando cambia la página actual
-  useEffect(() => {
-    setPageInputValue(currentPage);
-  }, [currentPage]);
+    // Actualizar el valor del input cuando cambia la página actual
+    useEffect(() => {
+        setPageInputValue(currentPage);
+    }, [currentPage]);
 
-  // Actualizar el valor máximo de página cuando cambia totalPages
-  useEffect(() => {
-    setMaxValidPage(totalPages);
-  }, [totalPages]);
+    // Calcular información de la paginación con useMemo para evitar recálculos innecesarios
+    const paginationInfo = useMemo(() => {
+        const startItem = (currentPage - 1) * itemsPerPage + 1;
+        const endItem = Math.min(
+            currentPage * itemsPerPage,
+            totalItems || totalPages * itemsPerPage
+        );
+        const calculatedTotalItems = totalItems || totalPages * itemsPerPage;
 
-  // Estilos memoizados para evitar recreaciones
-  const styles = useMemo(
-    () => ({
-      container: {
+        return { startItem, endItem, calculatedTotalItems };
+    }, [currentPage, totalItems, totalPages, itemsPerPage]);
+
+    const { startItem, endItem, calculatedTotalItems } = paginationInfo;
+
+    // Manejar cambio en el input de página con useCallback
+    const handleInputChange = useCallback((e) => {
+        const value = e.target.value;
+        if (value === "" || /^\d+$/.test(value)) {
+            setPageInputValue(value);
+        }
+    }, []);
+
+    // Manejar navegación a una página específica con useCallback
+    const handleGoToPage = useCallback(() => {
+        const pageNumber = parseInt(pageInputValue, 10);
+        if (!isNaN(pageNumber) && pageNumber >= 1 && pageNumber <= totalPages) {
+            goToPage(pageNumber);
+        } else {
+            setPageInputValue(currentPage);
+        }
+    }, [pageInputValue, totalPages, goToPage, currentPage]);
+
+    // Manejar tecla Enter en el input con useCallback
+    const handleKeyPress = useCallback(
+        (e) => {
+            if (e.key === "Enter") {
+                handleGoToPage();
+            }
+        },
+        [handleGoToPage]
+    );
+
+    // Generar números de página a mostrar con useMemo
+    const pageNumbers = useMemo(() => {
+        const result = [];
+        const maxVisiblePages = 5;
+
+        if (totalPages <= maxVisiblePages) {
+            // Mostrar todas las páginas si son pocas
+            for (let i = 1; i <= totalPages; i++) {
+                result.push(i);
+            }
+        } else {
+            // Siempre mostrar la primera página
+            result.push(1);
+
+            // Calcular rango de páginas a mostrar
+            let start = Math.max(2, currentPage - 1);
+            let end = Math.min(totalPages - 1, currentPage + 1);
+
+            // Ajustar para mostrar siempre 3 páginas intermedias
+            if (start === 2) end = Math.min(4, totalPages - 1);
+            if (end === totalPages - 1) start = Math.max(2, totalPages - 3);
+
+            // Añadir elipsis antes si es necesario
+            if (start > 2) result.push("...");
+
+            // Añadir páginas intermedias
+            for (let i = start; i <= end; i++) {
+                result.push(i);
+            }
+
+            // Añadir elipsis después si es necesario
+            if (end < totalPages - 1) result.push("...");
+
+            // Siempre mostrar la última página
+            result.push(totalPages);
+        }
+
+        return result;
+    }, [currentPage, totalPages]);
+
+    // Si no hay páginas, no mostrar el componente
+    if (totalPages <= 0) return null;
+
+    return (
+        <div
+            className="pagination-container"
+            style={styles.container}
+            role="navigation"
+            aria-label="Paginación"
+        >
+            {/* Información de elementos mostrados */}
+            <div className="pagination-counter" style={styles.pageCounter}>
+                Mostrando {startItem}-{endItem} de {calculatedTotalItems}{" "}
+                elementos
+            </div>
+
+            {/* Controles de navegación */}
+            <div
+                className="pagination-controls"
+                style={styles.controlsContainer}
+            >
+                {/* Botón anterior */}
+                <button
+                    className="pagination-btn"
+                    onClick={goToPrevPage}
+                    disabled={!hasPrevPage || isLoading}
+                    style={styles.button(hasPrevPage && !isLoading)}
+                    aria-label="Ir a la página anterior"
+                >
+                    Anterior
+                </button>
+
+                {/* Números de página */}
+                <div
+                    className="pagination-numbers"
+                    style={styles.pageNumbers}
+                    role="list"
+                >
+                    {pageNumbers.map((page, index) =>
+                        page === "..." ? (
+                            <span
+                                key={`ellipsis-${index}`}
+                                className="pagination-ellipsis"
+                                style={styles.ellipsis}
+                            >
+                                ...
+                            </span>
+                        ) : (
+                            <button
+                                key={`page-${page}`}
+                                className={`pagination-number ${
+                                    page === currentPage
+                                        ? "pagination-active"
+                                        : ""
+                                }`}
+                                onClick={() => goToPage(page)}
+                                style={styles.pageNumber(page === currentPage)}
+                                disabled={isLoading}
+                                aria-label={`Ir a la página ${page}`}
+                                aria-current={
+                                    page === currentPage ? "page" : null
+                                }
+                                role="listitem"
+                            >
+                                {page}
+                            </button>
+                        )
+                    )}
+                </div>
+
+                {/* Botón siguiente */}
+                <button
+                    className="pagination-btn"
+                    onClick={goToNextPage}
+                    disabled={!hasNextPage || isLoading}
+                    style={styles.button(hasNextPage && !isLoading)}
+                    aria-label="Ir a la página siguiente"
+                >
+                    Siguiente
+                </button>
+            </div>
+
+            {/* Ir a página específica */}
+            <div className="pagination-goto" style={styles.goToPageContainer}>
+                <label htmlFor="page-input">Ir a página:</label>
+                <input
+                    id="page-input"
+                    type="text"
+                    className="pagination-input"
+                    value={pageInputValue}
+                    onChange={handleInputChange}
+                    onKeyDown={handleKeyPress}
+                    style={styles.pageInput}
+                    disabled={isLoading}
+                    aria-label="Número de página"
+                />
+                <button
+                    className="pagination-go-btn"
+                    onClick={handleGoToPage}
+                    disabled={isLoading}
+                    style={styles.goButton}
+                    aria-label="Ir a la página especificada"
+                >
+                    Ir
+                </button>
+            </div>
+        </div>
+    );
+};
+
+// Estilos del componente
+const styles = {
+    container: {
         display: "flex",
         alignItems: "center",
-        justifyContent: "center",
+        justifyContent: "space-between",
         margin: "20px 0",
         flexWrap: "wrap",
+        gap: "15px",
+    },
+    controlsContainer: {
+        display: "flex",
+        alignItems: "center",
         gap: "10px",
-      },
-      button: (enabled) => ({
+    },
+    button: (enabled) => ({
         padding: "8px 16px",
         backgroundColor: enabled ? "#2c3e50" : "#e9ecef",
         color: enabled ? "#ffffff" : "#adb5bd",
@@ -47,41 +237,13 @@ const Pagination = ({
         fontWeight: "500",
         cursor: enabled ? "pointer" : "not-allowed",
         transition: "all 0.2s ease",
-      }),
-      pageInfo: {
-        margin: "0 15px",
-        color: "#495057",
-        fontSize: "14px",
-        display: "flex",
-        alignItems: "center",
-        gap: "8px",
-      },
-      pageInput: {
-        width: "60px",
-        padding: "6px 8px",
-        border: "1px solid #ced4da",
-        borderRadius: "4px",
-        fontSize: "14px",
-        textAlign: "center",
-      },
-      goButton: {
-        padding: "6px 12px",
-        backgroundColor: "#2c3e50",
-        color: "#ffffff",
-        border: "none",
-        borderRadius: "4px",
-        fontSize: "14px",
-        cursor: "pointer",
-        transition: "background-color 0.2s ease",
-      },
-      pageNumbers: {
+    }),
+    pageNumbers: {
         display: "flex",
         alignItems: "center",
         gap: "5px",
-        flexWrap: "wrap",
-        margin: "0 10px",
-      },
-      pageNumber: (isActive) => ({
+    },
+    pageNumber: (isActive) => ({
         padding: "6px 12px",
         backgroundColor: isActive ? "#2c3e50" : "#ffffff",
         color: isActive ? "#ffffff" : "#495057",
@@ -90,276 +252,40 @@ const Pagination = ({
         fontSize: "14px",
         cursor: "pointer",
         transition: "all 0.2s ease",
-      }),
-      ellipsis: {
+    }),
+    ellipsis: {
         padding: "6px 12px",
         color: "#6c757d",
         fontSize: "14px",
-      },
-      maxPagesInfo: {
-        padding: "4px 8px",
-        fontSize: "13px",
-        color: "#dc3545",
-        display: "none", // Inicialmente oculto
-      },
-      pageCounter: {
-        padding: "4px 8px",
-        fontSize: "13px",
+    },
+    pageCounter: {
+        fontSize: "14px",
         color: "#495057",
         fontWeight: "500",
-      },
-    }),
-    []
-  );
-
-  // Referencia para el mensaje de error
-  const errorMessageRef = React.useRef(null);
-
-  // Manejador para actualizar el valor del input
-  const handleInputChange = useCallback((e) => {
-    const value = e.target.value;
-    if (value === "" || /^\d+$/.test(value)) {
-      setPageInputValue(value);
-
-      // Ocultar mensaje de error si estaba visible
-      if (errorMessageRef.current) {
-        errorMessageRef.current.style.display = "none";
-      }
-    }
-  }, []);
-
-  // Manejador para ir a la página ingresada con validación estricta
-  const handleGoToPage = useCallback(() => {
-    const pageNumber = parseInt(pageInputValue, 10);
-
-    if (!isNaN(pageNumber)) {
-      if (pageNumber >= 1 && pageNumber <= maxValidPage) {
-        goToPage(pageNumber);
-        // Ocultar mensaje de error si estaba visible
-        if (errorMessageRef.current) {
-          errorMessageRef.current.style.display = "none";
-        }
-      } else {
-        // Mostrar mensaje de error
-        if (errorMessageRef.current) {
-          errorMessageRef.current.style.display = "block";
-        }
-        // Restaurar al valor válido si es inválido
-        setPageInputValue(currentPage);
-      }
-    } else {
-      // Restaurar al valor válido si no es un número
-      setPageInputValue(currentPage);
-    }
-  }, [pageInputValue, maxValidPage, goToPage, currentPage]);
-
-  // Manejador para la tecla Enter en el input
-  const handleKeyPress = useCallback(
-    (e) => {
-      if (e.key === "Enter") {
-        handleGoToPage();
-      }
     },
-    [handleGoToPage]
-  );
-
-  // Generar array de páginas a mostrar con elipsis para muchas páginas
-  const pageNumbers = useMemo(() => {
-    const range = [];
-    const maxVisiblePages = 5;
-    const maxPage = maxValidPage;
-
-    if (maxPage <= maxVisiblePages) {
-      // Mostrar todas las páginas si son pocas
-      for (let i = 1; i <= maxPage; i++) {
-        range.push(i);
-      }
-    } else {
-      // Siempre mostrar la primera página
-      range.push(1);
-
-      // Calcular el rango de páginas a mostrar
-      let start = Math.max(2, currentPage - 1);
-      let end = Math.min(maxPage - 1, currentPage + 1);
-
-      // Ajustar para mostrar siempre 3 páginas (o las que quepan)
-      if (start === 2) end = Math.min(4, maxPage - 1);
-      if (end === maxPage - 1) start = Math.max(2, maxPage - 3);
-
-      // Añadir elipsis antes si es necesario
-      if (start > 2) range.push("...");
-
-      // Añadir páginas intermedias
-      for (let i = start; i <= end; i++) {
-        range.push(i);
-      }
-
-      // Añadir elipsis después si es necesario
-      if (end < maxPage - 1) range.push("...");
-
-      // Siempre mostrar la última página
-      range.push(maxPage);
-    }
-
-    return range;
-  }, [currentPage, maxValidPage]);
-
-  // Manejadores de eventos para botones específicos
-  const handlePageClick = useCallback(
-    (page) => {
-      if (typeof page === "number" && page <= maxValidPage) {
-        goToPage(page);
-      }
+    goToPageContainer: {
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
     },
-    [goToPage, maxValidPage]
-  );
-
-  // Manejadores de eventos para estilos
-  const handleButtonHover = useCallback((e, enabled) => {
-    if (enabled) {
-      e.target.style.backgroundColor = "#34495e";
-    }
-  }, []);
-
-  const handleButtonLeave = useCallback((e, enabled) => {
-    if (enabled) {
-      e.target.style.backgroundColor = "#2c3e50";
-    }
-  }, []);
-
-  // Información adicional sobre la paginación
-  const paginationInfo = useMemo(() => {
-    // Si totalItems no está definido, calcularlo aproximadamente
-    const actualTotalItems = totalItems || totalPages * 25;
-    const itemsPerPage = Math.ceil(actualTotalItems / totalPages) || 25; // Derive items per page dynamically
-    const startItem = (currentPage - 1) * itemsPerPage + 1;
-    let endItem = currentPage * itemsPerPage;
-
-    // Si estamos en la última página, el último ítem es el total
-    if (currentPage === totalPages) {
-      endItem = actualTotalItems;
-    }
-
-    return {
-      startItem,
-      endItem,
-      actualTotalItems,
-    };
-  }, [currentPage, totalPages, totalItems]);
-
-  // No renderizar el componente si no hay páginas
-  if (maxValidPage === 0) {
-    return null;
-  }
-
-  return (
-    <div style={styles.container}>
-      {/* Botón Anterior */}
-      <button
-        onClick={goToPrevPage}
-        disabled={!hasPrevPage || isLoading}
-        style={styles.button(hasPrevPage && !isLoading)}
-        onMouseOver={(e) => handleButtonHover(e, hasPrevPage && !isLoading)}
-        onMouseOut={(e) => handleButtonLeave(e, hasPrevPage && !isLoading)}
-        aria-label="Página anterior"
-      >
-        ← Anterior
-      </button>
-
-      {/* Números de página con elipsis */}
-      <div style={styles.pageNumbers}>
-        {pageNumbers.map((page, index) =>
-          page === "..." ? (
-            <span key={`ellipsis-${index}`} style={styles.ellipsis}>
-              ...
-            </span>
-          ) : (
-            <button
-              key={`page-${page}`}
-              style={styles.pageNumber(page === currentPage)}
-              onClick={() => handlePageClick(page)}
-              onMouseOver={(e) => {
-                if (page !== currentPage) {
-                  e.target.style.backgroundColor = "#f8f9fa";
-                }
-              }}
-              onMouseOut={(e) => {
-                if (page !== currentPage) {
-                  e.target.style.backgroundColor = "#ffffff";
-                }
-              }}
-            >
-              {page}
-            </button>
-          )
-        )}
-      </div>
-
-      {/* Botón Siguiente */}
-      <button
-        onClick={goToNextPage}
-        disabled={!hasNextPage || isLoading || currentPage >= maxValidPage}
-        style={styles.button(
-          hasNextPage && !isLoading && currentPage < maxValidPage
-        )}
-        onMouseOver={(e) =>
-          handleButtonHover(
-            e,
-            hasNextPage && !isLoading && currentPage < maxValidPage
-          )
-        }
-        onMouseOut={(e) =>
-          handleButtonLeave(
-            e,
-            hasNextPage && !isLoading && currentPage < maxValidPage
-          )
-        }
-        aria-label="Página siguiente"
-      >
-        Siguiente →
-      </button>
-
-      {/* Input para ir a página específica */}
-      <div style={styles.pageInfo}>
-        <span>Ir a página:</span>
-        <input
-          type="text"
-          value={pageInputValue}
-          onChange={handleInputChange}
-          onKeyPress={handleKeyPress}
-          style={styles.pageInput}
-          aria-label="Número de página"
-          min="1"
-          max={maxValidPage}
-        />
-        <button
-          onClick={handleGoToPage}
-          style={styles.goButton}
-          onMouseOver={(e) => {
-            e.target.style.backgroundColor = "#34495e";
-          }}
-          onMouseOut={(e) => {
-            e.target.style.backgroundColor = "#2c3e50";
-          }}
-          aria-label="Ir a página"
-        >
-          Ir
-        </button>
-        <span>de {maxValidPage}</span>
-        <div ref={errorMessageRef} style={styles.maxPagesInfo}>
-          Solo hay {maxValidPage} página
-          {maxValidPage !== 1 ? "s" : ""} disponible
-          {maxValidPage !== 1 ? "s" : ""} con productos
-        </div>
-      </div>
-
-      {/* Contador de ítems */}
-      <div style={styles.pageCounter}>
-        Mostrando {paginationInfo.startItem}-{paginationInfo.endItem} de
-        aproximadamente {paginationInfo.actualTotalItems} productos
-      </div>
-    </div>
-  );
+    pageInput: {
+        width: "60px",
+        padding: "6px 8px",
+        border: "1px solid #ced4da",
+        borderRadius: "4px",
+        fontSize: "14px",
+        textAlign: "center",
+    },
+    goButton: {
+        padding: "6px 12px",
+        backgroundColor: "#2c3e50",
+        color: "#ffffff",
+        border: "none",
+        borderRadius: "4px",
+        fontSize: "14px",
+        cursor: "pointer",
+        transition: "background-color 0.2s ease",
+    },
 };
 
-export default React.memo(Pagination);
+export default Pagination;

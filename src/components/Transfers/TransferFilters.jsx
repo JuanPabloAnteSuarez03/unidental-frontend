@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../../context/AuthContext";
 import inventoryService from "../../services/inventoryService";
+import ProductSearchSelector from "../Common/ProductSearchSelector";
 
 const TransferFilters = ({
     filters,
@@ -13,9 +14,7 @@ const TransferFilters = ({
     const { authToken } = useAuth();
     const [ubicaciones, setUbicaciones] = useState([]);
     const [isLoadingUbicaciones, setIsLoadingUbicaciones] = useState(false);
-    const [productos, setProductos] = useState([]);
-    const [isLoadingProductos, setIsLoadingProductos] = useState(false);
-    const [productSearchTerm, setProductSearchTerm] = useState("");
+    const [selectedProduct, setSelectedProduct] = useState(null);
 
     // Cargar ubicaciones reales desde la base de datos
     const loadUbicaciones = useCallback(async () => {
@@ -37,34 +36,6 @@ const TransferFilters = ({
         }
     }, [authToken]);
 
-    // Cargar productos para la búsqueda
-    const loadProductos = useCallback(
-        async (searchTerm = "") => {
-            if (!authToken) return;
-
-            setIsLoadingProductos(true);
-            try {
-                const params = {};
-                if (searchTerm.trim()) {
-                    // Buscar por nombre
-                    params.search = searchTerm.trim();
-                }
-
-                const data = await inventoryService.getAllProducts(
-                    params,
-                    authToken
-                );
-                setProductos(data || []);
-            } catch (error) {
-                console.error("Error al cargar productos:", error);
-                setProductos([]);
-            } finally {
-                setIsLoadingProductos(false);
-            }
-        },
-        [authToken]
-    );
-
     // Cargar ubicaciones al montar el componente
     useEffect(() => {
         if (authToken) {
@@ -72,32 +43,28 @@ const TransferFilters = ({
         }
     }, [authToken, loadUbicaciones]);
 
-    // Manejar cambio en la búsqueda de productos
-    const handleProductSearchChange = (e) => {
-        const value = e.target.value;
-        setProductSearchTerm(value);
-
-        // Notificar al componente padre sobre el cambio
-        if (onProductSearchChange) {
-            onProductSearchChange(value);
-        }
-
-        // Cargar productos que coincidan con la búsqueda
-        if (value.length >= 2) {
-            loadProductos(value);
-        } else if (value.length === 0) {
-            setProductos([]);
-        }
-    };
-
-    // Manejar selección de producto de la lista
-    const handleProductSelect = (product) => {
-        setProductSearchTerm(product.name);
+    // Manejar selección de producto
+    const handleProductSelected = (product) => {
+        setSelectedProduct(product);
         if (onProductSearchChange) {
             onProductSearchChange(product.name);
         }
-        setProductos([]); // Limpiar la lista después de seleccionar
     };
+
+    // Manejar limpieza de selección de producto
+    const handleProductSelectionCleared = () => {
+        setSelectedProduct(null);
+        if (onProductSearchChange) {
+            onProductSearchChange("");
+        }
+    };
+
+    // Limpiar producto seleccionado cuando se limpien todos los filtros
+    useEffect(() => {
+        if (!filters.producto && selectedProduct) {
+            setSelectedProduct(null);
+        }
+    }, [filters.producto, selectedProduct]);
 
     return (
         <div
@@ -159,113 +126,15 @@ const TransferFilters = ({
                     🔎 Búsqueda de productos:
                 </label>
                 <div style={{ position: "relative", maxWidth: "100%" }}>
-                    <input
-                        type="text"
-                        id="productSearch"
-                        value={productSearchTerm}
-                        onChange={handleProductSearchChange}
-                        style={{
-                            width: "100%",
-                            maxWidth: "100%",
-                            boxSizing: "border-box",
-                            padding: "12px 16px",
-                            borderRadius: "8px",
-                            border: "2px solid #e9ecef",
-                            fontSize: "14px",
-                            fontWeight: "400",
-                            transition: "all 0.2s ease",
-                            outline: "none",
-                        }}
-                        placeholder="Buscar por nombre de producto..."
-                        onFocus={(e) => {
-                            e.target.style.borderColor = "#2c3e50";
-                            e.target.style.boxShadow =
-                                "0 0 0 3px rgba(44, 62, 80, 0.1)";
-                        }}
-                        onBlur={(e) => {
-                            e.target.style.borderColor = "#e9ecef";
-                            e.target.style.boxShadow = "none";
-                        }}
+                    <ProductSearchSelector
+                        onProductSelected={handleProductSelected}
+                        onSelectionCleared={handleProductSelectionCleared}
+                        initialProduct={selectedProduct}
+                        placeholder="Buscar producto por nombre, SKU o código..."
+                        showSelectedProduct={true}
+                        allowClearSelection={true}
+                        maxResults={10}
                     />
-
-                    {/* Loading indicator para productos */}
-                    {isLoadingProductos && (
-                        <div
-                            style={{
-                                position: "absolute",
-                                right: "16px",
-                                top: "50%",
-                                transform: "translateY(-50%)",
-                                fontSize: "12px",
-                                color: "#2c3e50",
-                            }}
-                        >
-                            Buscando...
-                        </div>
-                    )}
-
-                    {/* Lista de productos sugeridos */}
-                    {productos.length > 0 && productSearchTerm.length >= 2 && (
-                        <div
-                            style={{
-                                position: "absolute",
-                                top: "100%",
-                                left: 0,
-                                right: 0,
-                                backgroundColor: "#fff",
-                                border: "2px solid #e9ecef",
-                                borderTop: "none",
-                                borderRadius: "0 0 8px 8px",
-                                maxHeight: "200px",
-                                overflowY: "auto",
-                                zIndex: 1000,
-                                boxShadow: "0 4px 20px rgba(0,0,0,0.1)",
-                                width: "100%",
-                                boxSizing: "border-box",
-                            }}
-                        >
-                            {productos.slice(0, 10).map((product) => (
-                                <div
-                                    key={product.id}
-                                    onClick={() => handleProductSelect(product)}
-                                    style={{
-                                        padding: "12px 16px",
-                                        cursor: "pointer",
-                                        borderBottom: "1px solid #f1f3f4",
-                                        transition:
-                                            "background-color 0.2s ease",
-                                    }}
-                                    onMouseOver={(e) => {
-                                        e.target.style.backgroundColor =
-                                            "#f8f9fa";
-                                    }}
-                                    onMouseOut={(e) => {
-                                        e.target.style.backgroundColor =
-                                            "transparent";
-                                    }}
-                                >
-                                    <div
-                                        style={{
-                                            fontWeight: "500",
-                                            color: "#2c3e50",
-                                        }}
-                                    >
-                                        {product.name}
-                                    </div>
-                                    {product.sku && (
-                                        <div
-                                            style={{
-                                                fontSize: "12px",
-                                                color: "#6c757d",
-                                            }}
-                                        >
-                                            SKU: {product.sku}
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    )}
                 </div>
             </div>
 

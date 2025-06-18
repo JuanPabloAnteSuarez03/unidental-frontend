@@ -35,6 +35,7 @@ const InventoryTable = ({
                 borderCollapse: "collapse",
                 minWidth: "1000px",
                 backgroundColor: "#fff",
+                tableLayout: "auto", // Cambiar a auto para mantener tamaño natural
             },
             thead: {
                 background: "linear-gradient(135deg, #2c3e50 0%, #34495e 100%)",

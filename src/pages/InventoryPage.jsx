@@ -30,6 +30,10 @@ const InventoryPage = () => {
         searchByName,
         nameFilter,
 
+        // ✨ NUEVO: Filtro por SKU
+        searchBySku,
+        skuFilter,
+
         // Filtro de categorías
         selectedCategories,
         availableCategories,
@@ -43,6 +47,9 @@ const InventoryPage = () => {
     const handleSearch = (filters) => {
         // Filtro de nombre
         searchByName(filters.name);
+
+        // ✨ NUEVO: Filtro de SKU
+        searchBySku(filters.sku);
 
         // Filtro de categorías
         updateSelectedCategories(filters.categories);
@@ -76,6 +83,7 @@ const InventoryPage = () => {
                     onSearch={handleSearch}
                     onReset={resetAllFilters}
                     nameFilter={nameFilter}
+                    skuFilter={skuFilter} // ✨ NUEVO: Pasar skuFilter
                     selectedCategories={selectedCategories}
                     availableCategories={availableCategories}
                 />

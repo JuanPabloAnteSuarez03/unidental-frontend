@@ -1,12 +1,13 @@
-// src/hooks/useInventory.js
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
+import { useProducts } from "../context/ProductsContext"; // ✨ NUEVO: Importar contexto de productos
 import inventoryService from "../services/inventoryService";
 import {
     useNameSearch,
     usePagination,
     useFilterReset,
     useCategoryFilter,
+    useSkuSearch,
 } from "./inventory";
 
 // Configuración de caché
@@ -46,6 +47,14 @@ const useInventory = () => {
     // Obtenemos el token de autenticación del contexto
     const { authToken } = useAuth();
 
+    // ✨ NUEVO: Usar contexto de productos para búsquedas en cache
+    const {
+        productsCache,
+        searchProducts,
+        loadAllProducts,
+        isInitialized: isCacheInitialized,
+    } = useProducts();
+
     // Mantenemos estos estados
     const [count, setCount] = useState(0); // Total de productos en la BD
 
@@ -81,8 +90,7 @@ const useInventory = () => {
         if (url.startsWith("/")) return url;
 
         // If it's an absolute URL from our backend, convert to relative
-        const backendBaseUrl =
-            "https://unidental-backend-production.up.railway.app";
+        const backendBaseUrl = "https://unidental-backend.onrender.com";
         if (url.startsWith(backendBaseUrl)) {
             // Remove the base URL, keep the path starting with /api
             return url.replace(backendBaseUrl, "");
@@ -363,6 +371,9 @@ const useInventory = () => {
     const clearCache = useCallback(() => {
         cache.current = new Map();
         stockCache.current = new Map();
+
+        // Limpiar también la variable global de caché de búsqueda por SKU
+        window.skuSearchCache = null;
     }, []);
 
     // Utilizamos el hook personalizado para la paginación
@@ -370,6 +381,12 @@ const useInventory = () => {
 
     // Utilizamos el hook personalizado para la búsqueda por nombre
     const { nameFilter, searchByName, resetNameFilter } = useNameSearch(
+        resetPage,
+        clearCache
+    );
+
+    // ✨ NUEVO: Hook para búsqueda por SKU
+    const { skuFilter, searchBySku, resetSkuFilter } = useSkuSearch(
         resetPage,
         clearCache
     );
@@ -385,7 +402,11 @@ const useInventory = () => {
     } = useCategoryFilter(resetPage, clearCache);
 
     // Array de funciones de reset para cada filtro
-    const resetFunctions = [resetNameFilter, resetCategoryFilter];
+    const resetFunctions = [
+        resetNameFilter,
+        resetSkuFilter,
+        resetCategoryFilter,
+    ];
 
     // Utilizamos el hook para resetear todos los filtros
     const { resetAllFilters } = useFilterReset({
@@ -396,127 +417,367 @@ const useInventory = () => {
 
     // Efecto para cargar productos al inicio y cuando cambian los filtros
     useEffect(() => {
-        // Crear objeto de parámetros para la API
-        const params = {
-            page: pagination.currentPage,
-        };
+        const loadData = async () => {
+            // Verificar si tenemos resultados de búsqueda por SKU en caché
+            const skuSearchResults = cache.current.get("skuSearchResults");
+            const now = Date.now();
+            const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
 
-        // Añadir filtro de nombre si existe
-        if (nameFilter) {
-            params.name = nameFilter;
-        }
+            // Si tenemos resultados de búsqueda por SKU en caché y estamos cambiando de página
+            if (
+                skuSearchResults &&
+                now - skuSearchResults.timestamp < CACHE_DURATION &&
+                skuFilter &&
+                skuFilter.length > 0 &&
+                skuFilter.length < 16
+            ) {
+                // Actualizar la variable global para que sea accesible desde usePagination.js
+                window.skuSearchCache = skuSearchResults;
 
-        // Añadir filtro de categorías si hay seleccionadas
-        if (selectedCategories && selectedCategories.length > 0) {
-            params.category = selectedCategories;
-        }
-
-        // Log para depuración
-        console.log("Parámetros de búsqueda enviados a la API:", params);
-
-        // Cancelar cualquier solicitud previa
-        if (abortControllerRef.current) {
-            abortControllerRef.current.abort();
-        }
-
-        // Crear un nuevo controlador para esta solicitud
-        abortControllerRef.current = new AbortController();
-        const { signal } = abortControllerRef.current;
-
-        setIsLoadingProducts(true);
-        setError(null);
-
-        // Decidir qué función del servicio utilizar
-        const fetchData = async () => {
-            try {
-                const data = await inventoryService.getProducts(
-                    params,
-                    authToken,
-                    signal
+                console.log(
+                    `🔍 Usando resultados en caché para SKU: "${skuFilter}" (página ${pagination.currentPage})`
                 );
 
-                if (signal.aborted) {
-                    console.log("Fetch aborted, not updating state");
-                    return;
-                }
-
-                if (!data) {
-                    console.log("No data returned from API");
-                    return;
-                }
-
-                const products = data.results || [];
-
-                // Actualizar el estado con los datos recibidos
-                setProducts(products);
-                setCount(
-                    typeof data.count === "number"
-                        ? data.count
-                        : parseInt(data.count, 10) || 0
+                // Definir constantes para la paginación
+                const ITEMS_PER_PAGE = 25;
+                const currentPageIndex = pagination.currentPage;
+                const pageCount = Math.ceil(
+                    skuSearchResults.data.length / ITEMS_PER_PAGE
                 );
 
-                // ✨ OPTIMIZACIÓN: Mostrar productos inmediatamente
-                const productsWithPlaceholder =
-                    createProductsWithPlaceholder(products);
-                setProductsWithPlaceholder(productsWithPlaceholder);
-
-                // Calcular número de páginas
-                const pageCount = calculateRealisticPageCount(
-                    typeof data.count === "number"
-                        ? data.count
-                        : parseInt(data.count, 10) || 0
+                // Calcular índices para la paginación
+                const startIndex = (currentPageIndex - 1) * ITEMS_PER_PAGE;
+                const endIndex = Math.min(
+                    startIndex + ITEMS_PER_PAGE,
+                    skuSearchResults.data.length
                 );
 
-                // Actualizar el estado de paginación usando el hook
+                // Obtener solo los productos para la página actual
+                const paginatedResults = skuSearchResults.data.slice(
+                    startIndex,
+                    endIndex
+                );
+
+                console.log(
+                    `📊 Mostrando productos ${startIndex + 1}-${endIndex} de ${
+                        skuSearchResults.data.length
+                    }`
+                );
+
+                // Actualizar los productos mostrados con solo la página actual
+                setProducts(paginatedResults);
+                setProductsWithPlaceholder(paginatedResults);
+
+                // Actualizar el estado de paginación
+                const hasNextPage = endIndex < skuSearchResults.data.length;
+                const hasPrevPage = startIndex > 0;
+
                 pagination.updatePaginationState(
-                    pagination.currentPage,
+                    currentPageIndex,
                     pageCount,
-                    convertToProxyUrl(data.next),
-                    convertToProxyUrl(data.previous)
+                    hasNextPage ? `?page=${currentPageIndex + 1}` : null,
+                    hasPrevPage ? `?page=${currentPageIndex - 1}` : null
                 );
 
-                // También actualizamos el total general de productos si no hay filtros
-                if (
-                    Object.keys(params).length === 0 ||
-                    (Object.keys(params).length === 1 && params.page)
-                ) {
-                    setTotalCount(
+                // Actualizar conteo
+                setCount(skuSearchResults.data.length);
+
+                // No hacer llamada al API
+                return;
+            }
+
+            // ✨ MODIFICADO: Lógica para combinar búsqueda por SKU parcial y categoría
+            const isPartialSku =
+                skuFilter && skuFilter.length > 0 && skuFilter.length < 16; // SKUs completos tienen hasta 16 caracteres
+            const hasCategories =
+                selectedCategories && selectedCategories.length > 0;
+
+            // Caso especial: SKU parcial (con o sin categorías)
+            if (isPartialSku) {
+                console.log(`🎯 SKU PARTIAL SEARCH DETECTED:
+                - SKU: "${skuFilter}"
+                - Length: ${skuFilter.length} chars
+                - Categories: ${
+                    hasCategories ? selectedCategories.join(", ") : "None"
+                }
+                - Strategy: Using CACHE-ONLY search with combined filters`);
+
+                // ✨ IMPLEMENTAR BÚSQUEDA EN CACHE LOCAL
+                setIsLoadingProducts(true);
+
+                try {
+                    // Asegurar que el cache esté cargado
+                    if (!isCacheInitialized || productsCache.length === 0) {
+                        console.log(
+                            "🔄 Cache not ready, loading all products..."
+                        );
+                        await loadAllProducts();
+                    }
+
+                    // ✨ OPTIMIZACIÓN: No buscar si el SKU tiene menos de 3 caracteres y no hay categorías
+                    if (skuFilter.length < 3 && !hasCategories) {
+                        console.log(
+                            "⚠️ SKU search term too short, showing limited results"
+                        );
+                        // Mostrar solo los primeros 20 productos como muestra
+                        const limitedResults = productsCache.slice(0, 20);
+                        setProducts(limitedResults);
+                        setProductsWithPlaceholder(limitedResults);
+                        setCombinedProducts(limitedResults);
+
+                        // Actualizar paginación para resultados limitados
+                        pagination.updatePaginationState(1, 1, null, null);
+                        setCount(limitedResults.length);
+                        setIsLoadingProducts(false);
+                        return;
+                    }
+
+                    // Buscar en el cache local usando el SKU y categoría combinados
+                    console.log(
+                        `🔍 Searching in cache for SKU: "${skuFilter}" ${
+                            hasCategories ? "with categories" : ""
+                        }${nameFilter ? ` and name: "${nameFilter}"` : ""}`
+                    );
+                    const cacheResults = productsCache.filter((product) => {
+                        // Filtrar por SKU
+                        const productSku = (product.sku || "").toLowerCase();
+                        const searchTerm = skuFilter.toLowerCase();
+                        const skuMatches = productSku.includes(searchTerm);
+
+                        // Si no hay coincidencia con SKU, no continuar
+                        if (!skuMatches) return false;
+
+                        // Filtrar por nombre si existe
+                        if (nameFilter) {
+                            const productName = (
+                                product.name || ""
+                            ).toLowerCase();
+                            const nameSearchTerm = nameFilter.toLowerCase();
+                            const nameMatches =
+                                productName.includes(nameSearchTerm);
+                            if (!nameMatches) return false;
+                        }
+
+                        // Si no hay categorías seleccionadas, devolver resultado basado en SKU y nombre
+                        if (!hasCategories) return true;
+
+                        // Si hay categorías, verificar que el producto pertenezca a alguna de ellas
+                        const categoryMatches = selectedCategories.includes(
+                            product.category
+                        );
+
+                        // Combinar todos los filtros (SKU Y nombre Y categoría)
+                        return categoryMatches;
+                    });
+
+                    console.log(
+                        `🎯 Combined search results: ${cacheResults.length} products found`
+                    );
+
+                    // Definir constantes para la paginación
+                    const ITEMS_PER_PAGE = 25; // Usar 25 productos por página para ser consistente
+                    const currentPageIndex = pagination.currentPage || 1;
+                    const pageCount = Math.ceil(
+                        cacheResults.length / ITEMS_PER_PAGE
+                    );
+
+                    // Calcular índices para la paginación
+                    const startIndex = (currentPageIndex - 1) * ITEMS_PER_PAGE;
+                    const endIndex = Math.min(
+                        startIndex + ITEMS_PER_PAGE,
+                        cacheResults.length
+                    );
+
+                    // Obtener solo los productos para la página actual
+                    const paginatedResults = cacheResults.slice(
+                        startIndex,
+                        endIndex
+                    );
+
+                    console.log(
+                        `📊 Mostrando productos ${
+                            startIndex + 1
+                        }-${endIndex} de ${cacheResults.length}`
+                    );
+
+                    // Actualizar los productos mostrados con solo la página actual
+                    setProducts(paginatedResults);
+                    setProductsWithPlaceholder(paginatedResults);
+                    setCombinedProducts(cacheResults);
+
+                    // Guardar todos los resultados para poder paginarlos sin hacer nuevas búsquedas
+                    const skuSearchCache = {
+                        data: cacheResults,
+                        timestamp: Date.now(),
+                    };
+
+                    // Guardar en caché local
+                    cache.current.set("skuSearchResults", skuSearchCache);
+
+                    // Guardar también en una variable global para que sea accesible desde usePagination.js
+                    window.skuSearchCache = skuSearchCache;
+
+                    // Actualizar el estado de paginación
+                    const hasNextPage = endIndex < cacheResults.length;
+                    const hasPrevPage = startIndex > 0;
+
+                    pagination.updatePaginationState(
+                        currentPageIndex,
+                        pageCount,
+                        hasNextPage ? `?page=${currentPageIndex + 1}` : null,
+                        hasPrevPage ? `?page=${currentPageIndex - 1}` : null
+                    );
+
+                    // Actualizar conteo total de productos encontrados
+                    setCount(cacheResults.length);
+                } catch (error) {
+                    console.error("Error in cache search:", error);
+                    setError("Error al buscar en el cache local");
+                } finally {
+                    setIsLoadingProducts(false);
+                }
+
+                // No hacer llamada al API para búsquedas parciales de SKU
+                return;
+            }
+
+            // Crear objeto de parámetros para la API
+            const params = {
+                page: pagination.currentPage,
+            };
+
+            // Añadir filtro de nombre si existe
+            if (nameFilter) {
+                params.name = nameFilter;
+            }
+
+            // ✨ OPTIMIZADO: Solo enviar SKU al backend si es exacto o muy específico
+            if (skuFilter && skuFilter.length >= 16) {
+                console.log(
+                    `📡 SKU API SEARCH: "${skuFilter}" (length: ${skuFilter.length}) - Using backend`
+                );
+                params.sku = skuFilter;
+            }
+
+            // Añadir filtro de categorías si hay seleccionadas
+            if (selectedCategories && selectedCategories.length > 0) {
+                params.category = selectedCategories;
+            }
+
+            // Log para depuración
+            console.log("Parámetros de búsqueda enviados a la API:", params);
+
+            // Cancelar cualquier solicitud previa
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+            }
+
+            // Crear un nuevo controlador para esta solicitud
+            abortControllerRef.current = new AbortController();
+            const { signal } = abortControllerRef.current;
+
+            setIsLoadingProducts(true);
+            setError(null);
+
+            // Decidir qué función del servicio utilizar
+            const fetchData = async () => {
+                try {
+                    const data = await inventoryService.getProducts(
+                        params,
+                        authToken,
+                        signal
+                    );
+
+                    if (signal.aborted) {
+                        console.log("Fetch aborted, not updating state");
+                        return;
+                    }
+
+                    if (!data) {
+                        console.log("No data returned from API");
+                        return;
+                    }
+
+                    const products = data.results || [];
+
+                    // Actualizar el estado con los datos recibidos
+                    setProducts(products);
+                    setCount(
                         typeof data.count === "number"
                             ? data.count
                             : parseInt(data.count, 10) || 0
                     );
-                    lastTotalFetch.current = Date.now();
-                }
 
-                // ✨ Ya no necesitamos cargar stock aquí - se carga por separado
-            } catch (err) {
-                if (signal.aborted) {
-                    console.log("Fetch aborted, not updating error state");
-                    return;
-                }
+                    // ✨ OPTIMIZACIÓN: Mostrar productos inmediatamente
+                    const productsWithPlaceholder =
+                        createProductsWithPlaceholder(products);
+                    setProductsWithPlaceholder(productsWithPlaceholder);
 
-                console.error("Error al obtener productos:", err);
-                setError(
-                    err.message ||
-                        "Error al cargar productos. Intente de nuevo."
-                );
-                setProducts([]);
-                setProductsWithPlaceholder([]);
-            } finally {
-                if (!signal.aborted) {
-                    setIsLoadingProducts(false);
+                    // Calcular número de páginas
+                    const pageCount = calculateRealisticPageCount(
+                        typeof data.count === "number"
+                            ? data.count
+                            : parseInt(data.count, 10) || 0
+                    );
+
+                    // Actualizar el estado de paginación usando el hook
+                    pagination.updatePaginationState(
+                        pagination.currentPage,
+                        pageCount,
+                        convertToProxyUrl(data.next),
+                        convertToProxyUrl(data.previous)
+                    );
+
+                    // También actualizamos el total general de productos si no hay filtros
+                    if (
+                        Object.keys(params).length === 0 ||
+                        (Object.keys(params).length === 1 && params.page)
+                    ) {
+                        setTotalCount(
+                            typeof data.count === "number"
+                                ? data.count
+                                : parseInt(data.count, 10) || 0
+                        );
+                        lastTotalFetch.current = Date.now();
+                    }
+
+                    // ✨ Ya no necesitamos cargar stock aquí - se carga por separado
+                } catch (err) {
+                    if (signal.aborted) {
+                        console.log("Fetch aborted, not updating error state");
+                        return;
+                    }
+
+                    console.error("Error al obtener productos:", err);
+                    setError(
+                        err.message ||
+                            "Error al cargar productos. Intente de nuevo."
+                    );
+                    setProducts([]);
+                    setProductsWithPlaceholder([]);
+                } finally {
+                    if (!signal.aborted) {
+                        setIsLoadingProducts(false);
+                    }
                 }
-            }
+            };
+
+            fetchData();
         };
 
-        fetchData();
+        // Ejecutar la función async
+        loadData();
     }, [
         pagination.currentPage,
         nameFilter,
+        skuFilter, // ✨ Agregar skuFilter como dependencia
         selectedCategories,
         authToken,
         convertToProxyUrl,
         createProductsWithPlaceholder,
+        isCacheInitialized, // ✨ NUEVO: Dependencia del cache
+        productsCache, // ✨ NUEVO: Dependencia del cache
+        loadAllProducts, // ✨ NUEVO: Dependencia de la función de carga
     ]);
 
     // Efecto para combinar productos con datos de stock de forma optimizada
@@ -598,6 +859,10 @@ const useInventory = () => {
         // Filtros
         searchByName,
         nameFilter,
+
+        // ✨ NUEVO: Búsqueda por SKU
+        searchBySku,
+        skuFilter,
 
         // Filtro de categorías
         selectedCategories,
