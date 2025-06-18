@@ -6,12 +6,42 @@ export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, process.cwd());
 
     // URL del backend desde la variable de entorno o usar valor por defecto
-    const apiUrl =
-        env.VITE_API_URL ||
-        "https://unidental-backend-production.up.railway.app";
+    const apiUrl = env.VITE_API_URL || "https://unidental-backend.onrender.com"; // URL actualizada del backend
 
     return {
         plugins: [react()],
+        optimizeDeps: {
+            include: [
+                "react-icons/fa",
+                "react-icons/ai",
+                "react-icons/bi",
+                "react-icons/bs",
+                "react-icons/ci",
+                "react-icons/di",
+                "react-icons/fc",
+                "react-icons/fi",
+                "react-icons/gi",
+                "react-icons/go",
+                "react-icons/gr",
+                "react-icons/hi",
+                "react-icons/im",
+                "react-icons/io",
+                "react-icons/io5",
+                "react-icons/lia",
+                "react-icons/lu",
+                "react-icons/md",
+                "react-icons/pi",
+                "react-icons/ri",
+                "react-icons/rx",
+                "react-icons/si",
+                "react-icons/sl",
+                "react-icons/tb",
+                "react-icons/tfi",
+                "react-icons/ti",
+                "react-icons/vsc",
+                "react-icons/wi",
+            ],
+        },
         server: {
             proxy: {
                 // Redirigir todas las peticiones que empiecen con /api

@@ -508,18 +508,6 @@ export const deleteTransfer = (transferId) => {
 };
 
 /**
- * Limpiar todas las transferencias (útil para pruebas)
- */
-export const clearAllTransfers = () => {
-    try {
-        localStorage.removeItem(TRANSFERS_STORAGE_KEY);
-        console.log("Todas las transferencias han sido eliminadas");
-    } catch (error) {
-        console.error("Error al limpiar transferencias:", error);
-    }
-};
-
-/**
  * Obtener estadísticas de transferencias
  * @returns {Object} - Estadísticas
  */
@@ -561,7 +549,6 @@ const transfersService = {
     updateTransferStatus,
     getTransferById,
     deleteTransfer,
-    clearAllTransfers,
     getTransferStats,
     getTransfersFromStorage,
     saveTransfersToStorage,

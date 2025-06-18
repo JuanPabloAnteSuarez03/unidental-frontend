@@ -51,7 +51,7 @@ const NameSearch = ({ value, onChange }) => {
             <input
                 id="nameSearch"
                 type="text"
-                placeholder="Buscar por nombre..."
+                placeholder="Escribe aquí..."
                 value={searchTerm}
                 onChange={handleChange}
                 style={styles.input}

@@ -126,12 +126,11 @@ describe("InventoryPage", () => {
     test("renders page title and initial description (no filters, no products)", () => {
         render(<InventoryPage />);
         expect(screen.getByText("Gestión de Inventario")).toBeInTheDocument();
-        // Verifica el contador de productos en la descripción (0 por defecto)
+        // Usar una función para buscar texto que puede estar dividido en múltiples elementos
         expect(
-            screen.getByText(
-                "Administra y consulta el inventario de productos (0 en total)"
-            )
+            screen.getByText(/Administra y consulta el inventario de productos/)
         ).toBeInTheDocument();
+        expect(screen.getByText("0", { exact: false })).toBeInTheDocument();
     });
 
     test("renders page title and description with totalGeneralProducts", () => {
@@ -141,10 +140,9 @@ describe("InventoryPage", () => {
         });
         render(<InventoryPage />);
         expect(
-            screen.getByText(
-                "Administra y consulta el inventario de productos (150 en total)"
-            )
+            screen.getByText(/Administra y consulta el inventario de productos/)
         ).toBeInTheDocument();
+        expect(screen.getByText("150", { exact: false })).toBeInTheDocument();
     });
 
     test("displays loading message when isLoading is true", () => {
@@ -166,8 +164,9 @@ describe("InventoryPage", () => {
         });
         render(<InventoryPage />);
         expect(
-            screen.getByText(`Error al cargar productos: ${errorMessage}`)
+            screen.getByText("Error al cargar productos")
         ).toBeInTheDocument();
+        expect(screen.getByText(errorMessage)).toBeInTheDocument();
 
         // Cuando hay error, no se debe renderizar la tabla
         expect(screen.queryByTestId("inventory-table")).not.toBeInTheDocument();
@@ -318,7 +317,7 @@ describe("InventoryPage", () => {
 
             render(<InventoryPage />);
             expect(
-                screen.getByText("No se encontraron productos.")
+                screen.getByText("No se encontraron productos")
             ).toBeInTheDocument();
         });
 
@@ -332,7 +331,7 @@ describe("InventoryPage", () => {
 
             render(<InventoryPage />);
             expect(
-                screen.queryByText("No se encontraron productos.")
+                screen.queryByText("No se encontraron productos")
             ).not.toBeInTheDocument();
         });
 
@@ -346,7 +345,7 @@ describe("InventoryPage", () => {
 
             render(<InventoryPage />);
             expect(
-                screen.queryByText("No se encontraron productos.")
+                screen.queryByText("No se encontraron productos")
             ).not.toBeInTheDocument();
         });
     });

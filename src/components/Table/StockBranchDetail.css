@@ -1,0 +1,200 @@
+/* Indicador visual cuando el contenedor está expandido */
+.inventory-table-container[data-detail-expanded="true"] {
+  transition: padding-bottom 0.4s ease-out, min-height 0.4s ease-out;
+}
+
+/* Transición suave para todos los contenedores de inventario */
+.inventory-table-container,
+.inventory-card {
+  transition: padding-bottom 0.4s ease-out, min-height 0.4s ease-out;
+}
+
+/* Indicador visual sutil cuando la tabla se expande por un detalle */
+.inventory-table-container[data-detail-expanded="true"]::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.3), transparent);
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+/* Detalle de stock por sede */
+.stock-branch-detail {
+  position: absolute;
+  right: -250px;
+  top: 100%;
+  width: 240px;
+  background-color: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 4px 8px rgba(0, 0, 0, 0.08);
+  z-index: 1000;
+  animation: slideIn 0.2s ease-out;
+  max-height: 200px;
+  overflow: hidden;
+  margin-top: 4px;
+  max-width: calc(100vw - 40px);
+}
+
+/* En pantallas pequeñas */
+@media (max-width: 768px) {
+  .stock-branch-detail {
+    right: -200px;
+    width: 200px;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.stock-branch-detail__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid #e0e0e0;
+  background-color: #f9f9f9;
+}
+
+.stock-branch-detail__header h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.stock-branch-detail__close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  color: #999;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+}
+
+.stock-branch-detail__close:hover {
+  color: #333;
+}
+
+.stock-branch-detail__content {
+  max-height: 150px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e0 transparent;
+}
+
+/* Webkit scrollbar styles */
+.stock-branch-detail__content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.stock-branch-detail__content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.stock-branch-detail__content::-webkit-scrollbar-thumb {
+  background-color: #cbd5e0;
+  border-radius: 3px;
+}
+
+.stock-branch-detail__content::-webkit-scrollbar-thumb:hover {
+  background-color: #a0aec0;
+}
+
+.stock-branch-detail__item {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.stock-branch-detail__item:hover {
+  background-color: #f5f5f5;
+}
+
+.stock-branch-detail__branch-name {
+  font-weight: 500;
+  color: #333;
+}
+
+.stock-branch-detail__quantity {
+  font-weight: 600;
+  color: #1890ff;
+}
+
+.stock-branch-detail__footer {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 12px;
+  font-weight: bold;
+  background-color: #f5f5f5;
+  border-top: 1px solid #e0e0e0;
+}
+
+.stock-branch-detail__total-quantity {
+  color: #1890ff;
+}
+
+.stock-cell {
+  position: relative;
+}
+
+.stock-cell__total {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  user-select: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.stock-cell__total:hover {
+  background-color: rgba(24, 144, 255, 0.1);
+}
+
+.stock-cell__icon {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  position: relative;
+}
+
+.stock-cell__icon:after {
+  content: "";
+  position: absolute;
+  width: 0;
+  height: 0;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 4px solid #999;
+  transition: transform 0.2s;
+}
+
+.stock-cell__icon.expanded:after {
+  transform: translate(-50%, -50%) rotate(180deg);
+}
+
+.stock-cell__detail-wrapper {
+  position: relative;
+}

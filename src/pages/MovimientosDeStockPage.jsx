@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
+import { useProducts } from "../context/ProductsContext";
 import inventoryService from "../services/inventoryService";
 import MovementsHeader from "../components/StockMovements/MovementsHeader";
 import MovementNotification from "../components/StockMovements/MovementNotification";
@@ -62,8 +63,9 @@ const MovimientosDeStockPage = () => {
     // Estado para el producto seleccionado
     const [selectedProduct, setSelectedProduct] = useState(null);
 
-    // Obtener el contexto de autenticación
+    // Obtener el contexto de autenticación y productos
     const { authToken } = useAuth();
+    const { refreshCache } = useProducts();
 
     // Función para manejar selección de producto
     const handleProductSelected = (product) => {
@@ -233,8 +235,9 @@ const MovimientosDeStockPage = () => {
             // Limpiar también la selección del producto
             setSelectedProduct(null);
 
-            // Recargar los movimientos de la base de datos para mostrar el nuevo registro
+            // Actualizar cache de productos para reflejar cambios de stock
             setTimeout(() => {
+                refreshCache();
                 loadInventoryMovements(1);
             }, 1000);
         } catch (error) {
@@ -291,15 +294,6 @@ const MovimientosDeStockPage = () => {
             setNotification({ show: false, type: "", message: "" });
         }, 5000);
     };
-
-    // Lista simulada de productos
-    const products = [
-        "Jeringa desechable 5ml",
-        "Guantes de látex talla M",
-        "Algodón hidrófilo 500g",
-        "Mascarilla quirúrgica",
-        "Alcohol isopropílico 1L",
-    ];
 
     // Tipos de movimiento disponibles
     const movementTypes = [

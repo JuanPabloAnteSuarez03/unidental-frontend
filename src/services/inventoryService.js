@@ -25,8 +25,7 @@ const convertToProxyUrl = (url) => {
     if (url.startsWith("/")) return url;
 
     // If it's an absolute URL from our backend, convert to relative
-    const backendBaseUrl =
-        "https://unidental-backend-production.up.railway.app";
+    const backendBaseUrl = "https://unidental-backend.onrender.com";
     if (url.startsWith(backendBaseUrl)) {
         // Remove the base URL, keep the path starting with /api
         return url.replace(backendBaseUrl, "");
@@ -430,16 +429,16 @@ export const getStockByLocationFast = async (productId, authToken, signal) => {
         // Iniciar timer para medir performance
         const timerLabel = `getStockByLocationFast-${productId}`;
         console.time(timerLabel);
-        
+
         // Usar el filtro optimizado ?product=ID que ahora está disponible
         const params = new URLSearchParams();
         params.append("product", productId); // ⭐ NUEVO filtro que funciona correctamente
-        
+
         const url = `${API_STOCK_ALL_URL}?${params.toString()}`;
-        
+
         console.log("⚡ Fast stock search for product:", productId);
         console.log("URL:", url);
-        
+
         const response = await fetch(url, {
             headers: {
                 Authorization: `Token ${authToken}`,
@@ -453,44 +452,62 @@ export const getStockByLocationFast = async (productId, authToken, signal) => {
         }
 
         const data = await response.json();
-        
+
         console.log("Raw stock data from fast endpoint:", data);
-        
+
         // Construir mapa de ubicaciones
         const locationStockMap = {};
-        
+
         // Si es un array directo, usarlo; si no, usar data.results
         const stockData = Array.isArray(data) ? data : data.results;
-        
+
         if (Array.isArray(stockData)) {
             stockData.forEach((stockEntry) => {
-                if (stockEntry.location !== undefined && stockEntry.quantity !== undefined) {
+                if (
+                    stockEntry.location !== undefined &&
+                    stockEntry.quantity !== undefined
+                ) {
                     const locationId = stockEntry.location;
-                    const quantity = typeof stockEntry.quantity === "number" 
-                        ? stockEntry.quantity 
-                        : parseInt(stockEntry.quantity, 10) || 0;
-                    
+                    const quantity =
+                        typeof stockEntry.quantity === "number"
+                            ? stockEntry.quantity
+                            : parseInt(stockEntry.quantity, 10) || 0;
+
                     // Incluir tanto stock positivo como cero para mostrar información completa
                     locationStockMap[locationId] = quantity;
-                    console.log(`⚡ Found stock for product ${productId}: Location ${locationId} = ${quantity} units`);
+                    console.log(
+                        `⚡ Found stock for product ${productId}: Location ${locationId} = ${quantity} units`
+                    );
                 }
             });
         }
-        
+
         // Finalizar timer y mostrar resultados
         console.timeEnd(timerLabel);
         console.log(`✅ FAST stock search completed for product ${productId}:`);
-        console.log(`   📦 Stock entries found: ${Object.keys(locationStockMap).length}`);
-        console.log(`   🏪 Locations with stock: ${Object.keys(locationStockMap).filter(loc => locationStockMap[loc] > 0).length}`);
-        console.log("Final location stock map for product", productId, ":", locationStockMap);
-        
+        console.log(
+            `   📦 Stock entries found: ${Object.keys(locationStockMap).length}`
+        );
+        console.log(
+            `   🏪 Locations with stock: ${
+                Object.keys(locationStockMap).filter(
+                    (loc) => locationStockMap[loc] > 0
+                ).length
+            }`
+        );
+        console.log(
+            "Final location stock map for product",
+            productId,
+            ":",
+            locationStockMap
+        );
+
         return locationStockMap;
-        
     } catch (error) {
         // Finalizar timer incluso en caso de error
         const timerLabel = `getStockByLocationFast-${productId}`;
         console.timeEnd(timerLabel);
-        
+
         if (error.name === "AbortError") {
             console.log("Fast stock request was aborted");
             return {};
@@ -516,28 +533,28 @@ export const getStockByLocation = async (productId, authToken, signal) => {
         // Iniciar timer para medir performance
         const timerLabel = `getStockByLocation-${productId}`;
         console.time(timerLabel);
-        
+
         // Nota: El backend NO soporta filtro por producto, así que tenemos que buscar en todos los registros
         // Para optimizar, usamos page_size para reducir tráfico de red
         const params = new URLSearchParams();
         params.append("page_size", "100"); // Obtener más registros por página para ser más eficiente
 
         const url = `${API_STOCK_URL}?${params.toString()}`;
-        
+
         console.log("Fetching stock by location for product:", productId);
         console.log("URL:", url);
-        
+
         const locationStockMap = {};
         let foundEntries = false;
         let currentUrl = url;
         let pageCount = 0;
         const maxPages = 50; // Límite de seguridad más alto para evitar bucles infinitos
-        
+
         // Buscar a través de TODAS las páginas hasta encontrar todo el stock del producto
         while (currentUrl && pageCount < maxPages && !signal?.aborted) {
             pageCount++;
             console.log(`Searching page ${pageCount} for product ${productId}`);
-            
+
             const response = await fetch(currentUrl, {
                 headers: {
                     Authorization: `Token ${authToken}`,
@@ -547,11 +564,13 @@ export const getStockByLocation = async (productId, authToken, signal) => {
             });
 
             if (!response.ok) {
-                throw new Error(`Error ${response.status}: ${response.statusText}`);
+                throw new Error(
+                    `Error ${response.status}: ${response.statusText}`
+                );
             }
 
             const data = await response.json();
-            
+
             // Buscar el producto en esta página
             const results = data.results || data;
             if (Array.isArray(results)) {
@@ -559,51 +578,75 @@ export const getStockByLocation = async (productId, authToken, signal) => {
                     // Solo procesar entradas para el producto que buscamos
                     if (stockEntry.product == productId) {
                         foundEntries = true;
-                        
-                        if (stockEntry.location !== undefined && stockEntry.quantity !== undefined) {
+
+                        if (
+                            stockEntry.location !== undefined &&
+                            stockEntry.quantity !== undefined
+                        ) {
                             const locationId = stockEntry.location;
-                            const quantity = typeof stockEntry.quantity === "number" 
-                                ? stockEntry.quantity 
-                                : parseInt(stockEntry.quantity, 10) || 0;
-                            
+                            const quantity =
+                                typeof stockEntry.quantity === "number"
+                                    ? stockEntry.quantity
+                                    : parseInt(stockEntry.quantity, 10) || 0;
+
                             // Incluir tanto stock positivo como cero para mostrar información completa
                             locationStockMap[locationId] = quantity;
-                            console.log(`Found stock for product ${productId}: Location ${locationId} = ${quantity} units`);
+                            console.log(
+                                `Found stock for product ${productId}: Location ${locationId} = ${quantity} units`
+                            );
                         }
                     }
                 }
             }
-            
+
             // Continuar a la siguiente página si existe
             currentUrl = data.next ? convertToProxyUrl(data.next) : null;
-            
+
             // Si llegamos al final de las páginas disponibles, terminamos
             if (!currentUrl) {
-                console.log(`Finished searching all pages for product ${productId}. Found entries: ${foundEntries}`);
+                console.log(
+                    `Finished searching all pages for product ${productId}. Found entries: ${foundEntries}`
+                );
                 break;
             }
         }
-        
+
         // Advertencia si llegamos al límite de páginas sin terminar
         if (pageCount >= maxPages) {
-            console.warn(`Reached maximum page limit (${maxPages}) while searching for product ${productId}. Some stock data might be missing.`);
+            console.warn(
+                `Reached maximum page limit (${maxPages}) while searching for product ${productId}. Some stock data might be missing.`
+            );
         }
-        
+
         // Finalizar timer y mostrar resultados
         console.timeEnd(timerLabel);
         console.log(`✅ Stock search completed for product ${productId}:`);
         console.log(`   📄 Pages searched: ${pageCount}`);
-        console.log(`   📦 Stock entries found: ${foundEntries ? Object.keys(locationStockMap).length : 0}`);
-        console.log(`   🏪 Locations with stock: ${Object.keys(locationStockMap).filter(loc => locationStockMap[loc] > 0).length}`);
-        console.log("Final location stock map for product", productId, ":", locationStockMap);
-        
+        console.log(
+            `   📦 Stock entries found: ${
+                foundEntries ? Object.keys(locationStockMap).length : 0
+            }`
+        );
+        console.log(
+            `   🏪 Locations with stock: ${
+                Object.keys(locationStockMap).filter(
+                    (loc) => locationStockMap[loc] > 0
+                ).length
+            }`
+        );
+        console.log(
+            "Final location stock map for product",
+            productId,
+            ":",
+            locationStockMap
+        );
+
         return locationStockMap;
-        
     } catch (error) {
         // Finalizar timer incluso en caso de error
         const timerLabel = `getStockByLocation-${productId}`;
         console.timeEnd(timerLabel);
-        
+
         if (error.name === "AbortError") {
             console.log("Stock by location request was aborted");
             return {};
@@ -1431,7 +1474,6 @@ const inventoryService = {
 export default inventoryService;
 export { inventoryService };
 
-
 /**
  * Build URL with parameters
  * @param {string} baseUrl - Base API URL
@@ -1442,25 +1484,56 @@ const buildUrlWithParams = (baseUrl, params = {}) => {
     const urlParams = new URLSearchParams();
 
     // Añadir logs para depuración
-    console.log("Construyendo URL con parámetros:", JSON.stringify(params));
+    console.log(
+        "🔍 BUILDING URL - Construyendo URL con parámetros:",
+        JSON.stringify(params)
+    );
 
     // Add all parameters to URL
     Object.entries(params).forEach(([key, value]) => {
         if (value !== undefined && value !== null && value !== "") {
+            // ✨ NUEVA OPTIMIZACIÓN: Estrategia inteligente para SKU basada en longitud
+            if (key === "sku" && value.length > 0) {
+                const isPartialSku = value.length < 10; // Típicamente los SKUs completos son más largos
+
+                if (isPartialSku) {
+                    console.log(
+                        `🎯 PARTIAL SKU DETECTED: "${value}" (length: ${value.length})`
+                    );
+                    console.log(
+                        `📡 Strategy: Using ONLY 'search' parameter for better partial matching`
+                    );
+
+                    // Para SKUs parciales, usar SOLO 'search' que funciona mejor con SearchFilter
+                    urlParams.append("search", value);
+                    console.log(
+                        `✅ Added search="${value}" (optimized for partial matching)`
+                    );
+                } else {
+                    console.log(
+                        `🎯 FULL SKU DETECTED: "${value}" (length: ${value.length})`
+                    );
+                    console.log(
+                        `📡 Strategy: Using 'sku' parameter for exact matching`
+                    );
+
+                    // Para SKUs completos o largos, usar 'sku' para filtros específicos
+                    urlParams.append("sku", value);
+                    console.log(`✅ Added sku="${value}" (exact match)`);
+                }
+                return; // Salir temprano para evitar procesamiento adicional
+            }
+
             // Verificar si es un array para categorías
             if (Array.isArray(value)) {
-                console.log(
-                    `Añadiendo múltiples valores para el parámetro: ${key}=${value.join(
-                        ","
-                    )}`
-                );
+                console.log(`📊 Array parameter: ${key}=${value.join(",")}`);
                 // Para categorías, crear un parámetro separado para cada valor (operación OR)
                 value.forEach((val) => {
                     urlParams.append(key, val);
                 });
             } else {
                 urlParams.append(key, value);
-                console.log(`Añadiendo parámetro: ${key}=${value}`);
+                console.log(`📝 Standard parameter: ${key}=${value}`);
             }
         }
     });
@@ -1468,7 +1541,7 @@ const buildUrlWithParams = (baseUrl, params = {}) => {
     const queryString = urlParams.toString();
     const finalUrl = queryString ? `${baseUrl}?${queryString}` : baseUrl;
 
-    console.log("URL final construida:", finalUrl);
+    console.log("🎯 FINAL URL:", finalUrl);
 
     return finalUrl;
 };
@@ -1533,4 +1606,3 @@ const fetchStockPage = async (url, authToken, signal) => {
         throw error;
     }
 };
-

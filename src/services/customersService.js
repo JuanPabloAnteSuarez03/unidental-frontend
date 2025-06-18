@@ -10,17 +10,17 @@ const API_CUSTOMERS_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.CUSTOMER
  */
 const convertToProxyUrl = (url) => {
     if (!url) return url;
-    
+
     // If already a relative URL, return as is
-    if (url.startsWith('/')) return url;
-    
+    if (url.startsWith("/")) return url;
+
     // If it's an absolute URL from our backend, convert to relative
-    const backendBaseUrl = 'https://unidental-backend-production.up.railway.app';
+    const backendBaseUrl = "https://unidental-backend.onrender.com";
     if (url.startsWith(backendBaseUrl)) {
         // Remove the base URL, keep the path starting with /api
-        return url.replace(backendBaseUrl, '');
+        return url.replace(backendBaseUrl, "");
     }
-    
+
     // For any other absolute URL, return as is (shouldn't happen in our case)
     return url;
 };
@@ -43,31 +43,35 @@ export const getCustomers = async (params = {}, authToken, signal) => {
     try {
         // Build URL with query parameters
         const url = new URL(API_CUSTOMERS_URL, window.location.origin);
-        
-        if (params.search) url.searchParams.append('search', params.search);
-        if (params.ordering) url.searchParams.append('ordering', params.ordering);
-        if (params.page) url.searchParams.append('page', params.page);
+
+        if (params.search) url.searchParams.append("search", params.search);
+        if (params.ordering)
+            url.searchParams.append("ordering", params.ordering);
+        if (params.page) url.searchParams.append("page", params.page);
 
         const response = await fetch(url.toString(), {
             method: "GET",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Token ${authToken}`,
+                Authorization: `Token ${authToken}`,
             },
             signal,
         });
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `Error ${response.status}: ${response.statusText}`);
+            throw new Error(
+                errorData.detail ||
+                    `Error ${response.status}: ${response.statusText}`
+            );
         }
 
         const data = await response.json();
-        
+
         // Convert URLs for pagination
         if (data.next) data.next = convertToProxyUrl(data.next);
         if (data.previous) data.previous = convertToProxyUrl(data.previous);
-        
+
         return data;
     } catch (error) {
         console.error("Error fetching customers:", error);
@@ -100,7 +104,7 @@ export const createCustomer = async (customerData, authToken, signal) => {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Token ${authToken}`,
+                Authorization: `Token ${authToken}`,
             },
             body: JSON.stringify(customerData),
             signal,
@@ -108,7 +112,10 @@ export const createCustomer = async (customerData, authToken, signal) => {
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `Error ${response.status}: ${response.statusText}`);
+            throw new Error(
+                errorData.detail ||
+                    `Error ${response.status}: ${response.statusText}`
+            );
         }
 
         return await response.json();
@@ -136,14 +143,17 @@ export const getCustomerById = async (customerId, authToken, signal) => {
             method: "GET",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Token ${authToken}`,
+                Authorization: `Token ${authToken}`,
             },
             signal,
         });
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `Error ${response.status}: ${response.statusText}`);
+            throw new Error(
+                errorData.detail ||
+                    `Error ${response.status}: ${response.statusText}`
+            );
         }
 
         return await response.json();
@@ -161,7 +171,12 @@ export const getCustomerById = async (customerId, authToken, signal) => {
  * @param {AbortSignal} signal - AbortController signal for request cancellation
  * @returns {Promise<Object>} - Updated customer
  */
-export const updateCustomer = async (customerId, customerData, authToken, signal) => {
+export const updateCustomer = async (
+    customerId,
+    customerData,
+    authToken,
+    signal
+) => {
     if (!authToken) {
         throw new Error("No authentication token provided");
     }
@@ -172,7 +187,7 @@ export const updateCustomer = async (customerId, customerData, authToken, signal
             method: "PATCH",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Token ${authToken}`,
+                Authorization: `Token ${authToken}`,
             },
             body: JSON.stringify(customerData),
             signal,
@@ -180,7 +195,10 @@ export const updateCustomer = async (customerId, customerData, authToken, signal
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `Error ${response.status}: ${response.statusText}`);
+            throw new Error(
+                errorData.detail ||
+                    `Error ${response.status}: ${response.statusText}`
+            );
         }
 
         return await response.json();
@@ -207,14 +225,17 @@ export const deleteCustomer = async (customerId, authToken, signal) => {
         const response = await fetch(url, {
             method: "DELETE",
             headers: {
-                "Authorization": `Token ${authToken}`,
+                Authorization: `Token ${authToken}`,
             },
             signal,
         });
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `Error ${response.status}: ${response.statusText}`);
+            throw new Error(
+                errorData.detail ||
+                    `Error ${response.status}: ${response.statusText}`
+            );
         }
 
         return true;
@@ -231,7 +252,11 @@ export const deleteCustomer = async (customerId, authToken, signal) => {
  * @param {AbortSignal} signal - AbortController signal for request cancellation
  * @returns {Promise<Array>} - Customer sales history
  */
-export const getCustomerSalesHistory = async (customerId, authToken, signal) => {
+export const getCustomerSalesHistory = async (
+    customerId,
+    authToken,
+    signal
+) => {
     if (!authToken) {
         throw new Error("No authentication token provided");
     }
@@ -242,14 +267,17 @@ export const getCustomerSalesHistory = async (customerId, authToken, signal) => 
             method: "GET",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Token ${authToken}`,
+                Authorization: `Token ${authToken}`,
             },
             signal,
         });
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `Error ${response.status}: ${response.statusText}`);
+            throw new Error(
+                errorData.detail ||
+                    `Error ${response.status}: ${response.statusText}`
+            );
         }
 
         return await response.json();
@@ -277,11 +305,15 @@ export const getAllCustomers = async (authToken, signal) => {
         const pageSize = 100; // Load in chunks of 100
 
         while (hasMore) {
-            const response = await getCustomers({
-                page,
-                page_size: pageSize,
-                ordering: 'name' // Order by name for consistent results
-            }, authToken, signal);
+            const response = await getCustomers(
+                {
+                    page,
+                    page_size: pageSize,
+                    ordering: "name", // Order by name for consistent results
+                },
+                authToken,
+                signal
+            );
 
             const customers = response.results || [];
             allCustomers = [...allCustomers, ...customers];
@@ -292,7 +324,9 @@ export const getAllCustomers = async (authToken, signal) => {
 
             // Safety limit to prevent infinite loops
             if (page > 50) {
-                console.warn("Reached maximum pages limit while loading customers");
+                console.warn(
+                    "Reached maximum pages limit while loading customers"
+                );
                 break;
             }
         }
@@ -317,4 +351,4 @@ export const customersService = {
 };
 
 // Default export
-export default customersService; 
+export default customersService;

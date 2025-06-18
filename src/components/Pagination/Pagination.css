@@ -1,0 +1,63 @@
+/* Estilos para el componente de paginación */
+.pagination-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 20px 0;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+/* Responsividad para dispositivos móviles */
+@media (max-width: 768px) {
+    .pagination-container {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .pagination-counter {
+        margin-bottom: 10px;
+    }
+
+    .pagination-goto {
+        margin-top: 10px;
+    }
+}
+
+@media (max-width: 480px) {
+    .pagination-controls {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .pagination-numbers {
+        margin: 10px 0;
+    }
+
+    .pagination-number {
+        padding: 4px 8px !important;
+        font-size: 12px !important;
+    }
+
+    .pagination-btn {
+        font-size: 12px !important;
+        padding: 6px 12px !important;
+    }
+}
+
+/* Animaciones y efectos hover */
+.pagination-btn:hover:not(:disabled),
+.pagination-go-btn:hover:not(:disabled) {
+    background-color: #34495e !important;
+}
+
+.pagination-number:hover:not(:disabled):not(.pagination-active) {
+    background-color: #f8f9fa !important;
+    border-color: #2c3e50 !important;
+}
+
+.pagination-input:focus {
+    outline: none;
+    border-color: #2c3e50 !important;
+    box-shadow: 0 0 0 2px rgba(44, 62, 80, 0.25);
+}
