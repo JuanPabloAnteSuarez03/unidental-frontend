@@ -3,6 +3,9 @@ import ProductSearchSelector from "../Common/ProductSearchSelector";
 import PriceSourceLegend from "./PriceSourceLegend";
 import { useAuth } from "../../context/AuthContext";
 import inventoryService from "../../services/inventoryService";
+import batchesService from "../../services/batchesService";
+import compositeProductsService from "../../services/compositeProductsService";
+import advancedInventoryService from "../../services/advancedInventoryService";
 
 const ProductSelector = forwardRef(({ 
     onProductAdded,
@@ -18,6 +21,12 @@ const ProductSelector = forwardRef(({
     const [error, setError] = useState(null);
     const [stockInfo, setStockInfo] = useState(null);
     const [loadingStock, setLoadingStock] = useState(false);
+    
+    // Nuevos estados para lotes y productos compuestos
+    const [productSalesInfo, setProductSalesInfo] = useState(null);
+    const [selectedBatches, setSelectedBatches] = useState([]);
+    const [loadingAdvancedInfo, setLoadingAdvancedInfo] = useState(false);
+    
     const updateProductsStockRef = useRef(null);
 
     // Exponer la función updateProductsStock al componente padre
@@ -43,7 +52,7 @@ const ProductSelector = forwardRef(({
         return location ? location.name : `Ubicación ${locationId}`;
     }, [locationMap]);
 
-        // Efecto para actualizar información de stock cuando cambia la ubicación seleccionada
+    // Efecto para actualizar información de stock cuando cambia la ubicación seleccionada
     useEffect(() => {
         if (selectedProduct && stockInfo && stockInfo.allLocations) {
             console.log("Location changed, updating stock info for product:", selectedProduct.id);
@@ -63,6 +72,11 @@ const ProductSelector = forwardRef(({
                 availableInLocation: availableInLocation,
                 locationName: selectedLocation?.name || null
             }));
+
+            // Recargar información avanzada si es necesario
+            if (productSalesInfo?.requiresBatchControl && selectedLocation) {
+                loadAdvancedProductInfo(selectedProduct, selectedLocation.id);
+            }
         }
     }, [selectedLocation?.id, selectedProduct?.id, stockInfo?.allLocations]);
 
@@ -82,6 +96,44 @@ const ProductSelector = forwardRef(({
         }
     }, [selectedLocation]);
 
+    // Función para cargar información avanzada del producto
+    const loadAdvancedProductInfo = useCallback(async (product, locationId) => {
+        if (!authToken || !locationId || !product) return;
+
+        setLoadingAdvancedInfo(true);
+        try {
+            const salesInfo = await advancedInventoryService.getProductSalesInfo(
+                product, 
+                locationId, 
+                authToken
+            );
+            
+            setProductSalesInfo(salesInfo);
+            
+            // Si requiere control de lotes, limpiar selección anterior
+            if (salesInfo.requiresBatchControl) {
+                setSelectedBatches([]);
+            }
+        } catch (error) {
+            console.error("Error loading advanced product info:", error);
+            // Fallback: crear información básica
+            const basicProductInfo = {
+                ...product,
+                requiresBatchControl: product.requires_batch_control === true,
+                productType: product.product_type || 'simple',
+                isComposite: (product.product_type || 'simple') === 'composite',
+                isComponent: (product.product_type || 'simple') === 'component',
+                isSimple: (product.product_type || 'simple') === 'simple',
+                batches: [],
+                components: [],
+                stockInfo: null
+            };
+            setProductSalesInfo(basicProductInfo);
+        } finally {
+            setLoadingAdvancedInfo(false);
+        }
+    }, [authToken]);
+
     // Capturar la función del hook
     const handleUpdateProductsStock = useCallback((updateFn) => {
         updateProductsStockRef.current = updateFn;
@@ -96,6 +148,8 @@ const ProductSelector = forwardRef(({
         setLoadingStock(true);
         setPriceInfo(null);
         setStockInfo(null);
+        setProductSalesInfo(null);
+        setSelectedBatches([]);
 
         try {
             // Ejecutar ambas operaciones en paralelo
@@ -166,6 +220,11 @@ const ProductSelector = forwardRef(({
                     noStockRegistered: true
                 });
             }
+
+            // Cargar información avanzada si hay ubicación seleccionada
+            if (selectedLocation) {
+                await loadAdvancedProductInfo(product, selectedLocation.id);
+            }
             
         } catch (error) {
             console.error("Error obteniendo precio inteligente o stock:", error);
@@ -199,13 +258,51 @@ const ProductSelector = forwardRef(({
                 locationName: selectedLocation?.name || null,
                 totalStock: 0,
                 allLocations: {},
+                hasStockData: true,
                 error: true
             });
+
+            setError("Error al obtener información del producto");
         } finally {
             setLoadingPrice(false);
             setLoadingStock(false);
         }
-    }, [authToken]);
+    }, [authToken, selectedLocation, loadAdvancedProductInfo]);
+
+    // Función para seleccionar lotes automáticamente usando FIFO
+    const selectBatchesAutomatically = useCallback(async (requestedQuantity) => {
+        if (!selectedProduct || !selectedLocation || !productSalesInfo?.requiresBatchControl) {
+            return;
+        }
+
+        try {
+            const batchSelection = await advancedInventoryService.selectBatchesFIFO(
+                selectedProduct.id,
+                selectedLocation.id,
+                requestedQuantity,
+                authToken
+            );
+
+            if (batchSelection.success) {
+                setSelectedBatches(batchSelection.selectedBatches);
+                setError(null);
+            } else {
+                setError(batchSelection.message);
+                setSelectedBatches([]);
+            }
+        } catch (error) {
+            console.error("Error selecting batches:", error);
+            setError("Error al seleccionar lotes automáticamente");
+            setSelectedBatches([]);
+        }
+    }, [selectedProduct, selectedLocation, productSalesInfo, authToken]);
+
+    // Efecto para seleccionar lotes automáticamente cuando cambia la cantidad
+    useEffect(() => {
+        if (productSalesInfo?.requiresBatchControl && quantity > 0) {
+            selectBatchesAutomatically(quantity);
+        }
+    }, [quantity, productSalesInfo?.requiresBatchControl, selectBatchesAutomatically]);
 
     // Handle clearing product selection
     const handleSelectionCleared = useCallback(() => {
@@ -214,6 +311,8 @@ const ProductSelector = forwardRef(({
         setUnitPrice("");
         setPriceInfo(null);
         setStockInfo(null);
+        setProductSalesInfo(null);
+        setSelectedBatches([]);
         setError(null);
     }, []);
 
@@ -252,7 +351,7 @@ const ProductSelector = forwardRef(({
     };
 
     // Handle adding product to sale
-    const handleAddToSale = useCallback(() => {
+    const handleAddToSale = useCallback(async () => {
         if (!selectedProduct) {
             setError("Debe seleccionar un producto");
             return;
@@ -268,11 +367,34 @@ const ProductSelector = forwardRef(({
             return;
         }
 
+        if (!selectedLocation) {
+            setError("Debe seleccionar una ubicación");
+            return;
+        }
+
         // Validar stock disponible si hay información de stock
         if (stockInfo && selectedLocation) {
             const availableStock = stockInfo.availableInLocation !== null ? stockInfo.availableInLocation : 0;
             if (quantity > availableStock) {
                 setError(`Stock insuficiente. Disponible en ${selectedLocation.name}: ${availableStock} unidades`);
+                return;
+            }
+        }
+
+        // Validar lotes si el producto requiere control de lotes
+        if (productSalesInfo?.requiresBatchControl) {
+            if (selectedBatches.length === 0) {
+                setError("No hay lotes disponibles para este producto");
+                return;
+            }
+
+            const totalSelectedFromBatches = selectedBatches.reduce(
+                (sum, batch) => sum + (batch.selectedQuantity || 0), 
+                0
+            );
+
+            if (totalSelectedFromBatches < quantity) {
+                setError(`Lotes seleccionados insuficientes. Necesario: ${quantity}, Disponible en lotes: ${totalSelectedFromBatches}`);
                 return;
             }
         }
@@ -284,24 +406,50 @@ const ProductSelector = forwardRef(({
             unitPrice: unitPrice,
             unitPriceType: typeof unitPrice,
             parsedUnitPrice: parseFloat(unitPrice),
-            parsedUnitPriceType: typeof parseFloat(unitPrice)
+            parsedUnitPriceType: typeof parseFloat(unitPrice),
+            requiresBatchControl: productSalesInfo?.requiresBatchControl,
+            selectedBatches: selectedBatches,
+            isComposite: productSalesInfo?.isComposite,
+            components: productSalesInfo?.components
         });
 
         try {
-            onProductAdded(selectedProduct, quantity, parseFloat(unitPrice));
+            // Preparar datos adicionales para la venta
+            const additionalData = {};
+
+            // Agregar información de lotes si es necesario
+            if (productSalesInfo?.requiresBatchControl && selectedBatches.length > 0) {
+                additionalData.batches = selectedBatches.map(batch => ({
+                    batch_id: batch.batch_id || batch.id,
+                    batch_number: batch.batch_number,
+                    quantity: batch.selectedQuantity,
+                    expiry_date: batch.expiry_date,
+                    stock_id: batch.stock_id,
+                    location_id: selectedLocation.id
+                }));
+            }
+
+            // Para productos compuestos, NO enviamos información adicional
+            // El backend maneja automáticamente el desarmado según la documentación
+            // Solo se envía como un producto normal y el backend hace el resto
+
+            // Llamar a la función del padre con datos adicionales
+            onProductAdded(selectedProduct, quantity, parseFloat(unitPrice), additionalData);
             
             // Reset form
             setSelectedProduct(null);
             setQuantity(1);
             setUnitPrice("");
             setStockInfo(null);
+            setProductSalesInfo(null);
+            setSelectedBatches([]);
             setError(null);
             
         } catch (error) {
             console.error("Error adding product:", error);
             setError("Error al agregar el producto");
         }
-    }, [selectedProduct, quantity, unitPrice, onProductAdded]);
+    }, [selectedProduct, quantity, unitPrice, selectedLocation, stockInfo, productSalesInfo, selectedBatches, onProductAdded]);
 
     return (
         <div>
@@ -640,6 +788,259 @@ const ProductSelector = forwardRef(({
                             </div>
                         </div>
                     </div>
+
+                    {/* Información de Lotes */}
+                    {productSalesInfo?.requiresBatchControl && (
+                        <div style={{ marginBottom: "15px" }}>
+                            <div
+                                style={{
+                                    padding: "12px",
+                                    backgroundColor: "#e8f4fd",
+                                    border: "1px solid #3498db",
+                                    borderRadius: "6px",
+                                    marginBottom: "10px",
+                                }}
+                            >
+                                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                                    <span style={{ fontSize: "16px" }}>🏷️</span>
+                                    <div>
+                                        <div style={{ fontSize: "14px", fontWeight: "600", color: "#3498db" }}>
+                                            Control de Lotes Activo
+                                        </div>
+                                        <div style={{ fontSize: "12px", color: "#6c757d" }}>
+                                            Este producto requiere selección de lotes específicos
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                {loadingAdvancedInfo && (
+                                    <div style={{ fontSize: "12px", color: "#3498db", fontStyle: "italic" }}>
+                                        Cargando información de lotes...
+                                    </div>
+                                )}
+                                
+                                {productSalesInfo?.batches && productSalesInfo.batches.length > 0 && (
+                                    <div style={{ marginTop: "8px" }}>
+                                        <div style={{ fontSize: "12px", fontWeight: "600", color: "#2c3e50", marginBottom: "6px" }}>
+                                            Lotes disponibles (ordenados por FIFO):
+                                        </div>
+                                        {productSalesInfo.batches.map((batch, index) => {
+                                            const expiryStatus = batchesService.getBatchExpiryStatus(batch);
+                                            const isSelected = selectedBatches.some(selected => selected.batch_id === batch.batch_id);
+                                            const selectedBatch = selectedBatches.find(selected => selected.batch_id === batch.batch_id);
+                                            
+                                            return (
+                                                <div 
+                                                    key={index}
+                                                    style={{
+                                                        padding: "8px 10px",
+                                                        margin: "4px 0",
+                                                        backgroundColor: isSelected ? "#e8f5e8" : "white",
+                                                        border: `2px solid ${isSelected ? '#27ae60' : (expiryStatus.color === 'red' ? '#e74c3c' : expiryStatus.color === 'orange' ? '#f39c12' : '#27ae60')}`,
+                                                        borderRadius: "4px",
+                                                        fontSize: "11px"
+                                                    }}
+                                                >
+                                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                                                        <div>
+                                                            <strong>Lote:</strong> {batch.batch_number}
+                                                            {isSelected && <span style={{ color: "#27ae60", fontWeight: "bold", marginLeft: "8px" }}>✓ SELECCIONADO</span>}
+                                                        </div>
+                                                        <div style={{ 
+                                                            color: expiryStatus.color === 'red' ? '#e74c3c' : expiryStatus.color === 'orange' ? '#f39c12' : '#27ae60',
+                                                            fontWeight: "600",
+                                                            fontSize: "10px"
+                                                        }}>
+                                                            {expiryStatus.message}
+                                                        </div>
+                                                    </div>
+                                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                                        <div>
+                                                            <strong>Stock total:</strong> {batch.quantity} unidades
+                                                        </div>
+                                                        {isSelected && selectedBatch && (
+                                                            <div style={{ color: "#27ae60", fontWeight: "600" }}>
+                                                                Usando: {selectedBatch.selectedQuantity} unidades
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                        <div style={{ fontSize: "11px", color: "#6c757d", marginTop: "8px", padding: "6px", backgroundColor: "#f8f9fa", borderRadius: "4px" }}>
+                                            <strong>Total en ubicación:</strong> {productSalesInfo.batches.reduce((sum, batch) => sum + (batch.quantity || 0), 0)} unidades |
+                                            <strong> Seleccionado para venta:</strong> {selectedBatches.reduce((sum, batch) => sum + (batch.selectedQuantity || 0), 0)} unidades
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                {!loadingAdvancedInfo && productSalesInfo?.batches && productSalesInfo.batches.length === 0 && (
+                                    <div style={{ fontSize: "12px", color: "#e74c3c", marginTop: "8px" }}>
+                                        ⚠️ No hay lotes disponibles para este producto en esta ubicación
+                                    </div>
+                                )}
+                                
+                                {!loadingAdvancedInfo && !productSalesInfo?.batches && (
+                                    <div style={{ fontSize: "12px", color: "#e74c3c", marginTop: "8px" }}>
+                                        ⚠️ No se pudo cargar información de lotes
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Información de Tipo de Producto */}
+                    {productSalesInfo && (productSalesInfo.isComposite || productSalesInfo.isComponent) && (
+                        <div style={{ marginBottom: "15px" }}>
+                            {/* Si es un producto compuesto (kit) */}
+                            {productSalesInfo.isComposite && (
+                                console.log("Rendering composite info:", {
+                                    isComposite: productSalesInfo.isComposite,
+                                    components: productSalesInfo.components,
+                                    componentsLength: productSalesInfo.components?.length
+                                }) || true
+                            ) && (
+                                <div
+                                    style={{
+                                        padding: "12px",
+                                        backgroundColor: "#e8f5e8",
+                                        border: "2px solid #27ae60",
+                                        borderRadius: "8px",
+                                        marginBottom: "10px"
+                                    }}
+                                >
+                                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                                        <span style={{ fontSize: "20px" }}>📦</span>
+                                        <div>
+                                            <div style={{ fontSize: "16px", fontWeight: "700", color: "#27ae60" }}>
+                                                ✨ PRODUCTO KIT/COMPUESTO
+                                            </div>
+                                            <div style={{ fontSize: "13px", color: "#155724", fontWeight: "500" }}>
+                                                Este producto es un kit que incluye múltiples componentes
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    {productSalesInfo.components && productSalesInfo.components.length > 0 && (
+                                        <div style={{ marginTop: "10px" }}>
+                                            <div style={{ fontSize: "13px", fontWeight: "600", color: "#155724", marginBottom: "8px" }}>
+                                                🔍 Contenido del kit (por {quantity} unidad{quantity > 1 ? 'es' : ''}):
+                                            </div>
+                                            {compositeProductsService.calculateComponentsNeeded(productSalesInfo.components, quantity).map((component, index) => (
+                                                <div 
+                                                    key={index}
+                                                    style={{
+                                                        padding: "8px 10px",
+                                                        margin: "4px 0",
+                                                        backgroundColor: "white",
+                                                        border: "1px solid #c3e6cb",
+                                                        borderRadius: "4px",
+                                                        fontSize: "12px",
+                                                        display: "flex",
+                                                        justifyContent: "space-between",
+                                                        alignItems: "center"
+                                                    }}
+                                                >
+                                                    <div>
+                                                        <strong style={{ color: "#2c3e50" }}>{component.component_product_name}</strong>
+                                                        <span style={{ color: "#6c757d", marginLeft: "6px" }}>({component.component_product_sku})</span>
+                                                    </div>
+                                                    <div style={{ fontWeight: "700", color: "#27ae60", fontSize: "13px" }}>
+                                                        {component.totalQuantityNeeded} unidades
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            <div style={{ 
+                                                fontSize: "11px", 
+                                                color: "#155724", 
+                                                marginTop: "8px", 
+                                                padding: "6px 8px",
+                                                backgroundColor: "#d4edda",
+                                                borderRadius: "4px",
+                                                fontWeight: "500"
+                                            }}>
+                                                ℹ️ Al vender este kit, se descontarán automáticamente todos los componentes del inventario
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Si es un componente de otros kits */}
+                            {productSalesInfo.isComponent && (
+                                console.log("Rendering component info:", {
+                                    isComponent: productSalesInfo.isComponent,
+                                    parentComposites: productSalesInfo.parentComposites,
+                                    parentCompositesLength: productSalesInfo.parentComposites?.length
+                                }) || true
+                            ) && (
+                                <div
+                                    style={{
+                                        padding: "12px",
+                                        backgroundColor: "#fff3cd",
+                                        border: "2px solid #ffc107",
+                                        borderRadius: "8px",
+                                        marginBottom: "10px"
+                                    }}
+                                >
+                                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                                        <span style={{ fontSize: "20px" }}>🧩</span>
+                                        <div>
+                                            <div style={{ fontSize: "16px", fontWeight: "700", color: "#856404" }}>
+                                                ⚡ COMPONENTE DE KIT
+                                            </div>
+                                            <div style={{ fontSize: "13px", color: "#856404", fontWeight: "500" }}>
+                                                Este producto es parte de otros kits - puede desarmarse automáticamente
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    {productSalesInfo.parentComposites && productSalesInfo.parentComposites.length > 0 && (
+                                        <div style={{ marginTop: "10px" }}>
+                                            <div style={{ fontSize: "13px", fontWeight: "600", color: "#856404", marginBottom: "8px" }}>
+                                                🔗 Este componente está incluido en los siguientes kits:
+                                            </div>
+                                            {productSalesInfo.parentComposites.map((composite, index) => (
+                                                <div 
+                                                    key={index}
+                                                    style={{
+                                                        padding: "6px 8px",
+                                                        margin: "3px 0",
+                                                        backgroundColor: "white",
+                                                        border: "1px solid #ffeaa7",
+                                                        borderRadius: "4px",
+                                                        fontSize: "11px",
+                                                        display: "flex",
+                                                        justifyContent: "space-between",
+                                                        alignItems: "center"
+                                                    }}
+                                                >
+                                                    <div>
+                                                        <strong style={{ color: "#2c3e50" }}>{composite.composite_product_name}</strong>
+                                                    </div>
+                                                    <div style={{ fontWeight: "600", color: "#856404", fontSize: "10px" }}>
+                                                        {composite.quantity} por kit
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                    
+                                    <div style={{ 
+                                        fontSize: "11px", 
+                                        color: "#856404", 
+                                        marginTop: "8px", 
+                                        padding: "6px 8px",
+                                        backgroundColor: "#ffeaa7",
+                                        borderRadius: "4px",
+                                        fontWeight: "500"
+                                    }}>
+                                        ℹ️ Si no hay suficiente stock directo, el sistema desarmará automáticamente kits que contengan este producto
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* Product info display */}
                     <div 
