@@ -402,6 +402,70 @@ const SaleItemsList = ({
                                     </div>
                                 </div>
                             </div>
+
+                            {/* Información de Lotes */}
+                            {item.batches && item.batches.length > 0 && (
+                                <div style={{ marginTop: "12px" }}>
+                                    <div
+                                        style={{
+                                            padding: "8px 12px",
+                                            backgroundColor: "#e8f4fd",
+                                            border: "1px solid #3498db",
+                                            borderRadius: "4px",
+                                            marginBottom: "6px"
+                                        }}
+                                    >
+                                        <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+                                            <span style={{ fontSize: "14px" }}>🏷️</span>
+                                            <span style={{ fontSize: "12px", fontWeight: "600", color: "#3498db" }}>
+                                                Lotes utilizados
+                                            </span>
+                                        </div>
+                                        <div style={{ fontSize: "11px", color: "#6c757d" }}>
+                                            {item.batches.map((batch, batchIndex) => {
+                                                const expiryDate = batch.expiry_date ? new Date(batch.expiry_date).toLocaleDateString() : 'Sin fecha';
+                                                return (
+                                                    <div key={batchIndex} style={{ margin: "2px 0" }}>
+                                                        <strong>Lote {batch.batch_number}:</strong> {batch.quantity} unidades
+                                                        {batch.expiry_date && (
+                                                            <span style={{ color: "#6c757d" }}> (Vence: {expiryDate})</span>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Información de Componentes */}
+                            {item.components && item.components.length > 0 && (
+                                <div style={{ marginTop: "12px" }}>
+                                    <div
+                                        style={{
+                                            padding: "8px 12px",
+                                            backgroundColor: "#f8f9fa",
+                                            border: "1px solid #6c757d",
+                                            borderRadius: "4px",
+                                            marginBottom: "6px"
+                                        }}
+                                    >
+                                        <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+                                            <span style={{ fontSize: "14px" }}>📦</span>
+                                            <span style={{ fontSize: "12px", fontWeight: "600", color: "#2c3e50" }}>
+                                                Componentes incluidos
+                                            </span>
+                                        </div>
+                                        <div style={{ fontSize: "11px", color: "#6c757d" }}>
+                                            {item.components.map((component, componentIndex) => (
+                                                <div key={componentIndex} style={{ margin: "2px 0" }}>
+                                                    <strong>{component.component_name}</strong> ({component.component_sku}): {component.total_quantity} unidades
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     );
                 })}
