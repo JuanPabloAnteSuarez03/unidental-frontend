@@ -1455,6 +1455,8 @@ const inventoryService = {
     getFilteredStock,
     getCategories,
     getLocations,
+    getStockByLocationFast,
+    getStockByLocation,
     getStockSummary,
     getInventoryMovements,
     createInventoryMovement,

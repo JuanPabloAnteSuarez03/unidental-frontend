@@ -23,6 +23,9 @@ const API_CONFIG = {
         STOCK_SUMMARY: "/inventory/stock/summary/",
         STOCK: "/inventory/stock/",
         STOCK_ALL: "/inventory/stock/all/",
+        STOCK_BATCH_BY_LOCATIONS: "/inventory/stock/batch_stock_by_locations/",
+        STOCK_PRODUCT_BATCHES: "/inventory/stock/product_batches_stock/",
+        STOCK_LOCATION_BATCHES: "/inventory/stock/location_batch_stock/",
         CATEGORIES: "/catalogs/categories/",
         INVENTORY_MOVEMENTS: "/inventory/movements/",
         LOCATIONS: "/inventory/locations/",
@@ -31,6 +34,22 @@ const API_CONFIG = {
         SKU_GENERATE: "/catalogs/sku/generate/",
         SKU_VALIDATE: "/catalogs/sku/validate/",
         SKU_SYSTEM_INFO: "/catalogs/sku/info/",
+
+        // Lotes de productos
+        PRODUCT_BATCHES: "/catalogs/product-batches/",
+        PRODUCT_BATCHES_EXPIRED: "/catalogs/product-batches/expired/",
+        PRODUCT_BATCHES_EXPIRING_SOON: "/catalogs/product-batches/expiring_soon/",
+
+        // Productos compuestos
+        PRODUCT_COMPONENTS: "/catalogs/product-components/",
+        PRODUCT_COMPONENTS_BY_COMPOSITE: "/catalogs/product-components/by_composite/",
+        PRODUCT_COMPONENTS_BY_COMPONENT: "/catalogs/product-components/by_component/",
+
+        // Inventario avanzado
+        INVENTORY_BY_BATCHES: "/inventory/movements/by_batches/",
+        INVENTORY_EXPIRING_STOCK: "/inventory/movements/expiring_stock/",
+        INVENTORY_EXPIRY_ALERTS: "/inventory/movements/expiry_alerts/",
+        INVENTORY_BREAKDOWN_COMPOSITE: "/inventory/movements/breakdown_composite/",
 
         // Ventas - Clientes
         CUSTOMERS: "/sales/customers/",

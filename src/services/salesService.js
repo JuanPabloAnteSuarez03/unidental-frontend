@@ -127,20 +127,18 @@ export const createSale = async (saleData, authToken, signal) => {
 
         if (!response.ok) {
             let errorData;
+            const responseText = await response.text();
+            console.error("createSale - raw error response:", responseText);
+            
             try {
-                errorData = await response.json();
+                errorData = JSON.parse(responseText);
                 console.error("createSale - error response JSON:", errorData);
             } catch (parseError) {
                 console.error(
-                    "createSale - error parsing response:",
+                    "createSale - error parsing response as JSON:",
                     parseError
                 );
-                const textResponse = await response.text();
-                console.error(
-                    "createSale - error response text:",
-                    textResponse
-                );
-                errorData = { detail: textResponse };
+                errorData = { detail: responseText };
             }
 
             // Si hay errores de validación, mostrarlos de forma más clara

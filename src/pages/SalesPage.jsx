@@ -56,19 +56,29 @@ const SalesPage = () => {
         loadLocations();
     }, [authToken]);
 
-    const handleAddProduct = useCallback((product, quantity, unitPrice) => {
+    const handleAddProduct = useCallback((product, quantity, unitPrice, additionalData = {}) => {
         console.log("handleAddProduct - Recibido:", { 
             product: product.name, 
             quantity, 
             quantityType: typeof quantity,
             unitPrice, 
-            unitPriceType: typeof unitPrice 
+            unitPriceType: typeof unitPrice,
+            additionalData
         });
 
         setSaleItems(prevItems => {
-            const existingIndex = prevItems.findIndex(
-                item => item.product_id === product.id
-            );
+            // Para productos con lotes o componentes, no agrupar automáticamente
+            // ya que pueden tener diferentes lotes o configuraciones
+            const shouldGroup = !additionalData.batches && !additionalData.components;
+            
+            let existingIndex = -1;
+            if (shouldGroup) {
+                existingIndex = prevItems.findIndex(
+                    item => item.product_id === product.id && 
+                           !item.batches && 
+                           !item.components
+                );
+            }
 
             if (existingIndex !== -1) {
                 const newItems = [...prevItems];
@@ -90,8 +100,14 @@ const SalesPage = () => {
                     description: product.description || "",
                     category_name: product.category_name,
                     category: product.category || 0,
-                    unit: product.unit
-                }
+                    unit: product.unit,
+                    product_type: product.product_type || 'simple',
+                    requires_batch_control: product.requires_batch_control || false
+                },
+                // Agregar información de lotes si existe
+                ...(additionalData.batches && { batches: additionalData.batches }),
+                // Agregar información de componentes si existe
+                ...(additionalData.components && { components: additionalData.components })
             };
 
             console.log("handleAddProduct - Nuevo item creado:", newItem);
@@ -134,74 +150,145 @@ const SalesPage = () => {
     }, [saleItems]);
 
     const handleSubmitSale = async () => {
-        if (!selectedCustomer || saleItems.length === 0) {
-            alert("Por favor seleccione un cliente y agregue productos");
-            return;
-        }
-
+        if (isSubmitting) return;
+        
         if (!selectedLocation) {
-            alert("Por favor seleccione una sede para registrar la venta");
+            alert("Por favor seleccione una sede.");
             return;
         }
-
-        if (!authToken) {
-            alert("Error de autenticación");
+        
+        if (saleItems.length === 0) {
+            alert("Por favor agregue al menos un producto a la venta.");
             return;
         }
 
         setIsSubmitting(true);
-        try {
-            const totals = calculateTotals();
-            
-            console.log("handleSubmitSale - saleItems antes del mapeo:", saleItems);
-            
-            const mappedItems = saleItems.map((item, index) => {
-                console.log(`Item ${index}:`, {
-                    product_id: item.product_id,
-                    quantity: item.quantity,
-                    quantityType: typeof item.quantity,
-                    unit_price: item.unit_price,
-                    unitPriceType: typeof item.unit_price
-                });
 
-                return {
-                    product: item.product_id,
-                    product_details: {
-                        sku: item.product_details.sku,
-                        barcode: item.product_details.barcode,
-                        name: item.product_details.name,
-                        description: item.product_details.description,
-                        unit: item.product_details.unit,
-                        category: item.product_details.category
-                    },
-                    quantity: item.quantity,
-                    unit_price: item.unit_price.toString()
-                };
+        try {
+            // DIAGNÓSTICO: Verificar conectividad del backend antes de enviar la venta
+            console.log("🔍 DIAGNÓSTICO: Iniciando verificaciones previas...");
+            
+            // 1. Test de conectividad básica
+            try {
+                console.log("🔍 DIAGNÓSTICO: Probando conectividad con endpoint de ubicaciones...");
+                const locationsResponse = await fetch('/api/inventory/locations/', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Token ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                console.log("🔍 DIAGNÓSTICO: Status de ubicaciones:", locationsResponse.status);
+                
+                if (!locationsResponse.ok) {
+                    console.warn("⚠️ DIAGNÓSTICO: Problema con conectividad del backend");
+                    throw new Error(`Backend no responde correctamente (status: ${locationsResponse.status})`);
+                }
+            } catch (connectError) {
+                console.error("❌ DIAGNÓSTICO: Error de conectividad:", connectError);
+                throw new Error("No se puede conectar con el servidor. Por favor, verifique su conexión e intente nuevamente.");
+            }
+
+            // 2. Verificar cada producto en la venta
+            for (const item of saleItems) {
+                try {
+                    console.log(`🔍 DIAGNÓSTICO: Verificando producto ${item.product_id}...`);
+                    const productResponse = await fetch(`/api/catalogs/products/${item.product_id}/`, {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Token ${authToken}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    if (!productResponse.ok) {
+                        console.error(`❌ DIAGNÓSTICO: Producto ${item.product_id} no encontrado (status: ${productResponse.status})`);
+                        throw new Error(`El producto con ID ${item.product_id} no existe o no está disponible.`);
+                    }
+                    
+                    const productData = await productResponse.json();
+                    console.log(`✅ DIAGNÓSTICO: Producto ${item.product_id} existe:`, productData.name);
+                } catch (productError) {
+                    console.error(`❌ DIAGNÓSTICO: Error verificando producto ${item.product_id}:`, productError);
+                    throw productError;
+                }
+            }
+
+            // 3. Verificar stock disponible
+            console.log("🔍 DIAGNÓSTICO: Verificando stock para todos los productos...");
+            try {
+                const stockResponse = await fetch(`/api/inventory/stock/?location=${selectedLocation.id}`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Token ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (stockResponse.ok) {
+                    const stockData = await stockResponse.json();
+                    console.log("🔍 DIAGNÓSTICO: Stock response obtenido:", stockData);
+                    
+                    for (const item of saleItems) {
+                        const productStock = stockData.results ? 
+                            stockData.results.find(s => s.product === item.product_id) :
+                            stockData.find(s => s.product === item.product_id);
+                        
+                        if (productStock) {
+                            console.log(`🔍 DIAGNÓSTICO: Stock para producto ${item.product_id}: ${productStock.quantity} disponible, solicitado: ${item.quantity}`);
+                            if (productStock.quantity < item.quantity) {
+                                console.warn(`⚠️ DIAGNÓSTICO: Stock insuficiente para producto ${item.product_id}`);
+                            }
+                        } else {
+                            console.warn(`⚠️ DIAGNÓSTICO: No se encontró stock para producto ${item.product_id}`);
+                        }
+                    }
+                } else {
+                    console.warn("⚠️ DIAGNÓSTICO: No se pudo obtener información de stock");
+                }
+            } catch (stockError) {
+                console.warn("⚠️ DIAGNÓSTICO: Error obteniendo stock:", stockError);
+            }
+
+            console.log("✅ DIAGNÓSTICO: Verificaciones completadas, procediendo con la venta...");
+
+            // Mapear items según el formato esperado
+            const mappedItems = [];
+            
+            saleItems.forEach(item => {
+                // Si el producto tiene lotes seleccionados
+                if (item.selectedBatches && item.selectedBatches.length > 0) {
+                    item.selectedBatches.forEach(batch => {
+                        mappedItems.push({
+                            product: item.product_id,
+                            batch: batch.batch_id,
+                            quantity: batch.quantity,
+                            unit_price: item.unit_price.toString()
+                        });
+                    });
+                } else {
+                    // Producto sin lotes o sin lotes seleccionados
+                    mappedItems.push({
+                        product: item.product_id,
+                        quantity: item.quantity,
+                        unit_price: item.unit_price.toString()
+                    });
+                }
             });
 
             console.log("handleSubmitSale - mappedItems:", mappedItems);
             
             const saleData = {
-                customer: selectedCustomer.id,
-                customer_details: {
-                    name: selectedCustomer.name,
-                    phone: selectedCustomer.phone || "",
-                    email: selectedCustomer.email || "",
-                    notes: selectedCustomer.notes || ""
-                },
+                customer: selectedCustomer ? selectedCustomer.id : null,
                 location: selectedLocation.id,
-                location_details: {
-                    name: selectedLocation.name,
-                    type: selectedLocation.type,
-                    address: selectedLocation.address || ""
-                },
-                sale_type: saleType, // Enviar el tipo de venta directamente
+                sale_type: saleType,
                 should_invoice: shouldInvoice,
                 items: mappedItems
             };
 
             console.log("Datos de la venta a enviar:", saleData);
             console.log("Items en la venta:", saleData.items);
+            console.log("JSON completo que se enviará:", JSON.stringify(saleData, null, 2));
 
             const response = await salesService.createSale(saleData, authToken);
             
@@ -242,6 +329,10 @@ const SalesPage = () => {
                 errorMessage = "❌ No se pudo registrar la venta:\n\n" + error.message + "\n\nPor favor, verifique el stock disponible de los productos.";
             } else if (error.message.includes("stock") || error.message.includes("inventory")) {
                 errorMessage = "❌ Problema de inventario: " + error.message;
+            } else if (error.message.includes("conectar") || error.message.includes("servidor")) {
+                errorMessage = "❌ Problema de conexión: " + error.message;
+            } else if (error.message.includes("no existe") || error.message.includes("no encontrado")) {
+                errorMessage = "❌ Problema con el producto: " + error.message;
             } else {
                 errorMessage += (error.message || "Error desconocido");
             }
