@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useProducts } from "../context/ProductsContext";
 import inventoryService from "../services/inventoryService";
+import { createProductBatch } from "../services/productBatchService";
 import MovementsHeader from "../components/StockMovements/MovementsHeader";
 import MovementNotification from "../components/StockMovements/MovementNotification";
 import MovementForm from "../components/StockMovements/MovementForm";
@@ -19,6 +20,16 @@ const MovimientosDeStockPage = () => {
         expiryDate: "",
         notes: "",
     });
+
+    // Estado para los lotes
+    const [batchesData, setBatchesData] = useState([
+        {
+            batch_number: "",
+            expiry_date: "",
+            manufacturing_date: "",
+            supplier_reference: "",
+        },
+    ]);
 
     // Estado para filtros del historial
     const [filters, setFilters] = useState({
@@ -96,11 +107,53 @@ const MovimientosDeStockPage = () => {
                 [name]: value,
                 expiryDate: "", // Limpiar fecha de vencimiento para salidas
             });
+
+            // Reiniciar los lotes cuando se cambia a salida
+            setBatchesData([
+                {
+                    batch_number: "",
+                    expiry_date: "",
+                    manufacturing_date: "",
+                    supplier_reference: "",
+                },
+            ]);
         } else {
             setFormData({
                 ...formData,
                 [name]: value,
             });
+        }
+    };
+
+    // Función para manejar cambios en los lotes
+    const handleBatchesChange = (index, field, value) => {
+        const updatedBatches = [...batchesData];
+        updatedBatches[index] = {
+            ...updatedBatches[index],
+            [field]: value,
+        };
+        setBatchesData(updatedBatches);
+    };
+
+    // Función para agregar un nuevo lote
+    const handleAddBatch = () => {
+        setBatchesData([
+            ...batchesData,
+            {
+                batch_number: "",
+                expiry_date: "",
+                manufacturing_date: "",
+                supplier_reference: "",
+            },
+        ]);
+    };
+
+    // Función para eliminar un lote
+    const handleRemoveBatch = (index) => {
+        if (batchesData.length > 1) {
+            const updatedBatches = [...batchesData];
+            updatedBatches.splice(index, 1);
+            setBatchesData(updatedBatches);
         }
     };
 
@@ -170,9 +223,7 @@ const MovimientosDeStockPage = () => {
             !selectedProduct ||
             !formData.location ||
             !formData.movementType ||
-            !formData.quantity ||
-            // Solo requerir fecha de vencimiento para entradas, no para salidas
-            (formData.movementType !== "out" && !formData.expiryDate)
+            !formData.quantity
         ) {
             setNotification({
                 show: true,
@@ -186,6 +237,26 @@ const MovimientosDeStockPage = () => {
             return;
         }
 
+        // Validación adicional para los lotes en caso de movimiento de entrada
+        if (formData.movementType === "in") {
+            const invalidBatches = batchesData.filter(
+                (batch) => !batch.batch_number || !batch.expiry_date
+            );
+
+            if (invalidBatches.length > 0) {
+                setNotification({
+                    show: true,
+                    type: "error",
+                    message:
+                        "Por favor complete el número de lote y fecha de vencimiento para todos los lotes",
+                });
+                setTimeout(() => {
+                    setNotification({ show: false, type: "", message: "" });
+                }, 5000);
+                return;
+            }
+        }
+
         // Preparar los datos del movimiento para la API
         const movementData = {
             product: selectedProduct.id, // Usar el ID del producto
@@ -194,11 +265,6 @@ const MovimientosDeStockPage = () => {
             quantity: parseInt(formData.quantity),
             notes: formData.notes || "", // Asegurar que sea string vacío si no hay notas
         };
-
-        // Solo agregar fecha de vencimiento para entradas, no para salidas
-        if (formData.movementType !== "out" && formData.expiryDate) {
-            movementData.expiry_date = formData.expiryDate;
-        }
 
         try {
             // Mostrar estado de carga
@@ -215,12 +281,54 @@ const MovimientosDeStockPage = () => {
                     authToken
                 );
 
-            // Mostrar mensaje de éxito
-            setNotification({
-                show: true,
-                type: "success",
-                message: "Movimiento registrado con éxito en la base de datos",
-            });
+            // Si es un movimiento de entrada, crear los lotes
+            if (formData.movementType === "in" && batchesData.length > 0) {
+                try {
+                    // Crear lotes en la API
+                    const batchPromises = batchesData.map((batch) => {
+                        const batchData = {
+                            product: selectedProduct.id,
+                            batch_number: batch.batch_number,
+                            expiry_date: batch.expiry_date,
+                            ...(batch.manufacturing_date && {
+                                manufacturing_date: batch.manufacturing_date,
+                            }),
+                            ...(batch.supplier_reference && {
+                                supplier_reference: batch.supplier_reference,
+                            }),
+                        };
+                        return createProductBatch(batchData, authToken);
+                    });
+
+                    await Promise.all(batchPromises);
+
+                    // Mostrar mensaje de éxito
+                    setNotification({
+                        show: true,
+                        type: "success",
+                        message:
+                            "Movimiento y lotes registrados con éxito en la base de datos",
+                    });
+                } catch (batchError) {
+                    console.error("Error al crear lotes:", batchError);
+
+                    // Mostrar mensaje de éxito parcial
+                    setNotification({
+                        show: true,
+                        type: "warning",
+                        message:
+                            "Movimiento registrado con éxito, pero hubo problemas al registrar los lotes",
+                    });
+                }
+            } else {
+                // Mostrar mensaje de éxito
+                setNotification({
+                    show: true,
+                    type: "success",
+                    message:
+                        "Movimiento registrado con éxito en la base de datos",
+                });
+            }
 
             // Limpiar el formulario
             setFormData({
@@ -231,6 +339,16 @@ const MovimientosDeStockPage = () => {
                 expiryDate: "",
                 notes: "",
             });
+
+            // Reiniciar los lotes
+            setBatchesData([
+                {
+                    batch_number: "",
+                    expiry_date: "",
+                    manufacturing_date: "",
+                    supplier_reference: "",
+                },
+            ]);
 
             // Limpiar también la selección del producto
             setSelectedProduct(null);
@@ -501,18 +619,24 @@ const MovimientosDeStockPage = () => {
                 }}
             >
                 {/* Formulario para registrar nuevo movimiento */}
-                <MovementForm
-                    formData={formData}
-                    handleInputChange={handleInputChange}
-                    handleSubmit={handleSubmit}
-                    selectedProduct={selectedProduct}
-                    handleProductSelected={handleProductSelected}
-                    handleProductSelectionCleared={
-                        handleProductSelectionCleared
-                    }
-                    locations={locations}
-                    isLoadingLocations={isLoadingLocations}
-                />
+                <div style={{ width: "100%" }}>
+                    <MovementForm
+                        formData={formData}
+                        handleInputChange={handleInputChange}
+                        handleSubmit={handleSubmit}
+                        selectedProduct={selectedProduct}
+                        handleProductSelected={handleProductSelected}
+                        handleProductSelectionCleared={
+                            handleProductSelectionCleared
+                        }
+                        locations={locations}
+                        isLoadingLocations={isLoadingLocations}
+                        batchesData={batchesData}
+                        handleBatchesChange={handleBatchesChange}
+                        handleAddBatch={handleAddBatch}
+                        handleRemoveBatch={handleRemoveBatch}
+                    />
+                </div>
 
                 {/* Historial de Movimientos */}
                 <div style={{ width: "100%" }}>

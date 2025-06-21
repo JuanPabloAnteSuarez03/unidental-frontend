@@ -12,6 +12,8 @@ import ResetPasswordConfirmPage from "../pages/ResetPasswordConfirmPage";
 import MovimientosDeStockPage from "../pages/MovimientosDeStockPage";
 import TransferenciasInternasPage from "../pages/TransferenciasInternasPage";
 import NuevoProductoPage from "../pages/NuevoProductoPage";
+import AlertasPage from "../pages/AlertasPage";
+import AlertasBajoStockPage from "../pages/AlertasBajoStockPage";
 
 const AppRouter = () => {
     return (
@@ -37,6 +39,14 @@ const AppRouter = () => {
                 <Route
                     path="/inventario/nuevo-producto"
                     element={<NuevoProductoPage />}
+                />
+                <Route
+                    path="/inventario/alertas-vencimiento"
+                    element={<AlertasPage />}
+                />
+                <Route
+                    path="/inventario/alertas-bajo-stock"
+                    element={<AlertasBajoStockPage />}
                 />
                 <Route path="/ventas" element={<SalesPage />} />
                 <Route path="/ventas/devoluciones" element={<ReturnsPage />} />

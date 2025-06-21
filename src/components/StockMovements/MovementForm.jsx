@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import ProductSearchSelector from "../Common/ProductSearchSelector";
 
 const MovementForm = ({
@@ -10,7 +10,14 @@ const MovementForm = ({
     handleProductSelectionCleared,
     locations,
     isLoadingLocations,
+    batchesData,
+    handleBatchesChange,
+    handleAddBatch,
+    handleRemoveBatch,
 }) => {
+    // Estado local para controlar la visibilidad del botón de agregar lote
+    const [showAddBatchButton, setShowAddBatchButton] = useState(true);
+
     return (
         <div
             style={{
@@ -19,7 +26,7 @@ const MovementForm = ({
                 padding: "32px",
                 boxShadow:
                     "0 4px 20px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.1)",
-                maxWidth: "900px",
+                width: "100%",
                 margin: "0 auto",
                 border: "1px solid #e9ecef",
             }}
@@ -57,44 +64,51 @@ const MovementForm = ({
                     gap: "24px",
                 }}
             >
-                {/* Selector de Producto */}
-                <div
-                    style={{
-                        backgroundColor: "#f8f9fa",
-                        padding: "20px",
-                        borderRadius: "8px",
-                        border: "1px solid #e9ecef",
-                    }}
-                >
-                    <label
-                        style={{
-                            display: "block",
-                            marginBottom: "8px",
-                            fontWeight: "600",
-                            color: "#2c3e50",
-                            fontSize: "16px",
-                        }}
-                    >
-                        Producto <span style={{ color: "#dc3545" }}>*</span>
-                    </label>
-                    <ProductSearchSelector
-                        onProductSelected={handleProductSelected}
-                        onSelectionCleared={handleProductSelectionCleared}
-                        placeholder="Buscar producto por nombre, SKU o código..."
-                        initialProduct={selectedProduct}
-                    />
-                </div>
-
-                {/* Grid para Ubicación y Tipo de Movimiento */}
+                {/* Primera fila: Producto y Ubicación */}
                 <div
                     style={{
                         display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
+                        gridTemplateColumns: "2fr 1fr",
                         gap: "24px",
                     }}
                 >
+                    {/* Selector de Producto */}
+                    <div
+                        style={{
+                            backgroundColor: "#f8f9fa",
+                            padding: "20px",
+                            borderRadius: "8px",
+                            border: "1px solid #e9ecef",
+                        }}
+                    >
+                        <label
+                            style={{
+                                display: "block",
+                                marginBottom: "8px",
+                                fontWeight: "600",
+                                color: "#2c3e50",
+                                fontSize: "16px",
+                            }}
+                        >
+                            Producto <span style={{ color: "#dc3545" }}>*</span>
+                        </label>
+                        <ProductSearchSelector
+                            onProductSelected={handleProductSelected}
+                            onSelectionCleared={handleProductSelectionCleared}
+                            placeholder="Buscar producto por nombre, SKU o código..."
+                            initialProduct={selectedProduct}
+                        />
+                    </div>
+
                     {/* Selector de Ubicación */}
-                    <div>
+                    <div
+                        style={{
+                            backgroundColor: "#f8f9fa",
+                            padding: "20px",
+                            borderRadius: "8px",
+                            border: "1px solid #e9ecef",
+                        }}
+                    >
                         <label
                             htmlFor="location"
                             style={{
@@ -158,9 +172,25 @@ const MovementForm = ({
                             ))}
                         </select>
                     </div>
+                </div>
 
+                {/* Segunda fila: Tipo de Movimiento y Cantidad */}
+                <div
+                    style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        gap: "24px",
+                    }}
+                >
                     {/* Tipo de Movimiento */}
-                    <div>
+                    <div
+                        style={{
+                            backgroundColor: "#f8f9fa",
+                            padding: "20px",
+                            borderRadius: "8px",
+                            border: "1px solid #e9ecef",
+                        }}
+                    >
                         <label
                             style={{
                                 display: "block",
@@ -176,8 +206,9 @@ const MovementForm = ({
                         <div
                             style={{
                                 display: "flex",
-                                flexDirection: "column",
-                                gap: "8px",
+                                flexDirection: "row",
+                                gap: "16px",
+                                justifyContent: "space-around",
                             }}
                         >
                             {[
@@ -217,6 +248,8 @@ const MovementForm = ({
                                             formData.movementType === type.value
                                                 ? type.color
                                                 : "#495057",
+                                        flex: "1",
+                                        justifyContent: "center",
                                     }}
                                     onMouseEnter={(e) => {
                                         if (
@@ -259,24 +292,16 @@ const MovementForm = ({
                             ))}
                         </div>
                     </div>
-                </div>
 
-                {/* Cantidad y Fecha de Vencimiento */}
-                <div
-                    style={{
-                        display: "grid",
-                        gridTemplateColumns:
-                            formData.movementType === "out"
-                                ? "1fr 1fr"
-                                : "1fr 1fr",
-                        gap: "24px",
-                        backgroundColor: "#f8f9fa",
-                        padding: "20px",
-                        borderRadius: "8px",
-                        border: "1px solid #e9ecef",
-                    }}
-                >
-                    <div>
+                    {/* Cantidad */}
+                    <div
+                        style={{
+                            backgroundColor: "#f8f9fa",
+                            padding: "20px",
+                            borderRadius: "8px",
+                            border: "1px solid #e9ecef",
+                        }}
+                    >
                         <label
                             htmlFor="quantity"
                             style={{
@@ -343,146 +368,438 @@ const MovementForm = ({
                             </span>
                         </div>
                     </div>
-
-                    {formData.movementType !== "out" ? (
-                        <div>
-                            <label
-                                htmlFor="expiryDate"
-                                style={{
-                                    display: "block",
-                                    marginBottom: "8px",
-                                    fontWeight: "600",
-                                    color: "#2c3e50",
-                                    fontSize: "16px",
-                                }}
-                            >
-                                Fecha de Vencimiento{" "}
-                                <span style={{ color: "#dc3545" }}>*</span>
-                            </label>
-                            <input
-                                type="date"
-                                id="expiryDate"
-                                name="expiryDate"
-                                value={formData.expiryDate}
-                                onChange={handleInputChange}
-                                style={{
-                                    width: "100%",
-                                    padding: "14px 16px",
-                                    borderRadius: "8px",
-                                    border: "2px solid #e9ecef",
-                                    fontSize: "16px",
-                                    fontWeight: "500",
-                                    color: "#495057",
-                                    transition: "all 0.2s ease",
-                                    outline: "none",
-                                    boxSizing: "border-box",
-                                }}
-                                required
-                                onFocus={(e) => {
-                                    e.currentTarget.style.borderColor =
-                                        "#2c3e50";
-                                    e.currentTarget.style.boxShadow =
-                                        "0 0 0 3px rgba(44, 62, 80, 0.1)";
-                                }}
-                                onBlur={(e) => {
-                                    e.currentTarget.style.borderColor =
-                                        "#e9ecef";
-                                    e.currentTarget.style.boxShadow = "none";
-                                }}
-                            />
-                        </div>
-                    ) : (
-                        <div>
-                            <label
-                                style={{
-                                    display: "block",
-                                    marginBottom: "8px",
-                                    fontWeight: "600",
-                                    color: "#6c757d",
-                                    fontSize: "16px",
-                                }}
-                            >
-                                Fecha de Vencimiento
-                            </label>
-                            <div
-                                style={{
-                                    padding: "14px 16px",
-                                    borderRadius: "8px",
-                                    backgroundColor: "#e3f2fd",
-                                    border: "2px solid #90caf9",
-                                    color: "#1565c0",
-                                    fontSize: "14px",
-                                    fontWeight: "500",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "8px",
-                                    boxSizing: "border-box",
-                                    minHeight: "52px",
-                                }}
-                            >
-                                <span style={{ fontSize: "18px" }}>ℹ️</span>
-                                Los movimientos de salida no requieren fecha de
-                                vencimiento
-                            </div>
-                        </div>
-                    )}
                 </div>
 
-                {/* Notas */}
-                <div>
-                    <label
-                        htmlFor="notes"
-                        style={{
-                            display: "block",
-                            marginBottom: "8px",
-                            fontWeight: "600",
-                            color: "#2c3e50",
-                            fontSize: "16px",
-                        }}
-                    >
-                        Notas/Motivo{" "}
-                        <span
+                {/* Tercera fila: Sección de Lotes (solo para movimientos de entrada) y Notas */}
+                <div
+                    style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                            formData.movementType === "in" ? "3fr 2fr" : "1fr",
+                        gap: "24px",
+                    }}
+                >
+                    {/* Sección de Lotes (solo para movimientos de entrada) */}
+                    {formData.movementType === "in" && (
+                        <div
                             style={{
-                                color: "#6c757d",
-                                fontWeight: "400",
-                                fontSize: "14px",
+                                backgroundColor: "#f0f9ff",
+                                padding: "20px",
+                                borderRadius: "8px",
+                                border: "1px solid #90caf9",
                             }}
                         >
-                            (opcional)
-                        </span>
-                    </label>
-                    <textarea
-                        id="notes"
-                        name="notes"
-                        value={formData.notes}
-                        onChange={handleInputChange}
-                        rows="4"
+                            <div style={{ marginBottom: "16px" }}>
+                                <h3
+                                    style={{
+                                        fontSize: "18px",
+                                        fontWeight: "600",
+                                        margin: "0 0 8px 0",
+                                        color: "#0d47a1",
+                                    }}
+                                >
+                                    Información de Lotes
+                                </h3>
+                                <p
+                                    style={{
+                                        fontSize: "14px",
+                                        color: "#1565c0",
+                                        margin: "0",
+                                    }}
+                                >
+                                    Especifique los lotes y fechas de
+                                    vencimiento para este movimiento de entrada
+                                </p>
+                            </div>
+
+                            {/* Lista de lotes */}
+                            <div
+                                style={{
+                                    maxHeight: "300px",
+                                    overflowY: "auto",
+                                }}
+                            >
+                                {batchesData.map((batch, index) => (
+                                    <div
+                                        key={index}
+                                        style={{
+                                            backgroundColor: "#fff",
+                                            padding: "16px",
+                                            borderRadius: "8px",
+                                            border: "1px solid #bbdefb",
+                                            marginBottom: "16px",
+                                        }}
+                                    >
+                                        <div
+                                            style={{
+                                                display: "flex",
+                                                justifyContent: "space-between",
+                                                alignItems: "center",
+                                                marginBottom: "12px",
+                                            }}
+                                        >
+                                            <h4
+                                                style={{
+                                                    fontSize: "16px",
+                                                    fontWeight: "600",
+                                                    margin: "0",
+                                                    color: "#0d47a1",
+                                                }}
+                                            >
+                                                Lote #{index + 1}
+                                            </h4>
+                                            {index > 0 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        handleRemoveBatch(index)
+                                                    }
+                                                    style={{
+                                                        background: "none",
+                                                        border: "none",
+                                                        color: "#dc3545",
+                                                        cursor: "pointer",
+                                                        fontSize: "14px",
+                                                        fontWeight: "500",
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        gap: "4px",
+                                                    }}
+                                                >
+                                                    <span>❌</span> Eliminar
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        <div
+                                            style={{
+                                                display: "grid",
+                                                gridTemplateColumns: "1fr 1fr",
+                                                gap: "16px",
+                                                marginBottom: "12px",
+                                            }}
+                                        >
+                                            {/* Número de lote */}
+                                            <div>
+                                                <label
+                                                    htmlFor={`batch_number_${index}`}
+                                                    style={{
+                                                        display: "block",
+                                                        marginBottom: "6px",
+                                                        fontWeight: "600",
+                                                        color: "#2c3e50",
+                                                        fontSize: "14px",
+                                                    }}
+                                                >
+                                                    Número de Lote{" "}
+                                                    <span
+                                                        style={{
+                                                            color: "#dc3545",
+                                                        }}
+                                                    >
+                                                        *
+                                                    </span>
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    id={`batch_number_${index}`}
+                                                    value={batch.batch_number}
+                                                    onChange={(e) =>
+                                                        handleBatchesChange(
+                                                            index,
+                                                            "batch_number",
+                                                            e.target.value
+                                                        )
+                                                    }
+                                                    style={{
+                                                        width: "100%",
+                                                        padding: "12px 14px",
+                                                        borderRadius: "8px",
+                                                        border: "2px solid #e9ecef",
+                                                        fontSize: "14px",
+                                                        fontWeight: "500",
+                                                        color: "#495057",
+                                                        transition:
+                                                            "all 0.2s ease",
+                                                        outline: "none",
+                                                        boxSizing: "border-box",
+                                                    }}
+                                                    placeholder="Ej: LOT2024001"
+                                                    required
+                                                />
+                                            </div>
+
+                                            {/* Fecha de vencimiento */}
+                                            <div>
+                                                <label
+                                                    htmlFor={`expiry_date_${index}`}
+                                                    style={{
+                                                        display: "block",
+                                                        marginBottom: "6px",
+                                                        fontWeight: "600",
+                                                        color: "#2c3e50",
+                                                        fontSize: "14px",
+                                                    }}
+                                                >
+                                                    Fecha de Vencimiento{" "}
+                                                    <span
+                                                        style={{
+                                                            color: "#dc3545",
+                                                        }}
+                                                    >
+                                                        *
+                                                    </span>
+                                                </label>
+                                                <input
+                                                    type="date"
+                                                    id={`expiry_date_${index}`}
+                                                    value={batch.expiry_date}
+                                                    onChange={(e) =>
+                                                        handleBatchesChange(
+                                                            index,
+                                                            "expiry_date",
+                                                            e.target.value
+                                                        )
+                                                    }
+                                                    style={{
+                                                        width: "100%",
+                                                        padding: "12px 14px",
+                                                        borderRadius: "8px",
+                                                        border: "2px solid #e9ecef",
+                                                        fontSize: "14px",
+                                                        fontWeight: "500",
+                                                        color: "#495057",
+                                                        transition:
+                                                            "all 0.2s ease",
+                                                        outline: "none",
+                                                        boxSizing: "border-box",
+                                                    }}
+                                                    required
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div
+                                            style={{
+                                                display: "grid",
+                                                gridTemplateColumns: "1fr 1fr",
+                                                gap: "16px",
+                                            }}
+                                        >
+                                            {/* Fecha de fabricación (opcional) */}
+                                            <div>
+                                                <label
+                                                    htmlFor={`manufacturing_date_${index}`}
+                                                    style={{
+                                                        display: "block",
+                                                        marginBottom: "6px",
+                                                        fontWeight: "600",
+                                                        color: "#2c3e50",
+                                                        fontSize: "14px",
+                                                    }}
+                                                >
+                                                    Fecha de Fabricación{" "}
+                                                    <span
+                                                        style={{
+                                                            color: "#6c757d",
+                                                            fontWeight: "400",
+                                                            fontSize: "12px",
+                                                        }}
+                                                    >
+                                                        (opcional)
+                                                    </span>
+                                                </label>
+                                                <input
+                                                    type="date"
+                                                    id={`manufacturing_date_${index}`}
+                                                    value={
+                                                        batch.manufacturing_date ||
+                                                        ""
+                                                    }
+                                                    onChange={(e) =>
+                                                        handleBatchesChange(
+                                                            index,
+                                                            "manufacturing_date",
+                                                            e.target.value
+                                                        )
+                                                    }
+                                                    style={{
+                                                        width: "100%",
+                                                        padding: "12px 14px",
+                                                        borderRadius: "8px",
+                                                        border: "2px solid #e9ecef",
+                                                        fontSize: "14px",
+                                                        fontWeight: "500",
+                                                        color: "#495057",
+                                                        transition:
+                                                            "all 0.2s ease",
+                                                        outline: "none",
+                                                        boxSizing: "border-box",
+                                                    }}
+                                                />
+                                            </div>
+
+                                            {/* Referencia del proveedor (opcional) */}
+                                            <div>
+                                                <label
+                                                    htmlFor={`supplier_reference_${index}`}
+                                                    style={{
+                                                        display: "block",
+                                                        marginBottom: "6px",
+                                                        fontWeight: "600",
+                                                        color: "#2c3e50",
+                                                        fontSize: "14px",
+                                                    }}
+                                                >
+                                                    Referencia del Proveedor{" "}
+                                                    <span
+                                                        style={{
+                                                            color: "#6c757d",
+                                                            fontWeight: "400",
+                                                            fontSize: "12px",
+                                                        }}
+                                                    >
+                                                        (opcional)
+                                                    </span>
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    id={`supplier_reference_${index}`}
+                                                    value={
+                                                        batch.supplier_reference ||
+                                                        ""
+                                                    }
+                                                    onChange={(e) =>
+                                                        handleBatchesChange(
+                                                            index,
+                                                            "supplier_reference",
+                                                            e.target.value
+                                                        )
+                                                    }
+                                                    style={{
+                                                        width: "100%",
+                                                        padding: "12px 14px",
+                                                        borderRadius: "8px",
+                                                        border: "2px solid #e9ecef",
+                                                        fontSize: "14px",
+                                                        fontWeight: "500",
+                                                        color: "#495057",
+                                                        transition:
+                                                            "all 0.2s ease",
+                                                        outline: "none",
+                                                        boxSizing: "border-box",
+                                                    }}
+                                                    placeholder="Ej: PROV-REF-001"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Botón para agregar más lotes */}
+                            {showAddBatchButton && (
+                                <button
+                                    type="button"
+                                    onClick={handleAddBatch}
+                                    style={{
+                                        background: "none",
+                                        border: "2px dashed #90caf9",
+                                        borderRadius: "8px",
+                                        padding: "12px 16px",
+                                        width: "100%",
+                                        color: "#1565c0",
+                                        cursor: "pointer",
+                                        fontSize: "14px",
+                                        fontWeight: "600",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        gap: "8px",
+                                        transition: "all 0.2s ease",
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.backgroundColor =
+                                            "#e3f2fd";
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.backgroundColor =
+                                            "transparent";
+                                    }}
+                                >
+                                    <span style={{ fontSize: "18px" }}>+</span>{" "}
+                                    Agregar Otro Lote
+                                </button>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Notas */}
+                    <div
                         style={{
-                            width: "100%",
-                            padding: "14px 16px",
+                            backgroundColor: "#f8f9fa",
+                            padding: "20px",
                             borderRadius: "8px",
-                            border: "2px solid #e9ecef",
-                            fontSize: "16px",
-                            fontWeight: "400",
-                            color: "#495057",
-                            resize: "vertical",
-                            minHeight: "100px",
-                            transition: "all 0.2s ease",
-                            outline: "none",
-                            fontFamily: "inherit",
-                            boxSizing: "border-box",
+                            border: "1px solid #e9ecef",
                         }}
-                        placeholder="Ingrese notas adicionales o el motivo del movimiento..."
-                        onFocus={(e) => {
-                            e.currentTarget.style.borderColor = "#2c3e50";
-                            e.currentTarget.style.boxShadow =
-                                "0 0 0 3px rgba(44, 62, 80, 0.1)";
-                        }}
-                        onBlur={(e) => {
-                            e.currentTarget.style.borderColor = "#e9ecef";
-                            e.currentTarget.style.boxShadow = "none";
-                        }}
-                    />
+                    >
+                        <label
+                            htmlFor="notes"
+                            style={{
+                                display: "block",
+                                marginBottom: "8px",
+                                fontWeight: "600",
+                                color: "#2c3e50",
+                                fontSize: "16px",
+                            }}
+                        >
+                            Notas/Motivo{" "}
+                            <span
+                                style={{
+                                    color: "#6c757d",
+                                    fontWeight: "400",
+                                    fontSize: "14px",
+                                }}
+                            >
+                                (opcional)
+                            </span>
+                        </label>
+                        <textarea
+                            id="notes"
+                            name="notes"
+                            value={formData.notes}
+                            onChange={handleInputChange}
+                            rows="4"
+                            style={{
+                                width: "100%",
+                                padding: "14px 16px",
+                                borderRadius: "8px",
+                                border: "2px solid #e9ecef",
+                                fontSize: "16px",
+                                fontWeight: "400",
+                                color: "#495057",
+                                resize: "vertical",
+                                minHeight:
+                                    formData.movementType === "in"
+                                        ? "200px"
+                                        : "100px",
+                                transition: "all 0.2s ease",
+                                outline: "none",
+                                fontFamily: "inherit",
+                                boxSizing: "border-box",
+                            }}
+                            placeholder="Ingrese notas adicionales o el motivo del movimiento..."
+                            onFocus={(e) => {
+                                e.currentTarget.style.borderColor = "#2c3e50";
+                                e.currentTarget.style.boxShadow =
+                                    "0 0 0 3px rgba(44, 62, 80, 0.1)";
+                            }}
+                            onBlur={(e) => {
+                                e.currentTarget.style.borderColor = "#e9ecef";
+                                e.currentTarget.style.boxShadow = "none";
+                            }}
+                        />
+                    </div>
                 </div>
 
                 {/* Botón de envío */}
