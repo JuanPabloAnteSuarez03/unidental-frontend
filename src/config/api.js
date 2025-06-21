@@ -79,3 +79,13 @@ const API_CONFIG = {
 };
 
 export default API_CONFIG;
+
+// Configuración de la API
+export const API_BASE_URL =
+    "https://unidental-backend-production.up.railway.app/api";
+
+// Token de autenticación para pruebas
+export const TEST_AUTH_TOKEN = "721cabd8977b328c22f1e687966206a28b6fe7f8";
+
+// Configuración de tiempo de expiración para caché
+export const CACHE_EXPIRATION = 60 * 5; // 5 minutos en segundos

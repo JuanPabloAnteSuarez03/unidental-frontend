@@ -38,8 +38,12 @@ const MainLayout = ({ children }) => {
                 },
                 { name: "Nuevo Producto", path: "/inventario/nuevo-producto" },
                 {
-                    name: "Alertas y Notificaciones",
-                    path: "/inventario/alertas",
+                    name: "Alertas por Vencimiento",
+                    path: "/inventario/alertas-vencimiento",
+                },
+                {
+                    name: "Alertas por Bajo Stock",
+                    path: "/inventario/alertas-bajo-stock",
                 },
             ],
         },
