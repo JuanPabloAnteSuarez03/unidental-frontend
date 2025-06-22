@@ -42,12 +42,13 @@ export const getCustomers = async (params = {}, authToken, signal) => {
 
     try {
         // Build URL with query parameters
-        const url = new URL(API_CUSTOMERS_URL, window.location.origin);
+        let url = new URL(API_CUSTOMERS_URL, window.location.origin);
 
         if (params.search) url.searchParams.append("search", params.search);
         if (params.ordering)
             url.searchParams.append("ordering", params.ordering);
         if (params.page) url.searchParams.append("page", params.page);
+        if (params.page_size) url.searchParams.append("page_size", params.page_size);
 
         const response = await fetch(url.toString(), {
             method: "GET",

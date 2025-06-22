@@ -151,12 +151,12 @@ const SalesPage = () => {
 
     const handleSubmitSale = async () => {
         if (isSubmitting) return;
-        
+
         if (!selectedLocation) {
             alert("Por favor seleccione una sede.");
             return;
         }
-        
+
         if (saleItems.length === 0) {
             alert("Por favor agregue al menos un producto a la venta.");
             return;
@@ -269,9 +269,9 @@ const SalesPage = () => {
                 } else {
                     // Producto sin lotes o sin lotes seleccionados
                     mappedItems.push({
-                        product: item.product_id,
-                        quantity: item.quantity,
-                        unit_price: item.unit_price.toString()
+                    product: item.product_id,
+                    quantity: item.quantity,
+                    unit_price: item.unit_price.toString()
                     });
                 }
             });
