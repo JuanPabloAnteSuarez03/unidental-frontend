@@ -5,8 +5,8 @@ export default defineConfig(({ mode }) => {
     // Cargar variables de entorno según el modo
     const env = loadEnv(mode, process.cwd());
 
-    // URL del backend desde la variable de entorno o usar valor por defecto
-    const apiUrl = env.VITE_API_URL || "https://unidental-backend.onrender.com"; // URL actualizada del backend
+    // La URL del backend ahora está codificada para apuntar siempre a Render.
+    const apiUrl = "https://unidental-backend.onrender.com"; // URL actualizada del backend
 
     return {
         plugins: [react()],
@@ -46,7 +46,7 @@ export default defineConfig(({ mode }) => {
             proxy: {
                 // Redirigir todas las peticiones que empiecen con /api
                 "/api": {
-                    target: apiUrl.replace("/api", ""), // Quitar /api si está presente en la URL
+                    target: apiUrl,
                     changeOrigin: true,
                     secure: true,
                     rewrite: (path) => path.replace(/^\/api/, "/api"),

@@ -80,9 +80,10 @@ const API_CONFIG = {
 
 export default API_CONFIG;
 
-// Configuración de la API
-export const API_BASE_URL =
-    "https://unidental-backend-production.up.railway.app/api";
+// La siguiente constante API_BASE_URL está obsoleta y apunta a un backend incorrecto.
+// Se va a eliminar para usar únicamente la configuración en API_CONFIG.BASE_URL.
+// export const API_BASE_URL =
+//    "https://unidental-backend-production.up.railway.app/api";
 
 // Token de autenticación para pruebas
 export const TEST_AUTH_TOKEN = "721cabd8977b328c22f1e687966206a28b6fe7f8";
