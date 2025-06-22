@@ -52,7 +52,7 @@ const ProductSelector = forwardRef(({
         return location ? location.name : `Ubicación ${locationId}`;
     }, [locationMap]);
 
-    // Efecto para actualizar información de stock cuando cambia la ubicación seleccionada
+        // Efecto para actualizar información de stock cuando cambia la ubicación seleccionada
     useEffect(() => {
         if (selectedProduct && stockInfo && stockInfo.allLocations) {
             console.log("Location changed, updating stock info for product:", selectedProduct.id);
