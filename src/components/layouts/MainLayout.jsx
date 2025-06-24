@@ -42,8 +42,8 @@ const MainLayout = ({ children }) => {
                     path: "/inventario/alertas-vencimiento",
                 },
                 {
-                    name: "Alertas por Bajo Stock",
-                    path: "/inventario/alertas-bajo-stock",
+                    name: "Alertas por Stock",
+                    path: "/inventario/alertas-stock",
                 },
             ],
         },
