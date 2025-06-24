@@ -3,7 +3,7 @@ import AlertasHeader from "../components/Alertas/AlertasHeader";
 import AlertasStyles from "../components/Alertas/AlertasStyles";
 import ResumenAlertas from "../components/Alertas/ResumenAlertas";
 import LotesTable from "../components/Alertas/LotesTable";
-import { useAuth } from "../contexts/AuthContext";
+import { useAuth } from "../context/AuthContext";
 import {
     getAllProductBatches,
     getExpiringSoonBatches,
