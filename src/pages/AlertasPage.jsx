@@ -3,7 +3,7 @@ import AlertasHeader from "../components/Alertas/AlertasHeader";
 import AlertasStyles from "../components/Alertas/AlertasStyles";
 import ResumenAlertas from "../components/Alertas/ResumenAlertas";
 import LotesTable from "../components/Alertas/LotesTable";
-import { useAuth } from "../contexts/AuthContext";
+import { useAuth } from "../context/AuthContext";
 import {
     getAllProductBatches,
     getExpiringSoonBatches,
@@ -247,6 +247,10 @@ const AlertasPage = () => {
                         }
                         disabled={isLoadingLotes}
                     >
+                        <i
+                            className="fas fa-exclamation-triangle"
+                            style={{ marginRight: "5px" }}
+                        ></i>
                         Alertas Críticas
                     </button>
                     <button
@@ -258,6 +262,10 @@ const AlertasPage = () => {
                         onClick={() => handleRangoChange(RANGOS.SEIS_MESES)}
                         disabled={isLoadingLotes}
                     >
+                        <i
+                            className="fas fa-calendar-alt"
+                            style={{ marginRight: "5px" }}
+                        ></i>
                         Ver 6 Meses
                     </button>
                     <button
@@ -267,6 +275,10 @@ const AlertasPage = () => {
                         onClick={() => handleRangoChange(RANGOS.UN_ANIO)}
                         disabled={isLoadingLotes}
                     >
+                        <i
+                            className="fas fa-calendar-check"
+                            style={{ marginRight: "5px" }}
+                        ></i>
                         Ver 1 Año
                     </button>
                     <button
@@ -278,6 +290,10 @@ const AlertasPage = () => {
                         onClick={() => handleRangoChange(RANGOS.POCO_MAS_ANIO)}
                         disabled={isLoadingLotes}
                     >
+                        <i
+                            className="fas fa-clock"
+                            style={{ marginRight: "5px" }}
+                        ></i>
                         Ver Más de 1 Año
                     </button>
                     <button
@@ -285,6 +301,14 @@ const AlertasPage = () => {
                         onClick={fetchTodosLosDatos}
                         disabled={isLoadingLotes}
                     >
+                        <i
+                            className={`fas ${
+                                isLoadingLotes
+                                    ? "fa-spinner fa-spin"
+                                    : "fa-sync-alt"
+                            }`}
+                            style={{ marginRight: "5px" }}
+                        ></i>
                         {isLoadingLotes ? "Cargando..." : "Actualizar Lotes"}
                     </button>
                 </div>

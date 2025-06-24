@@ -8,7 +8,7 @@ import API_CONFIG from "../config/api";
 export const getAllProductBatches = async (authToken) => {
     try {
         const response = await fetch(
-            `${API_CONFIG.BASE_URL}/catalogs/product-batches/`,
+            `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.PRODUCT_BATCHES}`,
             {
                 headers: {
                     Authorization: `Token ${authToken}`,
@@ -38,7 +38,7 @@ export const getAllProductBatches = async (authToken) => {
 export const getExpiringSoonBatches = async (authToken, days = 90) => {
     try {
         const response = await fetch(
-            `${API_CONFIG.BASE_URL}/catalogs/product-batches/expiring_soon/?days=${days}`,
+            `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.PRODUCT_BATCHES_EXPIRING_SOON}?days=${days}`,
             {
                 headers: {
                     Authorization: `Token ${authToken}`,
@@ -164,7 +164,7 @@ export const getBatchesByExpiryRange = async (authToken, minDays, maxDays) => {
 export const getExpiredBatches = async (authToken) => {
     try {
         const response = await fetch(
-            `${API_CONFIG.BASE_URL}/catalogs/product-batches/expired/`,
+            `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.PRODUCT_BATCHES_EXPIRED}`,
             {
                 headers: {
                     Authorization: `Token ${authToken}`,
@@ -194,7 +194,7 @@ export const getExpiredBatches = async (authToken) => {
 export const createProductBatch = async (batchData, authToken) => {
     try {
         const response = await fetch(
-            `${API_CONFIG.BASE_URL}/catalogs/product-batches/`,
+            `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.PRODUCT_BATCHES}`,
             {
                 method: "POST",
                 headers: {

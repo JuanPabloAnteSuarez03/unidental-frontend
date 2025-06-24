@@ -13,7 +13,8 @@ import MovimientosDeStockPage from "../pages/MovimientosDeStockPage";
 import TransferenciasInternasPage from "../pages/TransferenciasInternasPage";
 import NuevoProductoPage from "../pages/NuevoProductoPage";
 import AlertasPage from "../pages/AlertasPage";
-import AlertasBajoStockPage from "../pages/AlertasBajoStockPage";
+
+import AlertasStockPage from "../pages/AlertasStockPage";
 
 const AppRouter = () => {
     return (
@@ -44,9 +45,10 @@ const AppRouter = () => {
                     path="/inventario/alertas-vencimiento"
                     element={<AlertasPage />}
                 />
+
                 <Route
-                    path="/inventario/alertas-bajo-stock"
-                    element={<AlertasBajoStockPage />}
+                    path="/inventario/alertas-stock"
+                    element={<AlertasStockPage />}
                 />
                 <Route path="/ventas" element={<SalesPage />} />
                 <Route path="/ventas/devoluciones" element={<ReturnsPage />} />

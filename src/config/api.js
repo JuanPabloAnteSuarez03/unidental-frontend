@@ -38,18 +38,22 @@ const API_CONFIG = {
         // Lotes de productos
         PRODUCT_BATCHES: "/catalogs/product-batches/",
         PRODUCT_BATCHES_EXPIRED: "/catalogs/product-batches/expired/",
-        PRODUCT_BATCHES_EXPIRING_SOON: "/catalogs/product-batches/expiring_soon/",
+        PRODUCT_BATCHES_EXPIRING_SOON:
+            "/catalogs/product-batches/expiring_soon/",
 
         // Productos compuestos
         PRODUCT_COMPONENTS: "/catalogs/product-components/",
-        PRODUCT_COMPONENTS_BY_COMPOSITE: "/catalogs/product-components/by_composite/",
-        PRODUCT_COMPONENTS_BY_COMPONENT: "/catalogs/product-components/by_component/",
+        PRODUCT_COMPONENTS_BY_COMPOSITE:
+            "/catalogs/product-components/by_composite/",
+        PRODUCT_COMPONENTS_BY_COMPONENT:
+            "/catalogs/product-components/by_component/",
 
         // Inventario avanzado
         INVENTORY_BY_BATCHES: "/inventory/movements/by_batches/",
         INVENTORY_EXPIRING_STOCK: "/inventory/movements/expiring_stock/",
         INVENTORY_EXPIRY_ALERTS: "/inventory/movements/expiry_alerts/",
-        INVENTORY_BREAKDOWN_COMPOSITE: "/inventory/movements/breakdown_composite/",
+        INVENTORY_BREAKDOWN_COMPOSITE:
+            "/inventory/movements/breakdown_composite/",
 
         // Ventas - Clientes
         CUSTOMERS: "/sales/customers/",
@@ -80,13 +84,4 @@ const API_CONFIG = {
 
 export default API_CONFIG;
 
-// La siguiente constante API_BASE_URL está obsoleta y apunta a un backend incorrecto.
-// Se va a eliminar para usar únicamente la configuración en API_CONFIG.BASE_URL.
-// export const API_BASE_URL =
-//    "https://unidental-backend-production.up.railway.app/api";
-
-// Token de autenticación para pruebas
-export const TEST_AUTH_TOKEN = "721cabd8977b328c22f1e687966206a28b6fe7f8";
-
-// Configuración de tiempo de expiración para caché
-export const CACHE_EXPIRATION = 60 * 5; // 5 minutos en segundos
+export const CACHE_EXPIRATION = 60 * 5;

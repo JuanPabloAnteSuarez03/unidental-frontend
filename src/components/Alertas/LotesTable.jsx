@@ -5,11 +5,28 @@ import {
     FaCheckCircle,
     FaInfoCircle,
     FaClock,
+    FaBatteryEmpty,
+    FaBatteryQuarter,
+    FaBatteryHalf,
+    FaBatteryThreeQuarters,
+    FaBatteryFull,
 } from "react-icons/fa";
 
-const LotesTable = ({ lotes, title, alertType = "default" }) => {
+const LotesTable = ({
+    lotes,
+    title,
+    alertType = "default",
+    // Configuración de columnas personalizada
+    columnConfig = {
+        hideManufacturingDate: false,
+        hideExpiryDate: false,
+        daysToExpiryLabel: "Días Restantes",
+    },
+}) => {
     // Función para formatear fechas
     const formatDate = (dateString) => {
+        if (!dateString) return "N/A";
+
         const date = new Date(dateString);
         return date.toLocaleDateString("es-ES", {
             day: "2-digit",
@@ -22,15 +39,15 @@ const LotesTable = ({ lotes, title, alertType = "default" }) => {
     const getStatusColor = () => {
         switch (alertType) {
             case "danger":
-                return "#ffebee"; // Rojo claro para vencidos
+                return "#ffebee"; // Rojo claro para vencidos o stock crítico
             case "warning":
-                return "#fff8e1"; // Amarillo claro para próximos a vencer (90 días)
+                return "#fff8e1"; // Amarillo claro para próximos a vencer o stock bajo
             case "info":
-                return "#e3f2fd"; // Azul claro para próximos a vencer (6 meses)
+                return "#e3f2fd"; // Azul claro para vencen en 6 meses o stock normal
             case "success":
-                return "#e8f5e9"; // Verde claro para próximos a vencer (1 año)
+                return "#e8f5e9"; // Verde claro para vencen en 1 año o stock alto
             case "secondary":
-                return "#f5f5f5"; // Gris claro para los que están a 2 meses de cumplir 1 año
+                return "#f5f5f5"; // Gris claro para los que están a 2 meses de cumplir 1 año o stock excesivo
             default:
                 return "inherit"; // Color normal
         }
@@ -122,10 +139,14 @@ const LotesTable = ({ lotes, title, alertType = "default" }) => {
                     <thead>
                         <tr>
                             <th>Producto</th>
-                            <th>Lote</th>
-                            <th>Fecha Fabricación</th>
-                            <th>Fecha Vencimiento</th>
-                            <th>Días Restantes</th>
+                            <th>Lote/SKU</th>
+                            {!columnConfig.hideManufacturingDate && (
+                                <th>Fecha Fabricación</th>
+                            )}
+                            {!columnConfig.hideExpiryDate && (
+                                <th>Fecha Vencimiento</th>
+                            )}
+                            <th>{columnConfig.daysToExpiryLabel}</th>
                             <th>Estado</th>
                         </tr>
                     </thead>
@@ -141,14 +162,23 @@ const LotesTable = ({ lotes, title, alertType = "default" }) => {
                                     {lote.product_name}
                                 </td>
                                 <td>{lote.batch_number}</td>
-                                <td>
-                                    {lote.manufacturing_date
-                                        ? formatDate(lote.manufacturing_date)
-                                        : "N/A"}
-                                </td>
-                                <td>{formatDate(lote.expiry_date)}</td>
+                                {!columnConfig.hideManufacturingDate && (
+                                    <td>
+                                        {lote.manufacturing_date
+                                            ? formatDate(
+                                                  lote.manufacturing_date
+                                              )
+                                            : "N/A"}
+                                    </td>
+                                )}
+                                {!columnConfig.hideExpiryDate && (
+                                    <td>{formatDate(lote.expiry_date)}</td>
+                                )}
                                 <td style={{ textAlign: "center" }}>
-                                    {lote.days_to_expiry < 0
+                                    {columnConfig.daysToExpiryLabel ===
+                                    "Stock Actual"
+                                        ? lote.days_to_expiry // En este caso, days_to_expiry contiene el valor del stock
+                                        : lote.days_to_expiry < 0
                                         ? `${Math.abs(
                                               lote.days_to_expiry
                                           )} días vencido`
@@ -172,7 +202,7 @@ const LotesTable = ({ lotes, title, alertType = "default" }) => {
                 </table>
             ) : (
                 <div className="no-lotes-message">
-                    No hay lotes disponibles en esta categoría
+                    No hay productos disponibles en esta categoría
                 </div>
             )}
         </div>
