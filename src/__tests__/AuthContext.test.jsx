@@ -42,6 +42,29 @@ const TestComponent = ({ onContextReady }) => {
 };
 
 describe("AuthContext", () => {
+    // Variables para guardar los console originales
+    let originalConsoleLog;
+    let originalConsoleWarn;
+    let originalConsoleError;
+
+    beforeAll(() => {
+        // Silenciar console logs durante los tests
+        originalConsoleLog = console.log;
+        originalConsoleWarn = console.warn;
+        originalConsoleError = console.error;
+
+        console.log = jest.fn();
+        console.warn = jest.fn();
+        console.error = jest.fn();
+    });
+
+    afterAll(() => {
+        // Restaurar console logs
+        console.log = originalConsoleLog;
+        console.warn = originalConsoleWarn;
+        console.error = originalConsoleError;
+    });
+
     beforeEach(() => {
         jest.clearAllMocks();
         localStorageMock.clear();
@@ -63,11 +86,13 @@ describe("AuthContext", () => {
             authContext = context;
         };
 
-        render(
-            <AuthProvider>
-                <TestComponent onContextReady={onContextReady} />
-            </AuthProvider>
-        );
+        await act(async () => {
+            render(
+                <AuthProvider>
+                    <TestComponent onContextReady={onContextReady} />
+                </AuthProvider>
+            );
+        });
 
         await waitFor(() => expect(authContext).toBeDefined());
 
@@ -97,11 +122,13 @@ describe("AuthContext", () => {
             authContext = context;
         };
 
-        render(
-            <AuthProvider>
-                <TestComponent onContextReady={onContextReady} />
-            </AuthProvider>
-        );
+        await act(async () => {
+            render(
+                <AuthProvider>
+                    <TestComponent onContextReady={onContextReady} />
+                </AuthProvider>
+            );
+        });
 
         await waitFor(() => expect(authContext.currentUser).not.toBeNull());
 
@@ -140,11 +167,13 @@ describe("AuthContext", () => {
             authContext = context;
         };
 
-        render(
-            <AuthProvider>
-                <TestComponent onContextReady={onContextReady} />
-            </AuthProvider>
-        );
+        await act(async () => {
+            render(
+                <AuthProvider>
+                    <TestComponent onContextReady={onContextReady} />
+                </AuthProvider>
+            );
+        });
 
         // Esperar primero a que se llame a removeItem
         await waitFor(() =>
@@ -170,11 +199,13 @@ describe("AuthContext", () => {
             authContext = context;
         };
 
-        render(
-            <AuthProvider>
-                <TestComponent onContextReady={onContextReady} />
-            </AuthProvider>
-        );
+        await act(async () => {
+            render(
+                <AuthProvider>
+                    <TestComponent onContextReady={onContextReady} />
+                </AuthProvider>
+            );
+        });
 
         await waitFor(() => expect(authContext).toBeDefined());
 
@@ -201,10 +232,9 @@ describe("AuthContext", () => {
         );
         expect(authContext.authToken).toBe(mockToken);
 
-        // Simular que la llamada a fetchCurrentUser en el useEffect fue completada
-        await act(async () => {
-            // Esperar a que las promesas pendientes se resuelvan
-            await new Promise((resolve) => setTimeout(resolve, 0));
+        // Esperar a que se complete la actualización del usuario
+        await waitFor(() => {
+            expect(authContext.currentUser).toEqual(mockUser);
         });
 
         // Verificar que fetch fue llamado para obtener datos del usuario
@@ -227,11 +257,13 @@ describe("AuthContext", () => {
             authContext = context;
         };
 
-        render(
-            <AuthProvider>
-                <TestComponent onContextReady={onContextReady} />
-            </AuthProvider>
-        );
+        await act(async () => {
+            render(
+                <AuthProvider>
+                    <TestComponent onContextReady={onContextReady} />
+                </AuthProvider>
+            );
+        });
 
         await waitFor(() => expect(authContext).toBeDefined());
 
@@ -263,11 +295,13 @@ describe("AuthContext", () => {
             authContext = context;
         };
 
-        render(
-            <AuthProvider>
-                <TestComponent onContextReady={onContextReady} />
-            </AuthProvider>
-        );
+        await act(async () => {
+            render(
+                <AuthProvider>
+                    <TestComponent onContextReady={onContextReady} />
+                </AuthProvider>
+            );
+        });
 
         await waitFor(() => expect(authContext.authToken).toBe(mockToken));
 
@@ -316,11 +350,13 @@ describe("AuthContext", () => {
             authContext = context;
         };
 
-        render(
-            <AuthProvider>
-                <TestComponent onContextReady={onContextReady} />
-            </AuthProvider>
-        );
+        await act(async () => {
+            render(
+                <AuthProvider>
+                    <TestComponent onContextReady={onContextReady} />
+                </AuthProvider>
+            );
+        });
 
         await waitFor(() => expect(authContext.authToken).toBe(mockToken));
 
@@ -335,17 +371,21 @@ describe("AuthContext", () => {
         expect(authContext.currentUser).toBeNull();
     });
 
-    test("AuthContext proporciona todas las funcionalidades necesarias", () => {
+    test("AuthContext proporciona todas las funcionalidades necesarias", async () => {
         let authContext;
         const onContextReady = (context) => {
             authContext = context;
         };
 
-        render(
-            <AuthProvider>
-                <TestComponent onContextReady={onContextReady} />
-            </AuthProvider>
-        );
+        await act(async () => {
+            render(
+                <AuthProvider>
+                    <TestComponent onContextReady={onContextReady} />
+                </AuthProvider>
+            );
+        });
+
+        await waitFor(() => expect(authContext).toBeDefined());
 
         // Verificar que el contexto proporciona todas las funciones y propiedades necesarias
         expect(authContext).toHaveProperty("authToken");

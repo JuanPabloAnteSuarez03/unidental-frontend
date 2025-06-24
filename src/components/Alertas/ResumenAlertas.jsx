@@ -1,11 +1,11 @@
 import React from "react";
 import {
-    FaExclamationTriangle,
-    FaCalendarTimes,
-    FaCalendarCheck,
-    FaInfoCircle,
-    FaCheckCircle,
-    FaClock,
+    FaBoxes,
+    FaBatteryEmpty,
+    FaBatteryQuarter,
+    FaBatteryHalf,
+    FaBatteryThreeQuarters,
+    FaBatteryFull,
 } from "react-icons/fa";
 
 const ResumenAlertas = ({
@@ -27,56 +27,121 @@ const ResumenAlertas = ({
         <div className="resumen-alertas">
             <div className="resumen-card total">
                 <div className="icon">
-                    <FaExclamationTriangle />
+                    <FaBoxes />
                 </div>
                 <div className="info">
                     <h3>{totalLotesConAlertas}</h3>
                     <p>Total de Lotes con Alertas</p>
                 </div>
             </div>
-            <div className="resumen-card expirados">
+            <div
+                className={`resumen-card expirados ${
+                    lotesExpirados > 0 ? "active" : ""
+                }`}
+            >
                 <div className="icon">
-                    <FaCalendarTimes style={{ color: "#e53935" }} />
+                    <FaBatteryEmpty style={{ color: "#e53935" }} />
                 </div>
                 <div className="info">
                     <h3>{lotesExpirados}</h3>
                     <p>Lotes Expirados</p>
+                    <small
+                        style={{
+                            fontSize: "11px",
+                            color: "#6c757d",
+                            fontStyle: "italic",
+                        }}
+                    >
+                        (productos ya vencidos)
+                    </small>
                 </div>
             </div>
-            <div className="resumen-card proximos">
+            <div
+                className={`resumen-card proximos ${
+                    lotesProximosAVencer > 0 ? "active" : ""
+                }`}
+            >
                 <div className="icon">
-                    <FaCalendarCheck style={{ color: "#ff9800" }} />
+                    <FaBatteryQuarter style={{ color: "#ff9800" }} />
                 </div>
                 <div className="info">
                     <h3>{lotesProximosAVencer}</h3>
                     <p>Vencen en 90 días</p>
+                    <small
+                        style={{
+                            fontSize: "11px",
+                            color: "#6c757d",
+                            fontStyle: "italic",
+                        }}
+                    >
+                        (0-90 días para vencer)
+                    </small>
                 </div>
             </div>
-            <div className="resumen-card seis-meses">
+            <div
+                className={`resumen-card seis-meses ${
+                    lotes6Meses > 0 ? "active" : ""
+                }`}
+            >
                 <div className="icon">
-                    <FaInfoCircle style={{ color: "#2196f3" }} />
+                    <FaBatteryHalf style={{ color: "#2196f3" }} />
                 </div>
                 <div className="info">
                     <h3>{lotes6Meses}</h3>
                     <p>Vencen en 6 meses</p>
+                    <small
+                        style={{
+                            fontSize: "11px",
+                            color: "#6c757d",
+                            fontStyle: "italic",
+                        }}
+                    >
+                        (91-180 días para vencer)
+                    </small>
                 </div>
             </div>
-            <div className="resumen-card un-anio">
+            <div
+                className={`resumen-card un-anio ${
+                    lotes1Anio > 0 ? "active" : ""
+                }`}
+            >
                 <div className="icon">
-                    <FaCheckCircle style={{ color: "#4caf50" }} />
+                    <FaBatteryThreeQuarters style={{ color: "#4caf50" }} />
                 </div>
                 <div className="info">
                     <h3>{lotes1Anio}</h3>
                     <p>Vencen en 1 año</p>
+                    <small
+                        style={{
+                            fontSize: "11px",
+                            color: "#6c757d",
+                            fontStyle: "italic",
+                        }}
+                    >
+                        (181-365 días para vencer)
+                    </small>
                 </div>
             </div>
-            <div className="resumen-card pre-anio">
+            <div
+                className={`resumen-card pre-anio ${
+                    lotesPreAnio > 0 ? "active" : ""
+                }`}
+            >
                 <div className="icon">
-                    <FaClock style={{ color: "#757575" }} />
+                    <FaBatteryFull style={{ color: "#757575" }} />
                 </div>
                 <div className="info">
                     <h3>{lotesPreAnio}</h3>
                     <p>Poco más de un año</p>
+                    <small
+                        style={{
+                            fontSize: "11px",
+                            color: "#6c757d",
+                            fontStyle: "italic",
+                        }}
+                    >
+                        (más de 365 días para vencer)
+                    </small>
                 </div>
             </div>
         </div>

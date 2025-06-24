@@ -1,4 +1,4 @@
-import { renderHook, act } from "@testing-library/react";
+import { renderHook } from "@testing-library/react";
 import { useAuth } from "../context/AuthContext";
 
 // Mock para el hook useInventory (debe estar antes de cualquier import)
