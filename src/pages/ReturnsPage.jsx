@@ -1,13 +1,10 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { returnsService } from "../services/returnsService";
-import { salesService } from "../services/salesService";
 import { useAuth } from "../context/AuthContext";
-import { useProducts } from "../context/ProductsContext";
 import { FaHistory, FaUndo, FaFileInvoiceDollar } from "react-icons/fa";
 
 const ReturnsPage = () => {
     const { authToken } = useAuth();
-    const { updateStockAfterSale } = useProducts();
     
     // Search and selection states
     const [searchTerm, setSearchTerm] = useState("");
@@ -91,22 +88,35 @@ const ReturnsPage = () => {
 
     // Select sale for return
     const handleSelectSale = useCallback(async (sale) => {
+        // Reset previous return state before fetching new data
+        setReturnItems([]);
+        setReturnReason("");
+        setReturnNotes("");
+        setSuccess(null);
+        setError(null);
+
         setSelectedSale(sale);
         setIsLoadingSale(true);
-        setError(null);
         
         try {
-            // Fetch sale details and its return history concurrently
-            const [saleDetails, returnHistory] = await Promise.all([
+            // Fetch sale details and a list of its associated returns
+            const [saleDetails, returnHistoryList] = await Promise.all([
                 returnsService.getSaleForReturn(sale.id, authToken),
                 returnsService.getReturnHistory({ original_sale: sale.id }, authToken)
             ]);
+
+            // Now, fetch the full details for each return to get the items
+            const detailedReturns = await Promise.all(
+                (returnHistoryList.results || []).map(ret => 
+                    returnsService.getReturnDetails(ret.id, authToken)
+                )
+            );
             
             setSaleDetails(saleDetails);
 
-            // Create a map of returned quantities for each sale_item_id
+            // Create a map of returned quantities using the detailed returns
             const returnedQuantitiesMap = {};
-            (returnHistory.results || []).forEach(ret => {
+            detailedReturns.forEach(ret => {
                 (ret.items || []).forEach(returnItem => {
                     const saleItemId = returnItem.sale_item;
                     if (saleItemId) {
@@ -168,72 +178,41 @@ const ReturnsPage = () => {
         
         setIsProcessingReturn(true);
         setError(null);
+        setSuccess(null);
         
         try {
             const returnData = {
-                original_sale_id: selectedSale.id,
-                customer_id: selectedSale.customer,
-                location_id: selectedSale.location,
+                original_sale: selectedSale.id,
+                location: selectedSale.location,
                 reason: returnReason,
                 notes: returnNotes,
                 items: itemsToReturn.map(item => ({
-                    sale_item_id: item.sale_item_id,
-                    product_id: item.product,
-                    quantity: item.return_quantity,
+                    sale_item: item.id,
+                    product: item.product,
+                    quantity_returned: item.return_quantity,
                     unit_price: item.unit_price
                 }))
             };
             
-            console.log("Return data being sent:", returnData);
-            console.log("Selected sale:", selectedSale);
-            console.log("Return items:", itemsToReturn);
-            
             const result = await returnsService.createReturn(returnData, authToken);
             
-            setSuccess(`Devolución #${result.id} creada. Actualizando venta original...`);
+            setSuccess(`Devolución #${result.id} creada exitosamente. El inventario ha sido actualizado.`);
 
-            // 1. Update original sale items to trigger backend recalculation
-            try {
-                const updatePromises = itemsToReturn.map(item => {
-                    const newQuantity = item.original_quantity - item.return_quantity;
-                    if (newQuantity > 0) {
-                        return salesService.updateSaleItem(item.sale_item_id, { quantity: newQuantity }, authToken);
-                    } else {
-                        return salesService.deleteSaleItem(item.sale_item_id, authToken);
-                    }
-                });
-                
-                await Promise.all(updatePromises);
-                setSuccess(`Devolución #${result.id} procesada y Venta #${selectedSale.id} actualizada.`);
+            // Forzar la recarga de datos para reflejar los cambios
+            await loadAllSales(); // Recarga la lista de ventas de la izquierda (para el total)
+            await handleSelectSale(selectedSale); // Recarga los detalles de la venta de la derecha
 
-            } catch (updateError) {
-                console.error("Failed to update original sale items:", updateError);
-                setError(`Devolución creada, pero falló la actualización de la venta original: ${updateError.message}`);
-            }
-
-            // 2. Refresh sales list to get updated totals from backend
-            await loadAllSales();
-
-            // 3. Update stock in UI
-            itemsToReturn.forEach(item => {
-                updateStockAfterSale(item.product, item.return_quantity);
-            });
-            
-            // 4. Reset form
-            setSelectedSale(null);
-            setSaleDetails(null);
-            setReturnItems([]);
+            // Limpiar solo los campos del formulario de devolución
             setReturnReason("");
             setReturnNotes("");
-            setSearchTerm("");
             
         } catch (error) {
             console.error("Error processing return:", error);
-            setError("Error al procesar la devolución: " + error.message);
+            setError(`Error al procesar la devolución: ${error.message}`);
         } finally {
             setIsProcessingReturn(false);
         }
-    }, [selectedSale, returnItems, returnReason, returnNotes, authToken, updateStockAfterSale, loadAllSales]);
+    }, [selectedSale, returnItems, returnReason, returnNotes, authToken, loadAllSales, handleSelectSale]);
 
     // Load return history
     const loadReturnHistory = useCallback(async () => {

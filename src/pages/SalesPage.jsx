@@ -257,11 +257,12 @@ const SalesPage = () => {
             
             saleItems.forEach(item => {
                 // Si el producto tiene lotes seleccionados
-                if (item.selectedBatches && item.selectedBatches.length > 0) {
-                    item.selectedBatches.forEach(batch => {
+                if (item.batches && item.batches.length > 0) {
+                    item.batches.forEach(batch => {
+                        // El backend espera 'batch' con el id del lote.
                         mappedItems.push({
                             product: item.product_id,
-                            batch: batch.batch_id,
+                            batch: batch.batch_id, // Asegurarse que es el ID del lote
                             quantity: batch.quantity,
                             unit_price: item.unit_price.toString()
                         });
