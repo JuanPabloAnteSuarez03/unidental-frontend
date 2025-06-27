@@ -77,7 +77,7 @@ const SalesPage = () => {
                     item => item.product_id === product.id && 
                            !item.batches && 
                            !item.components
-                );
+            );
             }
 
             if (existingIndex !== -1) {
