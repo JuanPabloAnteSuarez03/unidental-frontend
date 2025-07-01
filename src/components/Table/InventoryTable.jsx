@@ -61,15 +61,14 @@ const InventoryTable = ({
                 textAlign: "right",
             },
             // Definición de anchos específicos para columnas
-            skuColumn: { width: "10%" },
-            nameColumn: { width: "18%" },
-            brandColumn: { width: "10%" },
-            categoryColumn: { width: "12%" },
-            unitColumn: { width: "7%" },
-            stockColumn: { width: "6%" },
-            priceColumn: { width: "8%" },
-            marginColumn: { width: "8%" },
-            supplierColumn: { width: "13%" },
+            skuColumn: { width: "12%" },
+            nameColumn: { width: "25%" },
+            categoryColumn: { width: "15%" },
+            unitColumn: { width: "10%" },
+            stockColumn: { width: "12%" },
+            expiryColumn: { width: "15%" },
+            lastSaleColumn: { width: "15%" },
+            descriptionColumn: { width: "20%" },
             // ✨ Loading completo para productos iniciales
             fullLoadingContainer: {
                 textAlign: "center",
@@ -204,15 +203,6 @@ const InventoryTable = ({
                                 style={{
                                     ...styles.header,
                                     ...styles.headerLeft,
-                                    ...styles.brandColumn,
-                                }}
-                            >
-                                Marca
-                            </th>
-                            <th
-                                style={{
-                                    ...styles.header,
-                                    ...styles.headerLeft,
                                     ...styles.categoryColumn,
                                 }}
                             >
@@ -234,43 +224,34 @@ const InventoryTable = ({
                                     ...styles.stockColumn,
                                 }}
                             >
-                                Stock
-                            </th>
-                            <th
-                                style={{
-                                    ...styles.header,
-                                    ...styles.headerRight,
-                                    ...styles.priceColumn,
-                                }}
-                            >
-                                P. Compra
-                            </th>
-                            <th
-                                style={{
-                                    ...styles.header,
-                                    ...styles.headerRight,
-                                    ...styles.priceColumn,
-                                }}
-                            >
-                                P. Venta
-                            </th>
-                            <th
-                                style={{
-                                    ...styles.header,
-                                    ...styles.headerCenter,
-                                    ...styles.marginColumn,
-                                }}
-                            >
-                                Margen
+                                Stock Total
                             </th>
                             <th
                                 style={{
                                     ...styles.header,
                                     ...styles.headerLeft,
-                                    ...styles.supplierColumn,
+                                    ...styles.expiryColumn,
                                 }}
                             >
-                                Proveedor
+                                Próximo Vencimiento
+                            </th>
+                            <th
+                                style={{
+                                    ...styles.header,
+                                    ...styles.headerLeft,
+                                    ...styles.lastSaleColumn,
+                                }}
+                            >
+                                Última Venta
+                            </th>
+                            <th
+                                style={{
+                                    ...styles.header,
+                                    ...styles.headerLeft,
+                                    ...styles.descriptionColumn,
+                                }}
+                            >
+                                Descripción
                             </th>
                         </tr>
                     </thead>

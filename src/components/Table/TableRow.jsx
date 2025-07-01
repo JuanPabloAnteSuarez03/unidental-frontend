@@ -1,280 +1,179 @@
 // src/components/Table/TableRow.jsx
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import StockCell from "./StockCell";
+import { useInventoryWithBatches } from "../../hooks/useInventoryWithBatches";
+import { useAuth } from "../../context/AuthContext";
+import inventoryService from "../../services/inventoryService";
 
 const TableRow = ({ product, index }) => {
-    // Extraer información del producto y calcular valores derivados
-    const { margen, stockBajo, stockCritico, styles, extractedInfo } =
-        useMemo(() => {
-            // Calcula el margen basado en los campos del API
-            // Asumimos que el precio de compra viene de PurchaseOption.purchase_price
-            const margenValue =
-                product.purchase_price && product.sale_price
-                    ? ((product.sale_price - product.purchase_price) /
-                          product.purchase_price) *
-                      100
-                    : 0;
+    const { authToken } = useAuth();
 
-            // Extraer información de proveedor desde description
-            let providerName = "";
+    // Hook para datos de lotes
+    const { formatExpiryDate, getExpiryColor, isBatchesLoading } =
+        useInventoryWithBatches();
 
-            // Parsear description para obtener proveedor
-            if (product.description) {
-                // Extraer nombre del proveedor
-                const providerMatch = product.description.match(
-                    /Proveedor:\s*([^.]+?)(?=\.|$|\s*Stock)/i
+    // Estado para el precio de la última venta
+    const [lastSalePrice, setLastSalePrice] = useState(null);
+    const [isLoadingLastSale, setIsLoadingLastSale] = useState(false);
+
+    // Cargar precio de última venta
+    useEffect(() => {
+        const loadLastSalePrice = async () => {
+            if (!product?.id || !authToken) return;
+
+            setIsLoadingLastSale(true);
+            try {
+                const priceData = await inventoryService.getLastSalePrice(
+                    product.id,
+                    authToken
                 );
-                if (providerMatch && providerMatch[1]) {
-                    providerName = providerMatch[1].trim();
-                }
+                setLastSalePrice(priceData);
+            } catch (error) {
+                console.error("Error loading last sale price:", error);
+                setLastSalePrice({ price: 0, source: "error" });
+            } finally {
+                setIsLoadingLastSale(false);
             }
+        };
 
-            // Determinar niveles de stock basados en el stock proporcionado por la API
-            // Manejar estados de carga de stock
-            const isStockLoading = product.stockLoading === true;
-            const rawStock =
-                product.stock !== undefined && product.stock !== null
-                    ? product.stock
-                    : 0;
-            const totalStock =
-                typeof rawStock === "number"
-                    ? rawStock
-                    : parseInt(rawStock, 10) || 0;
+        loadLastSalePrice();
+    }, [product?.id, authToken]);
 
-            console.log(
-                `🔍 Product ${product.id}: stock=${product.stock}, stockLoading=${product.stockLoading}, totalStock=${totalStock}`
-            );
+    // Extraer información del producto y calcular valores derivados
+    const { styles } = useMemo(() => {
+        // Estilos computados basados en los datos
+        const computedStyles = {
+            row: {
+                backgroundColor: index % 2 === 0 ? "#fff" : "#f8f9fa",
+                transition: "all 0.2s ease",
+            },
+            cell: {
+                padding: "16px 12px",
+                borderBottom: "1px solid #e9ecef",
+                fontSize: "14px",
+            },
+            codeCell: {
+                fontFamily: "monospace",
+                fontWeight: "500",
+                color: "#6c757d",
+            },
+            nameCell: {
+                fontWeight: "600",
+                color: "#2c3e50",
+            },
+            categoryBadge: {
+                backgroundColor: "#e3f2fd",
+                color: "#1565c0",
+                padding: "4px 8px",
+                borderRadius: "12px",
+                fontSize: "12px",
+                fontWeight: "500",
+            },
+            unitCell: {
+                textAlign: "center",
+                color: "#495057",
+                fontSize: "14px",
+                fontWeight: "500",
+            },
+            stockCell: {
+                textAlign: "center",
+                fontWeight: "600",
+                position: "relative",
+            },
+            expiryCell: {
+                textAlign: "left",
+                fontSize: "13px",
+            },
+            expiryBadge: {
+                display: "inline-block",
+                padding: "4px 8px",
+                borderRadius: "12px",
+                fontSize: "12px",
+                fontWeight: "500",
+                textAlign: "center",
+                minWidth: "100px",
+            },
+            priceCell: {
+                textAlign: "left",
+                fontFamily: "monospace",
+                fontWeight: "600",
+                color: "#28a745",
+            },
+            loadingCell: {
+                color: "#6c757d",
+                fontStyle: "italic",
+            },
+            descriptionCell: {
+                fontSize: "13px",
+                color: "#6c757d",
+                maxWidth: "250px",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+            },
+        };
 
-            // Niveles de stock configurables
-            const NIVEL_STOCK_BAJO = 10;
-            const NIVEL_STOCK_CRITICO = 5;
+        return {
+            styles: computedStyles,
+        };
+    }, [product, index]);
 
-            const isStockBajo =
-                !isStockLoading && totalStock < NIVEL_STOCK_BAJO;
-            const isStockCritico =
-                !isStockLoading && totalStock < NIVEL_STOCK_CRITICO;
-
-            // Estilos computados basados en los datos
-            const computedStyles = {
-                row: {
-                    backgroundColor: index % 2 === 0 ? "#fff" : "#f8f9fa",
-                    transition: "all 0.2s ease",
-                },
-                cell: {
-                    padding: "16px 12px",
-                    borderBottom: "1px solid #e9ecef",
-                    fontSize: "14px",
-                },
-                codeCell: {
-                    fontFamily: "monospace",
-                    fontWeight: "500",
-                    color: "#6c757d",
-                },
-                nameCell: {
-                    fontWeight: "600",
-                    color: "#2c3e50",
-                },
-                brandCell: {
-                    color: "#495057",
-                    fontWeight: "500",
-                },
-                categoryBadge: {
-                    backgroundColor: "#e3f2fd",
-                    color: "#1565c0",
-                    padding: "4px 8px",
-                    borderRadius: "12px",
-                    fontSize: "12px",
-                    fontWeight: "500",
-                },
-                unitCell: {
-                    textAlign: "center",
-                    color: "#495057",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                },
-                stockCell: {
-                    textAlign: "center",
-                    fontWeight: "600",
-                    position: "relative",
-                },
-                stockIndicator: {
-                    color: isStockCritico
-                        ? "#dc3545"
-                        : isStockBajo
-                        ? "#fd7e14"
-                        : "#28a745",
-                    backgroundColor: isStockCritico
-                        ? "#f8d7da"
-                        : isStockBajo
-                        ? "#fff3cd"
-                        : "#d4edda",
-                    padding: "4px 8px",
-                    borderRadius: "12px",
-                    fontSize: "14px",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    minWidth: "40px",
-                    transition: "all 0.2s ease",
-                },
-                stockIndicatorHover: {
-                    transform: "scale(1.05)",
-                    boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                },
-                stockLoadingSkeleton: {
-                    backgroundColor: "#f0f0f0",
-                    padding: "4px 8px",
-                    borderRadius: "12px",
-                    fontSize: "14px",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    minWidth: "40px",
-                    color: "#999",
-                    position: "relative",
-                    overflow: "hidden",
-                },
-                skeletonShimmer: {
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    background:
-                        "linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent)",
-                    animation: "shimmer 1.5s infinite",
-                },
-                stockDetailBadge: {
-                    fontSize: "11px",
-                    padding: "2px 5px",
-                    borderRadius: "3px",
-                    backgroundColor: "#f0f0f0",
-                    color: "#555",
-                    margin: "2px",
-                    display: "inline-block",
-                },
-                priceCell: {
-                    textAlign: "right",
-                    fontFamily: "monospace",
-                },
-                salePriceCell: {
-                    fontWeight: "600",
-                },
-                marginCell: {
-                    textAlign: "center",
-                    fontWeight: "600",
-                },
-                marginValue: {
-                    color:
-                        margenValue > 50
-                            ? "#28a745"
-                            : margenValue > 25
-                            ? "#fd7e14"
-                            : "#dc3545",
-                },
-                supplierCell: {
-                    fontSize: "14px",
-                    color: "#6c757d",
-                },
-                supplierBadge: {
-                    display: "inline-block",
-                    backgroundColor: "#f0f0f0",
-                    color: "#555",
-                    padding: "3px 8px",
-                    borderRadius: "12px",
-                    fontSize: "13px",
-                    fontWeight: "500",
-                },
-                barcodeBadge: {
-                    display: "inline-block",
-                    fontFamily: "monospace",
-                    backgroundColor: "#f8f9fa",
-                    color: "#495057",
-                    padding: "2px 6px",
-                    borderRadius: "4px",
-                    fontSize: "12px",
-                    marginLeft: "5px",
-                },
-            };
-
-            return {
-                margen: margenValue,
-                stockBajo: isStockBajo,
-                stockCritico: isStockCritico,
-                isStockLoading,
-                styles: computedStyles,
-                extractedInfo: {
-                    proveedor:
-                        providerName ||
-                        product.supplier_name ||
-                        (product.supplier &&
-                        typeof product.supplier === "object"
-                            ? product.supplier.name
-                            : product.supplier) ||
-                        "",
-                    totalStock,
-                },
-            };
-        }, [product, index]);
-
-    // Si hay información del proveedor, mostrarla (del campo supplier_name o del description)
-    const supplierInfo =
-        extractedInfo.proveedor ||
-        (product.supplier
-            ? typeof product.supplier === "object"
-                ? product.supplier.name
-                : product.supplier
-            : "");
-
-    // Determinar el mensaje para el tooltip del stock
-    const getStockTooltip = () => {
-        if (extractedInfo.isStockLoading) {
-            return "Cargando información de stock...";
-        }
-        if (stockCritico) {
-            return `Stock crítico (${extractedInfo.totalStock}): Se requiere reposición urgente (Menos de 5 unidades).`;
-        } else if (stockBajo) {
-            return `Stock bajo (${extractedInfo.totalStock}): Considerar reposición próximamente (Menos de 10 unidades).`;
-        }
-        return `Stock disponible: ${extractedInfo.totalStock} unidades.`;
-    };
-
-    // Mostrar stock total con mejores indicadores visuales y skeleton loading
-    const renderStockInfo = () => {
-        // Skeleton loader mientras se carga el stock
-        if (extractedInfo.isStockLoading) {
-            return (
-                <>
-                    <style>
-                        {`
-                            @keyframes shimmer {
-                                0% { transform: translateX(-100%); }
-                                100% { transform: translateX(100%); }
-                            }
-                        `}
-                    </style>
-                    <span
-                        style={styles.stockLoadingSkeleton}
-                        title={getStockTooltip()}
-                    >
-                        <div style={styles.skeletonShimmer}></div>
-                        ---
-                    </span>
-                </>
-            );
+    // Renderizar información de vencimiento
+    const renderExpiryInfo = () => {
+        if (isBatchesLoading) {
+            return <span style={styles.loadingCell}>Cargando...</span>;
         }
 
-        const stockLabel = stockCritico ? "CRÍTICO" : stockBajo ? "BAJO" : "OK";
+        const expiryText = formatExpiryDate(product.id);
+
+        // Si no hay información de vencimiento, dejar en blanco
+        if (!expiryText || expiryText === "N/A") {
+            return <span style={{ color: "#6c757d" }}>-</span>;
+        }
+
+        const expiryColor = getExpiryColor(product.id);
 
         return (
             <span
                 style={{
-                    ...styles.stockIndicator,
-                    position: "relative",
+                    ...styles.expiryBadge,
+                    backgroundColor: expiryColor + "20",
+                    color: expiryColor,
+                    border: `1px solid ${expiryColor}`,
                 }}
-                title={getStockTooltip()}
+                title={`Próximo vencimiento del producto ${product.name}`}
             >
-                {extractedInfo.totalStock} {stockCritico && "⚠️"}
+                {expiryText}
+            </span>
+        );
+    };
+
+    // Renderizar precio de última venta
+    const renderLastSalePrice = () => {
+        if (isLoadingLastSale) {
+            return <span style={styles.loadingCell}>Cargando...</span>;
+        }
+
+        if (
+            !lastSalePrice ||
+            !lastSalePrice.price ||
+            lastSalePrice.price === 0
+        ) {
+            return <span style={{ color: "#6c757d" }}>Sin ventas</span>;
+        }
+
+        return (
+            <span
+                style={styles.priceCell}
+                title={`Última venta: ${
+                    lastSalePrice.date
+                        ? new Date(lastSalePrice.date).toLocaleDateString(
+                              "es-CO"
+                          )
+                        : "Fecha no disponible"
+                }`}
+            >
+                ${Number(lastSalePrice.price).toLocaleString("es-CO")}
             </span>
         );
     };
@@ -286,14 +185,6 @@ const TableRow = ({ product, index }) => {
             </td>
             <td style={{ ...styles.cell, ...styles.nameCell }}>
                 {product.name}
-                {product.barcode && (
-                    <span style={styles.barcodeBadge} title="Código de barras">
-                        {product.barcode}
-                    </span>
-                )}
-            </td>
-            <td style={{ ...styles.cell, ...styles.brandCell }}>
-                {product.brand}
             </td>
             <td style={styles.cell}>
                 <span style={styles.categoryBadge}>
@@ -309,37 +200,20 @@ const TableRow = ({ product, index }) => {
                     "N/A"}
             </td>
             <td style={{ ...styles.cell, ...styles.stockCell }}>
-                {/* Mostrar el StockCell con datos reales del producto */}
+                {/* StockCell con funcionalidad de sedes */}
                 <StockCell product={product} />
             </td>
+            <td style={{ ...styles.cell, ...styles.expiryCell }}>
+                {renderExpiryInfo()}
+            </td>
             <td style={{ ...styles.cell, ...styles.priceCell }}>
-                ${Number(product.purchase_price || 0).toLocaleString("es-CO")}
+                {renderLastSalePrice()}
             </td>
             <td
-                style={{
-                    ...styles.cell,
-                    ...styles.priceCell,
-                    ...styles.salePriceCell,
-                }}
+                style={{ ...styles.cell, ...styles.descriptionCell }}
+                title={product.description || "Sin descripción"}
             >
-                ${Number(product.sale_price || 0).toLocaleString("es-CO")}
-            </td>
-            <td style={{ ...styles.cell, ...styles.marginCell }}>
-                <span style={styles.marginValue}>
-                    {margen > 0 ? `${margen.toFixed(1)}%` : "N/A"}
-                </span>
-            </td>
-            <td style={{ ...styles.cell, ...styles.supplierCell }}>
-                {supplierInfo ? (
-                    <span
-                        style={styles.supplierBadge}
-                        title={`Proveedor: ${supplierInfo}`}
-                    >
-                        {supplierInfo}
-                    </span>
-                ) : (
-                    "No especificado"
-                )}
+                {product.description || "Sin descripción"}
             </td>
         </tr>
     );

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../../context/AuthContext";
 import inventoryService from "../../services/inventoryService";
 import transfersService from "../../services/transfersService";
+import batchesService from "../../services/batchesService";
+import advancedInventoryService from "../../services/advancedInventoryService";
 import ProductSearchSelector from "../Common/ProductSearchSelector";
 
 const RequestTransferModalV2 = ({
@@ -22,6 +24,14 @@ const RequestTransferModalV2 = ({
     const [availableStock, setAvailableStock] = useState(null);
     const [isLoadingStock, setIsLoadingStock] = useState(false);
     const [stockError, setStockError] = useState(null);
+
+    // 🆕 Estados para control de lotes
+    const [availableBatches, setAvailableBatches] = useState([]);
+    const [isLoadingBatches, setIsLoadingBatches] = useState(false);
+    const [batchesError, setBatchesError] = useState(null);
+    const [selectedBatches, setSelectedBatches] = useState([]);
+    const [productRequiresBatches, setProductRequiresBatches] = useState(false);
+    const [batchSelectionMode, setBatchSelectionMode] = useState("manual"); // 'manual' o 'automatic'
 
     // Estado para prevenir múltiples envíos
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -66,6 +76,11 @@ const RequestTransferModalV2 = ({
             setSelectedProduct(null);
             setAvailableStock(null);
             setStockError(null);
+            // 🆕 Limpiar estado de lotes
+            setAvailableBatches([]);
+            setSelectedBatches([]);
+            setBatchesError(null);
+            setProductRequiresBatches(false);
         }
     }, [isOpen, authToken, loadUbicaciones]);
 
@@ -105,10 +120,137 @@ const RequestTransferModalV2 = ({
         }
     }, [selectedProduct, formData.sedeOrigen, ubicaciones, authToken]);
 
-    // Cargar stock cuando cambien las dependencias
+    // 🆕 Función para cargar lotes disponibles en origen
+    const loadAvailableBatches = useCallback(async () => {
+        if (!selectedProduct || !formData.sedeOrigen || !authToken) {
+            setAvailableBatches([]);
+            setSelectedBatches([]);
+            return;
+        }
+
+        // Verificar si el producto requiere control de lotes
+        const requiresBatches =
+            batchesService.requiresBatchControl(selectedProduct);
+        setProductRequiresBatches(requiresBatches);
+
+        if (!requiresBatches) {
+            setAvailableBatches([]);
+            setSelectedBatches([]);
+            return;
+        }
+
+        // Buscar la ubicación origen por nombre
+        const ubicacionOrigen = ubicaciones.find(
+            (ub) => ub.name === formData.sedeOrigen
+        );
+
+        if (!ubicacionOrigen) {
+            setAvailableBatches([]);
+            setSelectedBatches([]);
+            return;
+        }
+
+        setIsLoadingBatches(true);
+        setBatchesError(null);
+
+        try {
+            const batches =
+                await advancedInventoryService.getAvailableBatchesFIFO(
+                    selectedProduct.id,
+                    ubicacionOrigen.id,
+                    authToken
+                );
+
+            setAvailableBatches(batches);
+
+            // Inicializar lotes seleccionados con cantidad 0 (igual que SendTransferModalV2)
+            setSelectedBatches(
+                batches.map((batch) => ({
+                    ...batch,
+                    selectedQuantity: 0,
+                    isPartial: false, // Para indicar si se solicita completo o parcial
+                }))
+            );
+        } catch (error) {
+            console.error("Error al cargar lotes:", error);
+            setBatchesError("Error al cargar lotes disponibles");
+            setAvailableBatches([]);
+            setSelectedBatches([]);
+        } finally {
+            setIsLoadingBatches(false);
+        }
+    }, [selectedProduct, formData.sedeOrigen, ubicaciones, authToken]);
+
+    // 🆕 Función para manejar cambios en la cantidad de lotes seleccionados (como SendTransferModalV2)
+    const handleBatchQuantityChange = (batchIndex, quantity) => {
+        const updatedBatches = [...selectedBatches];
+        const batch = updatedBatches[batchIndex];
+        const newQuantity = parseInt(quantity) || 0;
+
+        // No permitir cantidad mayor al stock disponible
+        const finalQuantity = Math.min(newQuantity, batch.quantity);
+
+        updatedBatches[batchIndex] = {
+            ...batch,
+            selectedQuantity: finalQuantity,
+            isPartial: finalQuantity > 0 && finalQuantity < batch.quantity,
+        };
+
+        setSelectedBatches(updatedBatches);
+    };
+
+    // 🆕 Función para seleccionar lote completo (como SendTransferModalV2)
+    const handleSelectCompleteBatch = (batchIndex) => {
+        const updatedBatches = [...selectedBatches];
+        const batch = updatedBatches[batchIndex];
+
+        updatedBatches[batchIndex] = {
+            ...batch,
+            selectedQuantity: batch.quantity,
+            isPartial: false,
+        };
+
+        setSelectedBatches(updatedBatches);
+    };
+
+    // 🆕 Calcular cantidad total seleccionada de lotes
+    const getTotalSelectedQuantity = () => {
+        return selectedBatches.reduce(
+            (total, batch) => total + batch.selectedQuantity,
+            0
+        );
+    };
+
+    // Cargar stock y lotes cuando cambien las dependencias
     useEffect(() => {
         loadAvailableStock();
-    }, [loadAvailableStock]);
+        loadAvailableBatches();
+    }, [loadAvailableStock, loadAvailableBatches]);
+
+    // 🆕 Sincronizar cantidad con lotes seleccionados
+    useEffect(() => {
+        if (productRequiresBatches && selectedBatches.length > 0) {
+            const totalQuantity = getTotalSelectedQuantity();
+            if (
+                totalQuantity > 0 &&
+                totalQuantity !== parseInt(formData.cantidad || 0)
+            ) {
+                // Actualizar la cantidad en el formulario automáticamente
+                handleInputChange({
+                    target: {
+                        name: "cantidad",
+                        value: totalQuantity.toString(),
+                    },
+                });
+            }
+        }
+    }, [
+        selectedBatches,
+        productRequiresBatches,
+        formData.cantidad,
+        getTotalSelectedQuantity,
+        handleInputChange,
+    ]);
 
     // Manejar selección de producto
     const handleProductSelected = (product) => {
@@ -161,6 +303,34 @@ const RequestTransferModalV2 = ({
                 setIsSubmitting(false);
                 return;
             }
+
+            // 🆕 Validaciones específicas para productos que requieren control de lotes
+            if (productRequiresBatches) {
+                // Filtrar lotes que tienen cantidad seleccionada > 0
+                const batchesWithQuantity = selectedBatches.filter(
+                    (batch) => batch.selectedQuantity > 0
+                );
+
+                if (batchesWithQuantity.length === 0) {
+                    alert(
+                        "Este producto requiere control de lotes. Por favor seleccione al menos un lote con cantidad mayor a 0."
+                    );
+                    setIsSubmitting(false);
+                    return;
+                }
+
+                const totalBatchQuantity = getTotalSelectedQuantity();
+                const requestedQuantity = parseInt(formData.cantidad);
+
+                if (totalBatchQuantity !== requestedQuantity) {
+                    alert(
+                        `La cantidad total de lotes seleccionados (${totalBatchQuantity}) debe coincidir con la cantidad solicitada (${requestedQuantity})`
+                    );
+                    setIsSubmitting(false);
+                    return;
+                }
+            }
+
             // Crear transferencia usando el nuevo servicio
             const transferData = {
                 selectedProduct: selectedProduct,
@@ -172,6 +342,20 @@ const RequestTransferModalV2 = ({
                 urgencia: formData.urgencia,
                 tipoTransferencia: "pull",
                 fechaEntrega: formData.fechaEntrega,
+                // 🆕 Incluir información de lotes si aplica
+                requiresBatchControl: productRequiresBatches,
+                selectedBatches: productRequiresBatches
+                    ? selectedBatches
+                          .filter((batch) => batch.selectedQuantity > 0)
+                          .map((batch) => ({
+                              batch_id: batch.batch_id,
+                              batch_number: batch.batch_number,
+                              selectedQuantity: batch.selectedQuantity,
+                              isPartial: batch.isPartial,
+                              availableStock: batch.quantity,
+                              expiry_date: batch.expiry_date,
+                          }))
+                    : [],
             };
 
             // Usar el servicio de transferencias (las solicitudes no crean movimientos de inventario inmediatamente)
@@ -180,9 +364,25 @@ const RequestTransferModalV2 = ({
                 authToken
             );
 
-            alert(
-                `Solicitud de transferencia enviada exitosamente!\nID: ${nuevaTransferencia.id}\nProducto: ${selectedProduct.name}\nCantidad: ${formData.cantidad}\nDesde: ${formData.sedeOrigen} → Hacia: ${formData.sedeDestino}\nLa solicitud se guardó correctamente y persistirá entre sesiones.`
-            );
+            // Mensaje de confirmación mejorado
+            let confirmationMessage = `Solicitud de transferencia enviada exitosamente!\nID: ${nuevaTransferencia.id}\nProducto: ${selectedProduct.name}\nCantidad: ${formData.cantidad}\nDesde: ${formData.sedeOrigen} → Hacia: ${formData.sedeDestino}`;
+
+            if (productRequiresBatches && selectedBatches.length > 0) {
+                const batchesWithQuantity = selectedBatches.filter(
+                    (batch) => batch.selectedQuantity > 0
+                );
+
+                if (batchesWithQuantity.length > 0) {
+                    confirmationMessage += `\n\nLotes seleccionados:`;
+                    batchesWithQuantity.forEach((batch) => {
+                        confirmationMessage += `\n• ${batch.batch_number}: ${batch.selectedQuantity} unidades`;
+                    });
+                }
+            }
+
+            confirmationMessage += `\n\nLa solicitud se guardó correctamente y persistirá entre sesiones.`;
+
+            alert(confirmationMessage);
 
             // Llamar callbacks para actualizar la UI
             if (onTransferCreated) onTransferCreated();
@@ -493,6 +693,390 @@ const RequestTransferModalV2 = ({
                                 </select>
                             </div>
                         </div>
+
+                        {/* 🆕 Batch Selection Section - Solo si el producto requiere control de lotes */}
+                        {selectedProduct &&
+                            formData.sedeOrigen &&
+                            productRequiresBatches && (
+                                <div style={{ marginBottom: "24px" }}>
+                                    <div
+                                        style={{
+                                            backgroundColor: "#fff8f0",
+                                            borderRadius: "12px",
+                                            padding: "20px",
+                                            border: "2px solid #fed7aa",
+                                        }}
+                                    >
+                                        <h3
+                                            style={{
+                                                fontSize: "16px",
+                                                fontWeight: "600",
+                                                color: "#c2410c",
+                                                margin: "0 0 16px 0",
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: "8px",
+                                            }}
+                                        >
+                                            📦 Selección de Lotes
+                                        </h3>
+
+                                        {isLoadingBatches ? (
+                                            <div
+                                                style={{
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    gap: "12px",
+                                                    padding: "16px",
+                                                    backgroundColor: "#f3f4f6",
+                                                    borderRadius: "8px",
+                                                    color: "#6b7280",
+                                                }}
+                                            >
+                                                <span>⏳</span>
+                                                <span>
+                                                    Cargando lotes
+                                                    disponibles...
+                                                </span>
+                                            </div>
+                                        ) : batchesError ? (
+                                            <div
+                                                style={{
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    gap: "12px",
+                                                    padding: "16px",
+                                                    backgroundColor: "#fee2e2",
+                                                    borderRadius: "8px",
+                                                    color: "#dc2626",
+                                                }}
+                                            >
+                                                <span>⚠️</span>
+                                                <span>{batchesError}</span>
+                                            </div>
+                                        ) : availableBatches.length === 0 ? (
+                                            <div
+                                                style={{
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    gap: "12px",
+                                                    padding: "16px",
+                                                    backgroundColor: "#fef3c7",
+                                                    borderRadius: "8px",
+                                                    color: "#d97706",
+                                                }}
+                                            >
+                                                <span>📦</span>
+                                                <span>
+                                                    No hay lotes disponibles en{" "}
+                                                    {formData.sedeOrigen}
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <div>
+                                                <div
+                                                    style={{
+                                                        display: "flex",
+                                                        justifyContent:
+                                                            "space-between",
+                                                        alignItems: "center",
+                                                        marginBottom: "16px",
+                                                    }}
+                                                >
+                                                    <span
+                                                        style={{
+                                                            fontSize: "14px",
+                                                            color: "#6b7280",
+                                                        }}
+                                                    >
+                                                        {
+                                                            availableBatches.length
+                                                        }{" "}
+                                                        lote(s) disponible(s)
+                                                    </span>
+                                                    {selectedBatches.length >
+                                                        0 && (
+                                                        <span
+                                                            style={{
+                                                                fontSize:
+                                                                    "14px",
+                                                                fontWeight:
+                                                                    "600",
+                                                                color: "#059669",
+                                                                backgroundColor:
+                                                                    "#d1fae5",
+                                                                padding:
+                                                                    "4px 8px",
+                                                                borderRadius:
+                                                                    "4px",
+                                                            }}
+                                                        >
+                                                            Total seleccionado:{" "}
+                                                            {getTotalSelectedQuantity()}{" "}
+                                                            unidades
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                <div
+                                                    style={{
+                                                        maxHeight: "300px",
+                                                        overflowY: "auto",
+                                                        border: "1px solid #e5e7eb",
+                                                        borderRadius: "8px",
+                                                    }}
+                                                >
+                                                    {availableBatches.map(
+                                                        (batch, index) => {
+                                                            const selectedBatch =
+                                                                selectedBatches[
+                                                                    index
+                                                                ];
+                                                            const expiryStatus =
+                                                                batchesService.getBatchExpiryStatus(
+                                                                    batch
+                                                                );
+
+                                                            return (
+                                                                <div
+                                                                    key={index}
+                                                                    style={{
+                                                                        padding:
+                                                                            "16px",
+                                                                        borderBottom:
+                                                                            index <
+                                                                            availableBatches.length -
+                                                                                1
+                                                                                ? "1px solid #e5e7eb"
+                                                                                : "none",
+                                                                        backgroundColor:
+                                                                            selectedBatch?.selectedQuantity >
+                                                                            0
+                                                                                ? "#f0f9ff"
+                                                                                : "#fff",
+                                                                    }}
+                                                                >
+                                                                    <div
+                                                                        style={{
+                                                                            display:
+                                                                                "flex",
+                                                                            justifyContent:
+                                                                                "space-between",
+                                                                            alignItems:
+                                                                                "flex-start",
+                                                                            marginBottom:
+                                                                                "12px",
+                                                                        }}
+                                                                    >
+                                                                        <div>
+                                                                            <div
+                                                                                style={{
+                                                                                    fontSize:
+                                                                                        "14px",
+                                                                                    fontWeight:
+                                                                                        "600",
+                                                                                    color: "#111827",
+                                                                                    marginBottom:
+                                                                                        "4px",
+                                                                                }}
+                                                                            >
+                                                                                📦{" "}
+                                                                                {
+                                                                                    batch.batch_number
+                                                                                }
+                                                                            </div>
+                                                                            <div
+                                                                                style={{
+                                                                                    fontSize:
+                                                                                        "12px",
+                                                                                    color: "#6b7280",
+                                                                                    marginBottom:
+                                                                                        "4px",
+                                                                                }}
+                                                                            >
+                                                                                📅{" "}
+                                                                                Vence:{" "}
+                                                                                {batch.expiry_date
+                                                                                    ? new Date(
+                                                                                          batch.expiry_date
+                                                                                      ).toLocaleDateString()
+                                                                                    : "Sin fecha"}
+                                                                            </div>
+                                                                            <div
+                                                                                style={{
+                                                                                    fontSize:
+                                                                                        "12px",
+                                                                                    color: "#059669",
+                                                                                    fontWeight:
+                                                                                        "500",
+                                                                                }}
+                                                                            >
+                                                                                📊{" "}
+                                                                                Stock:{" "}
+                                                                                {
+                                                                                    batch.quantity
+                                                                                }{" "}
+                                                                                unidades
+                                                                            </div>
+                                                                        </div>
+
+                                                                        <div
+                                                                            style={{
+                                                                                display:
+                                                                                    "flex",
+                                                                                alignItems:
+                                                                                    "center",
+                                                                                gap: "8px",
+                                                                            }}
+                                                                        >
+                                                                            <span
+                                                                                style={{
+                                                                                    ...expiryStatus.style,
+                                                                                    fontSize:
+                                                                                        "11px",
+                                                                                    padding:
+                                                                                        "4px 6px",
+                                                                                    borderRadius:
+                                                                                        "4px",
+                                                                                    fontWeight:
+                                                                                        "600",
+                                                                                }}
+                                                                            >
+                                                                                {
+                                                                                    expiryStatus.label
+                                                                                }
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* Controles de cantidad */}
+                                                                    <div
+                                                                        style={{
+                                                                            display:
+                                                                                "grid",
+                                                                            gridTemplateColumns:
+                                                                                "1fr auto auto",
+                                                                            gap: "12px",
+                                                                            alignItems:
+                                                                                "center",
+                                                                        }}
+                                                                    >
+                                                                        <div
+                                                                            style={{
+                                                                                display:
+                                                                                    "flex",
+                                                                                alignItems:
+                                                                                    "center",
+                                                                                gap: "8px",
+                                                                            }}
+                                                                        >
+                                                                            <span
+                                                                                style={{
+                                                                                    fontSize:
+                                                                                        "13px",
+                                                                                    color: "#374151",
+                                                                                    fontWeight:
+                                                                                        "500",
+                                                                                }}
+                                                                            >
+                                                                                Cantidad:
+                                                                            </span>
+                                                                            <input
+                                                                                type="number"
+                                                                                min="0"
+                                                                                max={
+                                                                                    batch.quantity
+                                                                                }
+                                                                                value={
+                                                                                    selectedBatch?.selectedQuantity ||
+                                                                                    0
+                                                                                }
+                                                                                onChange={(
+                                                                                    e
+                                                                                ) =>
+                                                                                    handleBatchQuantityChange(
+                                                                                        index,
+                                                                                        e
+                                                                                            .target
+                                                                                            .value
+                                                                                    )
+                                                                                }
+                                                                                style={{
+                                                                                    width: "80px",
+                                                                                    padding:
+                                                                                        "6px 8px",
+                                                                                    border: "1px solid #d1d5db",
+                                                                                    borderRadius:
+                                                                                        "4px",
+                                                                                    fontSize:
+                                                                                        "13px",
+                                                                                }}
+                                                                            />
+                                                                        </div>
+
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() =>
+                                                                                handleSelectCompleteBatch(
+                                                                                    index
+                                                                                )
+                                                                            }
+                                                                            style={{
+                                                                                padding:
+                                                                                    "6px 12px",
+                                                                                backgroundColor:
+                                                                                    "#3b82f6",
+                                                                                color: "#ffffff",
+                                                                                border: "none",
+                                                                                borderRadius:
+                                                                                    "4px",
+                                                                                fontSize:
+                                                                                    "12px",
+                                                                                fontWeight:
+                                                                                    "500",
+                                                                                cursor: "pointer",
+                                                                            }}
+                                                                        >
+                                                                            Todo
+                                                                            el
+                                                                            lote
+                                                                        </button>
+
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() =>
+                                                                                handleBatchQuantityChange(
+                                                                                    index,
+                                                                                    0
+                                                                                )
+                                                                            }
+                                                                            style={{
+                                                                                padding:
+                                                                                    "6px 8px",
+                                                                                backgroundColor:
+                                                                                    "#ef4444",
+                                                                                color: "#ffffff",
+                                                                                border: "none",
+                                                                                borderRadius:
+                                                                                    "4px",
+                                                                                fontSize:
+                                                                                    "12px",
+                                                                                cursor: "pointer",
+                                                                            }}
+                                                                        >
+                                                                            ✕
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        }
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
 
                         {/* Quantity and Priority Grid */}
                         <div

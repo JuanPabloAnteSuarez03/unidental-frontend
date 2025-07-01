@@ -13,8 +13,9 @@ import MovimientosDeStockPage from "../pages/MovimientosDeStockPage";
 import TransferenciasInternasPage from "../pages/TransferenciasInternasPage";
 import NuevoProductoPage from "../pages/NuevoProductoPage";
 import AlertasPage from "../pages/AlertasPage";
-
 import AlertasStockPage from "../pages/AlertasStockPage";
+import SuppliersPage from "../pages/SuppliersPage";
+import SupplierDetailPage from "../pages/SupplierDetailPage";
 
 const AppRouter = () => {
     return (
@@ -45,7 +46,6 @@ const AppRouter = () => {
                     path="/inventario/alertas-vencimiento"
                     element={<AlertasPage />}
                 />
-
                 <Route
                     path="/inventario/alertas-stock"
                     element={<AlertasStockPage />}
@@ -55,6 +55,12 @@ const AppRouter = () => {
                 {/* Rutas de clientes */}
                 <Route path="/clientes/lista" element={<CustomersListPage />} />
                 <Route path="/clientes/nuevo" element={<NewCustomerPage />} />
+                {/* Rutas de proveedores */}
+                <Route path="/proveedores" element={<SuppliersPage />} />
+                <Route
+                    path="/proveedores/:supplierName"
+                    element={<SupplierDetailPage />}
+                />
             </Route>
         </Routes>
     );

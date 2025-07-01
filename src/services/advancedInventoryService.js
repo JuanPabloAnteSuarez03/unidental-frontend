@@ -12,8 +12,12 @@ const API_INVENTORY_EXPIRY_ALERTS_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDP
  */
 const buildUrlWithParams = (baseUrl, params = {}) => {
     const url = new URL(baseUrl, window.location.origin);
-    Object.keys(params).forEach(key => {
-        if (params[key] !== null && params[key] !== undefined && params[key] !== '') {
+    Object.keys(params).forEach((key) => {
+        if (
+            params[key] !== null &&
+            params[key] !== undefined &&
+            params[key] !== ""
+        ) {
             url.searchParams.append(key, params[key]);
         }
     });
@@ -123,7 +127,11 @@ export const getExpiryAlerts = async (params = {}, authToken) => {
  * @param {string} authToken - Token de autenticación
  * @returns {Promise<Array>} - Lista de lotes ordenados por FIFO con cantidades de stock
  */
-export const getAvailableBatchesFIFO = async (productId, locationId, authToken) => {
+export const getAvailableBatchesFIFO = async (
+    productId,
+    locationId,
+    authToken
+) => {
     if (!authToken) {
         throw new Error("No authentication token provided");
     }
@@ -131,9 +139,9 @@ export const getAvailableBatchesFIFO = async (productId, locationId, authToken) 
     try {
         // Usar el nuevo endpoint optimizado que devuelve lotes con stock
         const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.STOCK_PRODUCT_BATCHES}?product=${productId}&only_available=true`;
-        
+
         console.log("Fetching product batches with stock from:", url);
-        
+
         const response = await fetch(url, {
             headers: {
                 Authorization: `Token ${authToken}`,
@@ -147,53 +155,71 @@ export const getAvailableBatchesFIFO = async (productId, locationId, authToken) 
 
         const data = await response.json();
         console.log("Product batches stock data received:", data);
-        
+
         // La estructura es diferente: los lotes están en data.batches (no data.results)
         const batches = data.batches || [];
-        
+
         // Filtrar lotes que tienen stock en la ubicación específica
         console.log("Processing batches for location:", locationId);
+        console.log("Location ID type:", typeof locationId);
         console.log("Number of batches to process:", batches.length);
-        
-        const batchesInLocation = batches.map((batch, index) => {
-            console.log(`Processing batch ${index} (${batch.batch_number}):`, batch);
-            
-            // Buscar stock en la ubicación específica - está en batch.locations
-            const locationStock = batch.locations?.find(location => 
-                location.location_id === locationId
-            );
-            
-            console.log(`Location stock found for batch ${batch.batch_number}:`, locationStock);
-            
-            if (!locationStock || locationStock.quantity <= 0) {
-                console.log(`No stock in location for batch ${batch.batch_number}`);
-                return null; // No hay stock en esta ubicación
-            }
-            
-            return {
-                id: batch.batch_id,
-                batch_id: batch.batch_id,
-                batch_number: batch.batch_number,
-                expiry_date: batch.expiry_date,
-                manufacturing_date: batch.manufacturing_date,
-                supplier_reference: batch.supplier_reference,
-                notes: batch.notes,
-                is_expired: batch.is_expired,
-                days_to_expiry: batch.days_to_expiry,
-                product: data.product_id,
-                product_name: data.product_name,
-                quantity: locationStock.quantity,
-                stock_id: locationStock.id || null,
-                location_id: locationId,
-                location_name: locationStock.location_name
-            };
-        }).filter(batch => batch !== null); // Remover lotes sin stock en la ubicación
-        
+
+        const batchesInLocation = batches
+            .map((batch, index) => {
+                console.log(
+                    `Processing batch ${index} (${batch.batch_number}):`,
+                    batch
+                );
+
+                // Buscar stock en la ubicación específica - está en batch.locations
+                const locationStock = batch.locations?.find((location) => {
+                    console.log(
+                        `  Comparing location ${
+                            location.location_id
+                        } (${typeof location.location_id}) with ${locationId} (${typeof locationId})`
+                    );
+                    return (
+                        location.location_id === locationId ||
+                        parseInt(location.location_id) === parseInt(locationId)
+                    );
+                });
+
+                console.log(
+                    `Location stock found for batch ${batch.batch_number}:`,
+                    locationStock
+                );
+
+                if (!locationStock || locationStock.quantity <= 0) {
+                    console.log(
+                        `No stock in location for batch ${batch.batch_number}`
+                    );
+                    return null; // No hay stock en esta ubicación
+                }
+
+                return {
+                    id: batch.batch_id,
+                    batch_id: batch.batch_id,
+                    batch_number: batch.batch_number,
+                    expiry_date: batch.expiry_date,
+                    manufacturing_date: batch.manufacturing_date,
+                    supplier_reference: batch.supplier_reference,
+                    notes: batch.notes,
+                    is_expired: batch.is_expired,
+                    days_to_expiry: batch.days_to_expiry,
+                    product: data.product_id,
+                    product_name: data.product_name,
+                    quantity: locationStock.quantity,
+                    stock_id: locationStock.id || null,
+                    location_id: locationId,
+                    location_name: locationStock.location_name,
+                };
+            })
+            .filter((batch) => batch !== null); // Remover lotes sin stock en la ubicación
+
         console.log("Final batches with stock in location:", batchesInLocation);
-        
+
         // Los lotes ya vienen ordenados por FIFO desde el backend
         return batchesInLocation;
-        
     } catch (error) {
         console.error("Error getting available batches FIFO:", error);
         throw error;
@@ -208,29 +234,41 @@ export const getAvailableBatchesFIFO = async (productId, locationId, authToken) 
  * @param {string} authToken - Token de autenticación
  * @returns {Promise<Object>} - Resultado con lotes seleccionados y información
  */
-export const selectBatchesFIFO = async (productId, locationId, requestedQuantity, authToken) => {
+export const selectBatchesFIFO = async (
+    productId,
+    locationId,
+    requestedQuantity,
+    authToken
+) => {
     try {
-        const availableBatches = await getAvailableBatchesFIFO(productId, locationId, authToken);
-        
+        const availableBatches = await getAvailableBatchesFIFO(
+            productId,
+            locationId,
+            authToken
+        );
+
         if (availableBatches.length === 0) {
             return {
                 success: false,
-                message: 'No hay lotes disponibles para este producto',
+                message: "No hay lotes disponibles para este producto",
                 selectedBatches: [],
                 totalAvailable: 0,
-                totalSelected: 0
+                totalSelected: 0,
             };
         }
 
-        const totalAvailable = availableBatches.reduce((sum, batch) => sum + batch.quantity, 0);
-        
+        const totalAvailable = availableBatches.reduce(
+            (sum, batch) => sum + batch.quantity,
+            0
+        );
+
         if (totalAvailable < requestedQuantity) {
             return {
                 success: false,
                 message: `Stock insuficiente. Disponible: ${totalAvailable}, Solicitado: ${requestedQuantity}`,
                 selectedBatches: availableBatches,
                 totalAvailable: totalAvailable,
-                totalSelected: totalAvailable
+                totalSelected: totalAvailable,
             };
         }
 
@@ -241,11 +279,14 @@ export const selectBatchesFIFO = async (productId, locationId, requestedQuantity
         for (const batch of availableBatches) {
             if (remainingQuantity <= 0) break;
 
-            const quantityFromThisBatch = Math.min(batch.quantity, remainingQuantity);
-            
+            const quantityFromThisBatch = Math.min(
+                batch.quantity,
+                remainingQuantity
+            );
+
             selectedBatches.push({
                 ...batch,
-                selectedQuantity: quantityFromThisBatch
+                selectedQuantity: quantityFromThisBatch,
             });
 
             remainingQuantity -= quantityFromThisBatch;
@@ -253,12 +294,11 @@ export const selectBatchesFIFO = async (productId, locationId, requestedQuantity
 
         return {
             success: true,
-            message: 'Lotes seleccionados correctamente usando FIFO',
+            message: "Lotes seleccionados correctamente usando FIFO",
             selectedBatches: selectedBatches,
             totalAvailable: totalAvailable,
-            totalSelected: requestedQuantity
+            totalSelected: requestedQuantity,
         };
-
     } catch (error) {
         console.error("Error selecting batches FIFO:", error);
         throw error;
@@ -273,16 +313,26 @@ export const selectBatchesFIFO = async (productId, locationId, requestedQuantity
  * @param {string} authToken - Token de autenticación
  * @returns {Promise<Object>} - Resultado de la validación
  */
-export const validateBatchStock = async (productId, locationId, requestedQuantity, authToken) => {
+export const validateBatchStock = async (
+    productId,
+    locationId,
+    requestedQuantity,
+    authToken
+) => {
     try {
-        const result = await selectBatchesFIFO(productId, locationId, requestedQuantity, authToken);
-        
+        const result = await selectBatchesFIFO(
+            productId,
+            locationId,
+            requestedQuantity,
+            authToken
+        );
+
         return {
             isValid: result.success,
             availableQuantity: result.totalAvailable,
             requestedQuantity: requestedQuantity,
             message: result.message,
-            batchInfo: result.selectedBatches
+            batchInfo: result.selectedBatches,
         };
     } catch (error) {
         console.error("Error validating batch stock:", error);
@@ -290,8 +340,8 @@ export const validateBatchStock = async (productId, locationId, requestedQuantit
             isValid: false,
             availableQuantity: 0,
             requestedQuantity: requestedQuantity,
-            message: 'Error al validar stock por lotes',
-            batchInfo: []
+            message: "Error al validar stock por lotes",
+            batchInfo: [],
         };
     }
 };
@@ -314,23 +364,39 @@ export const getProductSalesInfo = async (product, locationId, authToken) => {
             isSimple: compositeProductsService.isSimpleProduct(product),
             batches: [],
             components: [],
-            stockInfo: null
+            stockInfo: null,
         };
 
         // Si requiere control de lotes, obtener lotes disponibles
         if (productInfo.requiresBatchControl) {
             try {
-                productInfo.batches = await getAvailableBatchesFIFO(product.id, locationId, authToken);
+                productInfo.batches = await getAvailableBatchesFIFO(
+                    product.id,
+                    locationId,
+                    authToken
+                );
                 productInfo.stockInfo = {
-                    totalStock: productInfo.batches.reduce((sum, batch) => sum + batch.quantity, 0),
+                    totalStock: productInfo.batches.reduce(
+                        (sum, batch) => sum + batch.quantity,
+                        0
+                    ),
                     batchCount: productInfo.batches.length,
-                    hasExpiredBatches: productInfo.batches.some(batch => batch.is_expired),
-                    hasExpiringSoonBatches: productInfo.batches.some(batch => 
-                        !batch.is_expired && batch.days_to_expiry !== null && parseInt(batch.days_to_expiry) <= 30
-                    )
+                    hasExpiredBatches: productInfo.batches.some(
+                        (batch) => batch.is_expired
+                    ),
+                    hasExpiringSoonBatches: productInfo.batches.some(
+                        (batch) =>
+                            !batch.is_expired &&
+                            batch.days_to_expiry !== null &&
+                            parseInt(batch.days_to_expiry) <= 30
+                    ),
                 };
             } catch (error) {
-                console.warn("Error getting batch info for product:", product.id, error);
+                console.warn(
+                    "Error getting batch info for product:",
+                    product.id,
+                    error
+                );
                 productInfo.batches = [];
                 productInfo.stockInfo = { totalStock: 0, batchCount: 0 };
             }
@@ -339,13 +405,23 @@ export const getProductSalesInfo = async (product, locationId, authToken) => {
         // Si es un producto compuesto, obtener sus componentes
         if (productInfo.isComposite) {
             try {
-                console.log("Product is composite, fetching components for product:", product.id);
-                const componentsResponse = await compositeProductsService.getComponentsByComposite(product.id, authToken);
+                console.log(
+                    "Product is composite, fetching components for product:",
+                    product.id
+                );
+                const componentsResponse =
+                    await compositeProductsService.getComponentsByComposite(
+                        product.id,
+                        authToken
+                    );
                 console.log("Components response:", componentsResponse);
                 console.log("Response type:", typeof componentsResponse);
                 console.log("Is array:", Array.isArray(componentsResponse));
-                console.log("Has results property:", 'results' in componentsResponse);
-                
+                console.log(
+                    "Has results property:",
+                    "results" in componentsResponse
+                );
+
                 // Manejar tanto respuesta paginada como array directo
                 if (Array.isArray(componentsResponse)) {
                     productInfo.components = componentsResponse;
@@ -354,10 +430,14 @@ export const getProductSalesInfo = async (product, locationId, authToken) => {
                 } else {
                     productInfo.components = [];
                 }
-                
+
                 console.log("Components found:", productInfo.components);
             } catch (error) {
-                console.warn("Error getting components for composite product:", product.id, error);
+                console.warn(
+                    "Error getting components for composite product:",
+                    product.id,
+                    error
+                );
                 productInfo.components = [];
             }
         }
@@ -365,13 +445,23 @@ export const getProductSalesInfo = async (product, locationId, authToken) => {
         // Si es un componente, obtener en qué kits está incluido
         if (productInfo.isComponent) {
             try {
-                console.log("Product is component, fetching parent composites for product:", product.id);
-                const compositesResponse = await compositeProductsService.getCompositesByComponent(product.id, authToken);
+                console.log(
+                    "Product is component, fetching parent composites for product:",
+                    product.id
+                );
+                const compositesResponse =
+                    await compositeProductsService.getCompositesByComponent(
+                        product.id,
+                        authToken
+                    );
                 console.log("Parent composites response:", compositesResponse);
                 console.log("Response type:", typeof compositesResponse);
                 console.log("Is array:", Array.isArray(compositesResponse));
-                console.log("Has results property:", 'results' in compositesResponse);
-                
+                console.log(
+                    "Has results property:",
+                    "results" in compositesResponse
+                );
+
                 // Manejar tanto respuesta paginada como array directo
                 if (Array.isArray(compositesResponse)) {
                     productInfo.parentComposites = compositesResponse;
@@ -380,10 +470,17 @@ export const getProductSalesInfo = async (product, locationId, authToken) => {
                 } else {
                     productInfo.parentComposites = [];
                 }
-                
-                console.log("Parent composites found:", productInfo.parentComposites);
+
+                console.log(
+                    "Parent composites found:",
+                    productInfo.parentComposites
+                );
             } catch (error) {
-                console.warn("Error getting parent composites for component:", product.id, error);
+                console.warn(
+                    "Error getting parent composites for component:",
+                    product.id,
+                    error
+                );
                 productInfo.parentComposites = [];
             }
         }
@@ -403,10 +500,19 @@ export const getProductSalesInfo = async (product, locationId, authToken) => {
  * @param {string} authToken - Token de autenticación
  * @returns {Promise<Object>} - Datos preparados para la venta
  */
-export const prepareSaleData = async (product, quantity, locationId, authToken) => {
+export const prepareSaleData = async (
+    product,
+    quantity,
+    locationId,
+    authToken
+) => {
     try {
-        const productInfo = await getProductSalesInfo(product, locationId, authToken);
-        
+        const productInfo = await getProductSalesInfo(
+            product,
+            locationId,
+            authToken
+        );
+
         const saleData = {
             product_id: product.id,
             quantity: quantity,
@@ -419,40 +525,44 @@ export const prepareSaleData = async (product, quantity, locationId, authToken) 
                 category: product.category || 0,
                 unit: product.unit,
                 product_type: productInfo.productType,
-                requires_batch_control: productInfo.requiresBatchControl
+                requires_batch_control: productInfo.requiresBatchControl,
             },
             batches: [],
-            components: []
+            components: [],
         };
 
         // Si requiere control de lotes, seleccionar lotes usando FIFO
         if (productInfo.requiresBatchControl) {
-            const batchSelection = await selectBatchesFIFO(product.id, locationId, quantity, authToken);
-            
+            const batchSelection = await selectBatchesFIFO(
+                product.id,
+                locationId,
+                quantity,
+                authToken
+            );
+
             if (!batchSelection.success) {
                 throw new Error(batchSelection.message);
             }
 
-            saleData.batches = batchSelection.selectedBatches.map(batch => ({
+            saleData.batches = batchSelection.selectedBatches.map((batch) => ({
                 batch_id: batch.batch_id,
                 batch_number: batch.batch_number,
                 quantity: batch.selectedQuantity,
-                expiry_date: batch.expiry_date
+                expiry_date: batch.expiry_date,
             }));
         }
 
         // Si es un producto compuesto, incluir información de componentes
         if (productInfo.isComposite) {
-            saleData.components = compositeProductsService.calculateComponentsNeeded(
-                productInfo.components, 
-                quantity
-            ).map(component => ({
-                component_product_id: component.component_product,
-                component_name: component.component_product_name,
-                component_sku: component.component_product_sku,
-                quantity_per_unit: component.quantity,
-                total_quantity: component.totalQuantityNeeded
-            }));
+            saleData.components = compositeProductsService
+                .calculateComponentsNeeded(productInfo.components, quantity)
+                .map((component) => ({
+                    component_product_id: component.component_product,
+                    component_name: component.component_product_name,
+                    component_sku: component.component_product_sku,
+                    quantity_per_unit: component.quantity,
+                    total_quantity: component.totalQuantityNeeded,
+                }));
         }
 
         return saleData;
@@ -481,42 +591,44 @@ export const validateSale = async (saleItems, locationId, authToken) => {
             // Validar si requiere control de lotes
             if (product.requires_batch_control) {
                 const batchValidation = await validateBatchStock(
-                    item.product_id, 
-                    locationId, 
-                    quantity, 
+                    item.product_id,
+                    locationId,
+                    quantity,
                     authToken
                 );
-                
+
                 if (!batchValidation.isValid) {
                     canProceed = false;
                     validationResults.push({
                         product_name: product.name,
-                        issue: 'batch_stock',
-                        message: batchValidation.message
+                        issue: "batch_stock",
+                        message: batchValidation.message,
                     });
                 }
             }
 
             // Validar si es producto compuesto
-            if (product.product_type === 'composite') {
+            if (product.product_type === "composite") {
                 try {
-                    const componentsResponse = await compositeProductsService.getComponentsByComposite(
-                        item.product_id, 
-                        authToken
-                    );
+                    const componentsResponse =
+                        await compositeProductsService.getComponentsByComposite(
+                            item.product_id,
+                            authToken
+                        );
                     const components = componentsResponse.results || [];
-                    
-                    const componentValidation = compositeProductsService.validateComponentsStock(
-                        components, 
-                        quantity
-                    );
-                    
+
+                    const componentValidation =
+                        compositeProductsService.validateComponentsStock(
+                            components,
+                            quantity
+                        );
+
                     if (!componentValidation.canAssemble) {
                         canProceed = false;
                         validationResults.push({
                             product_name: product.name,
-                            issue: 'component_stock',
-                            message: componentValidation.message
+                            issue: "component_stock",
+                            message: componentValidation.message,
                         });
                     }
                 } catch (error) {
@@ -528,16 +640,16 @@ export const validateSale = async (saleItems, locationId, authToken) => {
         return {
             canProceed,
             validationResults,
-            message: canProceed 
-                ? 'Todos los productos pueden venderse' 
-                : 'Algunos productos tienen problemas de stock'
+            message: canProceed
+                ? "Todos los productos pueden venderse"
+                : "Algunos productos tienen problemas de stock",
         };
     } catch (error) {
         console.error("Error validating sale:", error);
         return {
             canProceed: false,
             validationResults: [],
-            message: 'Error al validar la venta'
+            message: "Error al validar la venta",
         };
     }
 };
@@ -555,4 +667,4 @@ const advancedInventoryService = {
     validateSale,
 };
 
-export default advancedInventoryService; 
+export default advancedInventoryService;

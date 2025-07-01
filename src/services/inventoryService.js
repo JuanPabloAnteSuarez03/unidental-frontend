@@ -1447,6 +1447,66 @@ export const validateStockForTransfer = async (
     }
 };
 
+/**
+ * Get batches with stock for a specific product at a specific location
+ * @param {number} productId - Product ID
+ * @param {number} locationId - Location ID
+ * @param {string} authToken - Authentication token
+ * @returns {Promise<Array>} - Array of batches with stock information
+ */
+export const getBatchesWithStockAtLocation = async (
+    productId,
+    locationId,
+    authToken
+) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    if (!productId || !locationId) {
+        throw new Error("Product ID and Location ID are required");
+    }
+
+    const API_BATCHES_BY_LOCATION_URL = `${API_CONFIG.BASE_URL}/inventory/movements/by_batches/`;
+
+    try {
+        // Build URL with product and location filters
+        const params = new URLSearchParams();
+        params.append("product", productId);
+        params.append("location", locationId);
+
+        const url = `${API_BATCHES_BY_LOCATION_URL}?${params.toString()}`;
+
+        const response = await fetch(url, {
+            headers: {
+                Authorization: `Token ${authToken}`,
+                "Content-Type": "application/json",
+            },
+        });
+
+        if (!response.ok) {
+            throw new Error(`Error ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        // Filter out batches with zero stock and add additional properties
+        const batchesWithStock = data
+            .filter((batch) => batch.quantity > 0)
+            .map((batch) => ({
+                ...batch,
+                availableStock: batch.quantity,
+                selectedQuantity: 0,
+                useFullBatch: false,
+            }));
+
+        return batchesWithStock;
+    } catch (error) {
+        console.error("Error fetching batches with stock at location:", error);
+        throw error;
+    }
+};
+
 // Export as default
 const inventoryService = {
     getProducts,
@@ -1471,6 +1531,7 @@ const inventoryService = {
     getProductStockAtLocation,
     getProductStockByLocations,
     validateStockForTransfer,
+    getBatchesWithStockAtLocation,
 };
 
 export default inventoryService;
