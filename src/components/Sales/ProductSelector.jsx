@@ -228,11 +228,17 @@ const ProductSelector = forwardRef(({
             
         } catch (error) {
             console.error("Error obteniendo precio inteligente o stock:", error);
-            // Fallback: usar selling_price del producto si está disponible
-            const fallbackPrice = product.selling_price || product.cost_price || "";
+            // Fallback: usar sale_price > selling_price > cost_price
+            const fallbackPrice = product.sale_price || product.selling_price || product.cost_price || "";
             setUnitPrice(fallbackPrice.toString());
             
-            if (product.selling_price) {
+            if (product.sale_price) {
+                setPriceInfo({
+                    source: 'product_sale_price',
+                    source_label: 'Precio de venta del producto',
+                    price: parseFloat(product.sale_price)
+                });
+            } else if (product.selling_price) {
                 setPriceInfo({
                     source: 'suggested',
                     source_label: 'Precio de venta sugerido',
@@ -333,6 +339,8 @@ const ProductSelector = forwardRef(({
     // Get price info icon and color based on source
     const getPriceSourceIcon = (source) => {
         switch (source) {
+            case 'product_sale_price':
+                return { icon: '🎯', color: '#28a745', bgColor: '#d1ecf1' };
             case 'sale':
                 return { icon: '💰', color: '#27ae60', bgColor: '#d5edda' };
             case 'purchase':
@@ -1045,9 +1053,16 @@ const ProductSelector = forwardRef(({
                     {/* Product info display */}
                     <div 
                         className="sales-product-info-grid"
-                        style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginBottom: "15px" }}
+                        style={{ 
+                            display: "grid", 
+                            gridTemplateColumns: selectedProduct.sale_price && selectedProduct.selling_price && selectedProduct.cost_price ? "1fr 1fr 1fr" : 
+                                               selectedProduct.sale_price && (selectedProduct.selling_price || selectedProduct.cost_price) ? "1fr 1fr" : 
+                                               "1fr 1fr", 
+                            gap: "15px", 
+                            marginBottom: "15px" 
+                        }}
                     >
-                        {selectedProduct.cost_price && (
+                        {selectedProduct.sale_price && (
                             <div>
                                 <label
                                     style={{
@@ -1058,20 +1073,21 @@ const ProductSelector = forwardRef(({
                                         marginBottom: "4px",
                                     }}
                                 >
-                                    Precio de Costo
+                                    🎯 Precio de Venta Oficial
                                 </label>
                                 <div
                                     style={{
                                         boxSizing: "border-box",
                                         padding: "8px",
                                         fontSize: "14px",
-                                        backgroundColor: "#f8f9fa",
-                                        border: "1px solid #dee2e6",
+                                        backgroundColor: "#d1ecf1",
+                                        border: "2px solid #28a745",
                                         borderRadius: "4px",
-                                        color: "#6c757d",
+                                        color: "#28a745",
+                                        fontWeight: "700",
                                     }}
                                 >
-                                    ${Number(selectedProduct.cost_price).toLocaleString()}
+                                    ${Number(selectedProduct.sale_price).toLocaleString()}
                                 </div>
                             </div>
                         )}
@@ -1102,6 +1118,35 @@ const ProductSelector = forwardRef(({
                                     }}
                                 >
                                     ${Number(selectedProduct.selling_price).toLocaleString()}
+                                </div>
+                            </div>
+                        )}
+
+                        {selectedProduct.cost_price && (
+                            <div>
+                                <label
+                                    style={{
+                                        display: "block",
+                                        fontSize: "12px",
+                                        fontWeight: "600",
+                                        color: "#2c3e50",
+                                        marginBottom: "4px",
+                                    }}
+                                >
+                                    Precio de Costo
+                                </label>
+                                <div
+                                    style={{
+                                        boxSizing: "border-box",
+                                        padding: "8px",
+                                        fontSize: "14px",
+                                        backgroundColor: "#f8f9fa",
+                                        border: "1px solid #dee2e6",
+                                        borderRadius: "4px",
+                                        color: "#6c757d",
+                                    }}
+                                >
+                                    ${Number(selectedProduct.cost_price).toLocaleString()}
                                 </div>
                             </div>
                         )}
