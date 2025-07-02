@@ -382,9 +382,9 @@ const ProductSearchSelector = ({
                                                     Categoría: {product.category_name}
                                                 </div>
                                             )}
-                                            {product.selling_price && (
+                                            {(product.sale_price || product.selling_price) && (
                                                 <div style={{ fontSize: "12px", color: "#27ae60", fontWeight: "600" }}>
-                                                    Precio: ${Number(product.selling_price).toLocaleString()}
+                                                    Precio: ${Number(product.sale_price || product.selling_price).toLocaleString()}
                                                 </div>
                                             )}
                                         </div>

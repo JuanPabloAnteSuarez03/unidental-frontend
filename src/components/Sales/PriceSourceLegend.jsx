@@ -5,32 +5,39 @@ const PriceSourceLegend = () => {
 
     const priceTypes = [
         {
+            source: 'product_sale_price',
+            icon: '🎯',
+            label: 'Precio de venta del producto',
+            description: 'Precio de venta oficial establecido en la configuración del producto',
+            priority: 1
+        },
+        {
             source: 'sale',
             icon: '💰',
             label: 'Último precio de venta',
             description: 'El precio al que se vendió este producto por última vez',
-            priority: 1
+            priority: 2
         },
         {
             source: 'purchase',
             icon: '📦',
             label: 'Último precio de compra',
             description: 'El precio al que se compró este producto por última vez',
-            priority: 2
+            priority: 3
         },
         {
             source: 'suggested',
             icon: '💡',
             label: 'Precio de venta sugerido',
             description: 'Precio recomendado configurado en el producto',
-            priority: 3
+            priority: 4
         },
         {
             source: 'cost',
             icon: '🏷️',
             label: 'Precio de costo',
             description: 'Precio base de costo del producto',
-            priority: 4
+            priority: 5
         },
         {
             source: 'manual',
@@ -44,7 +51,7 @@ const PriceSourceLegend = () => {
             icon: '⚠️',
             label: 'Sin precio disponible',
             description: 'No hay información de precios - debe ingresar manualmente',
-            priority: 5
+            priority: 6
         }
     ];
 
