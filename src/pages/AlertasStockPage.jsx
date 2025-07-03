@@ -867,45 +867,6 @@ const AlertasStockPage = () => {
         <div className="alertas-page">
             <AlertasStyles />
             <AlertasHeader title="Alertas por Stock" />
-            <div
-                style={{
-                    display: "flex",
-                    justifyContent: "flex-end",
-                    marginBottom: 16,
-                    gap: "10px",
-                }}
-            >
-                <button
-                    onClick={() => setMostrarModalRangos(true)}
-                    style={{
-                        background: "#28a745",
-                        color: "white",
-                        border: "none",
-                        borderRadius: 6,
-                        padding: "10px 18px",
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        fontSize: 16,
-                    }}
-                >
-                    Configurar Rangos de Stock
-                </button>
-                <button
-                    onClick={() => setMostrarModalUmbralStock(true)}
-                    style={{
-                        background: "#1976d2",
-                        color: "white",
-                        border: "none",
-                        borderRadius: 6,
-                        padding: "10px 18px",
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        fontSize: 16,
-                    }}
-                >
-                    Configurar Umbral de Stock
-                </button>
-            </div>
 
             {/* 🎨 Estilos mejorados para la sección de configuración */}
             <style>{`
@@ -2025,6 +1986,78 @@ const AlertasStockPage = () => {
                             <FaSync style={{ fontSize: "16px" }} />
                         )}
                         {isLoadingProductos ? "Cargando..." : "Actualizar"}
+                    </button>
+
+                    <button
+                        onClick={() => setMostrarModalRangos(true)}
+                        style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            padding: "12px 16px",
+                            border: "none",
+                            backgroundColor: "#28a745",
+                            color: "white",
+                            borderRadius: "12px",
+                            cursor: "pointer",
+                            fontSize: "13px",
+                            fontWeight: "600",
+                            transition: "all 0.3s ease",
+                            boxShadow: "0 2px 8px rgba(40,167,69,0.3)",
+                            transform: "translateY(0)",
+                            minWidth: "120px",
+                            justifyContent: "center",
+                        }}
+                        onMouseEnter={(e) => {
+                            e.target.style.backgroundColor = "#218838";
+                            e.target.style.transform = "translateY(-1px)";
+                            e.target.style.boxShadow =
+                                "0 4px 12px rgba(40,167,69,0.4)";
+                        }}
+                        onMouseLeave={(e) => {
+                            e.target.style.backgroundColor = "#28a745";
+                            e.target.style.transform = "translateY(0)";
+                            e.target.style.boxShadow =
+                                "0 2px 8px rgba(40,167,69,0.3)";
+                        }}
+                    >
+                        ⚙️ Rangos
+                    </button>
+
+                    <button
+                        onClick={() => setMostrarModalUmbralStock(true)}
+                        style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            padding: "12px 16px",
+                            border: "none",
+                            backgroundColor: "#17a2b8",
+                            color: "white",
+                            borderRadius: "12px",
+                            cursor: "pointer",
+                            fontSize: "13px",
+                            fontWeight: "600",
+                            transition: "all 0.3s ease",
+                            boxShadow: "0 2px 8px rgba(23,162,184,0.3)",
+                            transform: "translateY(0)",
+                            minWidth: "120px",
+                            justifyContent: "center",
+                        }}
+                        onMouseEnter={(e) => {
+                            e.target.style.backgroundColor = "#138496";
+                            e.target.style.transform = "translateY(-1px)";
+                            e.target.style.boxShadow =
+                                "0 4px 12px rgba(23,162,184,0.4)";
+                        }}
+                        onMouseLeave={(e) => {
+                            e.target.style.backgroundColor = "#17a2b8";
+                            e.target.style.transform = "translateY(0)";
+                            e.target.style.boxShadow =
+                                "0 2px 8px rgba(23,162,184,0.3)";
+                        }}
+                    >
+                        🎯 Umbral
                     </button>
                 </div>
             </div>

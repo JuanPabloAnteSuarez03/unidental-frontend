@@ -50,7 +50,7 @@ const MainLayout = ({ children }) => {
         compras: {
             title: "Compras",
             items: [
-                { name: "Proveedores", path: "/proveedores" },
+                { name: "Proveedores", path: "/compras/proveedores" },
                 { name: "Órdenes de Compra", path: "/compras/ordenes" },
                 {
                     name: "Análisis de Precios",

@@ -12,33 +12,6 @@ const TableRow = ({ product, index }) => {
     const { formatExpiryDate, getExpiryColor, isBatchesLoading } =
         useInventoryWithBatches();
 
-    // Estado para el precio de la última venta
-    const [lastSalePrice, setLastSalePrice] = useState(null);
-    const [isLoadingLastSale, setIsLoadingLastSale] = useState(false);
-
-    // Cargar precio de última venta
-    useEffect(() => {
-        const loadLastSalePrice = async () => {
-            if (!product?.id || !authToken) return;
-
-            setIsLoadingLastSale(true);
-            try {
-                const priceData = await inventoryService.getLastSalePrice(
-                    product.id,
-                    authToken
-                );
-                setLastSalePrice(priceData);
-            } catch (error) {
-                console.error("Error loading last sale price:", error);
-                setLastSalePrice({ price: 0, source: "error" });
-            } finally {
-                setIsLoadingLastSale(false);
-            }
-        };
-
-        loadLastSalePrice();
-    }, [product?.id, authToken]);
-
     // Extraer información del producto y calcular valores derivados
     const { styles } = useMemo(() => {
         // Estilos computados basados en los datos
@@ -148,35 +121,31 @@ const TableRow = ({ product, index }) => {
         );
     };
 
-    // Renderizar precio de última venta
-    const renderLastSalePrice = () => {
-        if (isLoadingLastSale) {
-            return <span style={styles.loadingCell}>Cargando...</span>;
-        }
+    // Renderizar precio de venta (sale_price)
+    const renderSalePrice = () => {
+        const salePrice = product.sale_price;
 
-        if (
-            !lastSalePrice ||
-            !lastSalePrice.price ||
-            lastSalePrice.price === 0
-        ) {
-            return <span style={{ color: "#6c757d" }}>Sin ventas</span>;
+        if (!salePrice || salePrice === 0) {
+            return <span style={{ color: "#6c757d" }}>Sin precio</span>;
         }
 
         return (
             <span
                 style={styles.priceCell}
-                title={`Última venta: ${
-                    lastSalePrice.date
-                        ? new Date(lastSalePrice.date).toLocaleDateString(
-                              "es-CO"
-                          )
-                        : "Fecha no disponible"
-                }`}
+                title={`Precio de venta del producto ${product.name}`}
             >
-                ${Number(lastSalePrice.price).toLocaleString("es-CO")}
+                ${Number(salePrice).toLocaleString("es-CO")}
             </span>
         );
     };
+
+    // Obtener la descripción del producto usando el primer campo disponible
+    const desc =
+        product.description ||
+        product.detalle ||
+        product.details ||
+        product.notes ||
+        "Sin descripción";
 
     return (
         <tr style={styles.row}>
@@ -207,13 +176,13 @@ const TableRow = ({ product, index }) => {
                 {renderExpiryInfo()}
             </td>
             <td style={{ ...styles.cell, ...styles.priceCell }}>
-                {renderLastSalePrice()}
+                {renderSalePrice()}
             </td>
             <td
                 style={{ ...styles.cell, ...styles.descriptionCell }}
-                title={product.description || "Sin descripción"}
+                title={desc}
             >
-                {product.description || "Sin descripción"}
+                {desc}
             </td>
         </tr>
     );

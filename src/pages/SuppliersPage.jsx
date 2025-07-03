@@ -25,7 +25,7 @@ const SuppliersPage = () => {
             .replace(/[^a-zA-Z0-9\s]/g, "")
             .replace(/\s+/g, "-")
             .toLowerCase()}-id-${supplier.id}`;
-        navigate(`/proveedores/${urlName}`);
+        navigate(`/compras/proveedores/${urlName}`);
     };
 
     // Función para cargar proveedores (optimizada)
@@ -209,46 +209,51 @@ const SuppliersPage = () => {
             {/* Header */}
             <div
                 style={{
-                    backgroundColor: "white",
-                    borderRadius: "8px",
-                    padding: "24px",
+                    background:
+                        "linear-gradient(135deg, #2c3e50 0%, #34495e 100%)",
+                    borderRadius: "12px",
+                    padding: "32px",
                     marginBottom: "24px",
-                    boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                    border: "1px solid #e9ecef",
+                    boxShadow: "0 4px 16px rgba(44,62,80,0.15)",
+                    border: "1px solid #2c3e50",
+                    color: "white",
                 }}
             >
                 <div
                     style={{
                         display: "flex",
-                        flexDirection: "column",
-                        gap: "16px",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                        gap: "24px",
                     }}
                 >
                     <div
                         style={{
                             display: "flex",
                             alignItems: "center",
-                            gap: "12px",
+                            gap: "16px",
                         }}
                     >
                         <div
                             style={{
-                                width: "48px",
-                                height: "48px",
-                                backgroundColor: "#e3f2fd",
-                                borderRadius: "8px",
+                                width: "56px",
+                                height: "56px",
+                                backgroundColor: "rgba(255,255,255,0.2)",
+                                borderRadius: "12px",
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
+                                backdropFilter: "blur(10px)",
                             }}
                         >
                             <svg
-                                width="24"
-                                height="24"
+                                width="28"
+                                height="28"
                                 fill="none"
                                 stroke="currentColor"
                                 viewBox="0 0 24 24"
-                                style={{ color: "#1976d2" }}
+                                style={{ color: "white" }}
                             >
                                 <path
                                     strokeLinecap="round"
@@ -261,94 +266,26 @@ const SuppliersPage = () => {
                         <div>
                             <h1
                                 style={{
-                                    fontSize: "28px",
-                                    fontWeight: "bold",
-                                    color: "#212529",
+                                    fontSize: "32px",
+                                    fontWeight: "800",
+                                    color: "white",
                                     margin: "0",
+                                    letterSpacing: "-0.5px",
                                 }}
                             >
                                 Proveedores
                             </h1>
                             <p
                                 style={{
-                                    color: "#6c757d",
-                                    margin: "4px 0 0 0",
-                                    fontSize: "14px",
+                                    color: "rgba(255,255,255,0.8)",
+                                    margin: "8px 0 0 0",
+                                    fontSize: "16px",
+                                    fontWeight: "500",
                                 }}
                             >
                                 Gestiona todos los proveedores de la empresa
                             </p>
                         </div>
-                    </div>
-
-                    <div
-                        style={{
-                            display: "flex",
-                            gap: "16px",
-                            flexWrap: "wrap",
-                        }}
-                    >
-                        <div
-                            style={{
-                                backgroundColor: "#007bff",
-                                color: "white",
-                                padding: "16px 20px",
-                                borderRadius: "8px",
-                                minWidth: "140px",
-                            }}
-                        >
-                            <div
-                                style={{ fontSize: "24px", fontWeight: "bold" }}
-                            >
-                                {totalCount}
-                            </div>
-                            <div style={{ fontSize: "12px", opacity: "0.9" }}>
-                                Proveedores totales
-                            </div>
-                        </div>
-                        <div
-                            style={{
-                                backgroundColor: "#28a745",
-                                color: "white",
-                                padding: "16px 20px",
-                                borderRadius: "8px",
-                                minWidth: "140px",
-                            }}
-                        >
-                            <div
-                                style={{ fontSize: "24px", fontWeight: "bold" }}
-                            >
-                                {suppliers.length}
-                            </div>
-                            <div style={{ fontSize: "12px", opacity: "0.9" }}>
-                                En esta página
-                            </div>
-                        </div>
-                        {!isInitialLoad && (
-                            <div
-                                style={{
-                                    backgroundColor: "#17a2b8",
-                                    color: "white",
-                                    padding: "16px 20px",
-                                    borderRadius: "8px",
-                                    minWidth: "140px",
-                                }}
-                            >
-                                <div
-                                    style={{
-                                        fontSize: "24px",
-                                        fontWeight: "bold",
-                                    }}
-                                >
-                                    ⚡
-                                </div>
-                                <div
-                                    style={{ fontSize: "12px", opacity: "0.9" }}
-                                >
-                                    Navegación rápida
-                                </div>
-                            </div>
-                        )}
                     </div>
                 </div>
             </div>
@@ -364,19 +301,31 @@ const SuppliersPage = () => {
                     border: "1px solid #e9ecef",
                 }}
             >
+                <style>{`
+                    @media (max-width: 768px) {
+                        .search-form {
+                            grid-template-columns: 1fr !important;
+                        }
+                        .search-button {
+                            width: 100% !important;
+                            margin-top: 8px !important;
+                        }
+                    }
+                `}</style>
                 <form
                     onSubmit={handleSearch}
+                    className="search-form"
                     style={{
-                        display: "flex",
+                        display: "grid",
+                        gridTemplateColumns: "1fr auto",
                         gap: "16px",
-                        flexWrap: "wrap",
+                        alignItems: "start",
                     }}
                 >
                     <div
                         style={{
-                            flex: "1",
-                            minWidth: "300px",
                             position: "relative",
+                            minWidth: 0,
                         }}
                     >
                         <div
@@ -386,6 +335,7 @@ const SuppliersPage = () => {
                                 top: "50%",
                                 transform: "translateY(-50%)",
                                 color: "#6c757d",
+                                zIndex: 1,
                             }}
                         >
                             <svg
@@ -416,6 +366,7 @@ const SuppliersPage = () => {
                                 fontSize: "14px",
                                 outline: "none",
                                 transition: "border-color 0.2s",
+                                boxSizing: "border-box",
                             }}
                             onFocus={(e) =>
                                 (e.target.style.borderColor = "#007bff")
@@ -427,6 +378,7 @@ const SuppliersPage = () => {
                     </div>
                     <button
                         type="submit"
+                        className="search-button"
                         style={{
                             padding: "12px 24px",
                             backgroundColor: "#007bff",
@@ -437,6 +389,8 @@ const SuppliersPage = () => {
                             fontWeight: "500",
                             cursor: "pointer",
                             transition: "background-color 0.2s",
+                            whiteSpace: "nowrap",
+                            height: "fit-content",
                         }}
                         onMouseEnter={(e) =>
                             (e.target.style.backgroundColor = "#0056b3")

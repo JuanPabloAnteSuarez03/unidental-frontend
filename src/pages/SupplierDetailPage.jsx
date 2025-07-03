@@ -66,7 +66,7 @@ const SupplierDetailPage = () => {
     };
 
     const handleBackToSuppliers = () => {
-        navigate("/proveedores");
+        navigate("/compras/proveedores");
     };
 
     // Función para filtrar productos basado en el término de búsqueda
@@ -318,55 +318,42 @@ const SupplierDetailPage = () => {
                 </button>
             </div>
 
-            {/* Header con información del proveedor */}
+            {/* Nombre del proveedor */}
             <div
                 style={{
                     backgroundColor: "white",
-                    borderRadius: "20px",
+                    borderRadius: "16px",
                     padding: "32px",
-                    marginBottom: "30px",
-                    boxShadow: "0 8px 32px rgba(0,0,0,0.08)",
-                    border: "1px solid #f0f0f0",
-                    position: "relative",
-                    overflow: "hidden",
+                    marginBottom: "24px",
+                    boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
+                    border: "1px solid #e9ecef",
+                    textAlign: "center",
                 }}
             >
-                {/* Barra de color superior */}
-                <div
-                    style={{
-                        position: "absolute",
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        height: "4px",
-                        background:
-                            "linear-gradient(90deg, #2c3e50 0%, #34495e 100%)",
-                    }}
-                />
-
                 <div
                     style={{
                         display: "flex",
                         alignItems: "center",
-                        gap: "24px",
-                        marginBottom: "16px",
+                        justifyContent: "center",
+                        gap: "16px",
+                        marginBottom: "12px",
                     }}
                 >
                     <div
                         style={{
-                            width: "64px",
-                            height: "64px",
-                            borderRadius: "16px",
+                            width: "48px",
+                            height: "48px",
                             backgroundColor: "#e3f2fd",
+                            borderRadius: "12px",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
-                            boxShadow: "0 4px 16px rgba(25,118,210,0.15)",
+                            boxShadow: "0 4px 12px rgba(25,118,210,0.15)",
                         }}
                     >
                         <svg
-                            width="32"
-                            height="32"
+                            width="24"
+                            height="24"
                             fill="none"
                             stroke="currentColor"
                             viewBox="0 0 24 24"
@@ -380,60 +367,58 @@ const SupplierDetailPage = () => {
                             />
                         </svg>
                     </div>
-                    <div style={{ flex: 1 }}>
-                        <h1
-                            style={{
-                                fontSize: "2.5rem",
-                                fontWeight: "700",
-                                color: "#2c3e50",
-                                margin: "0 0 12px 0",
-                                lineHeight: "1.2",
-                            }}
-                        >
-                            {supplier.name}
-                        </h1>
-                        <div
-                            style={{
-                                display: "flex",
-                                gap: "16px",
-                                flexWrap: "wrap",
-                                alignItems: "center",
-                            }}
-                        >
-                            <span
-                                style={{
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    padding: "8px 16px",
-                                    backgroundColor: "#e3f2fd",
-                                    color: "#1976d2",
-                                    borderRadius: "20px",
-                                    fontSize: "14px",
-                                    fontWeight: "700",
-                                    letterSpacing: "0.5px",
-                                    boxShadow: "0 2px 8px rgba(25,118,210,0.1)",
-                                }}
-                            >
-                                ID: #{supplier.id}
-                            </span>
-                            <span
-                                style={{
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    padding: "8px 16px",
-                                    backgroundColor: "#e8f5e9",
-                                    color: "#2e7d32",
-                                    borderRadius: "20px",
-                                    fontSize: "14px",
-                                    fontWeight: "700",
-                                    letterSpacing: "0.5px",
-                                    boxShadow: "0 2px 8px rgba(46,125,50,0.1)",
-                                }}
-                            >
-                                Activo
-                            </span>
-                        </div>
-                    </div>
+                    <h1
+                        style={{
+                            fontSize: "36px",
+                            fontWeight: "800",
+                            color: "#2c3e50",
+                            margin: "0",
+                            letterSpacing: "-0.5px",
+                        }}
+                    >
+                        {supplier.name}
+                    </h1>
+                </div>
+                <div
+                    style={{
+                        display: "flex",
+                        justifyContent: "center",
+                        gap: "16px",
+                        flexWrap: "wrap",
+                    }}
+                >
+                    <span
+                        style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            padding: "8px 16px",
+                            backgroundColor: "#e3f2fd",
+                            color: "#1976d2",
+                            borderRadius: "20px",
+                            fontSize: "14px",
+                            fontWeight: "700",
+                            letterSpacing: "0.5px",
+                            boxShadow: "0 2px 8px rgba(25,118,210,0.1)",
+                        }}
+                    >
+                        ID: #{supplier.id}
+                    </span>
+                    <span
+                        style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            padding: "8px 16px",
+                            backgroundColor: "#e8f5e9",
+                            color: "#2e7d32",
+                            borderRadius: "20px",
+                            fontSize: "14px",
+                            fontWeight: "700",
+                            letterSpacing: "0.5px",
+                            boxShadow: "0 2px 8px rgba(46,125,50,0.1)",
+                        }}
+                    >
+                        Activo
+                    </span>
                 </div>
             </div>
 

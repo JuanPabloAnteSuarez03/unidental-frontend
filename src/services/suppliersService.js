@@ -357,6 +357,25 @@ export const getPurchaseOptions = async (params = {}, authToken) => {
     }
 };
 
+// Obtener opciones de compra de proveedores
+export async function getSupplierPurchaseOptions(authToken) {
+    const response = await fetch(
+        "https://unidental-backend.onrender.com/api/suppliers/purchase-options/",
+        {
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Token ${authToken}`,
+            },
+        }
+    );
+    if (!response.ok) {
+        throw new Error(
+            "Error al obtener las opciones de compra de proveedores"
+        );
+    }
+    return await response.json();
+}
+
 // Servicio por defecto
 const suppliersService = {
     getSuppliers,
@@ -367,6 +386,7 @@ const suppliersService = {
     deleteSupplier,
     getPurchaseOptions,
     clearSuppliersCache,
+    getSupplierPurchaseOptions,
 };
 
 export default suppliersService;

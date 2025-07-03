@@ -242,7 +242,7 @@ const InventoryTable = ({
                                     ...styles.lastSaleColumn,
                                 }}
                             >
-                                Última Venta
+                                Precio de Venta
                             </th>
                             <th
                                 style={{

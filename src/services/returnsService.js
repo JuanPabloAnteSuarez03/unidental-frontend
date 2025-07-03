@@ -148,17 +148,18 @@ export const createReturn = async (returnData, authToken, signal) => {
     }
 
     try {
-        // Prepare return data for the API, ensuring correct data types
+        // Prepare return data for the API
         const returnPayload = {
-            original_sale: parseInt(returnData.original_sale, 10),
-            location: parseInt(returnData.location, 10),
+            original_sale: parseInt(returnData.original_sale_id),
+            customer: parseInt(returnData.customer_id),
+            location: parseInt(returnData.location_id),
             reason: returnData.reason,
             notes: returnData.notes || "",
             items: returnData.items.map((item) => ({
-                sale_item: parseInt(item.sale_item, 10),
-                product: parseInt(item.product, 10),
-                quantity_returned: parseInt(item.quantity_returned, 10),
-                unit_price: String(item.unit_price), // Ensure unit_price is a string
+                sale_item: item.sale_item_id || null, // If available from original sale
+                product: parseInt(item.product_id),
+                quantity_returned: parseInt(item.quantity),
+                unit_price: parseFloat(item.unit_price),
             })),
         };
 
@@ -193,18 +194,16 @@ export const createReturn = async (returnData, authToken, signal) => {
                 }
                 Object.keys(errorData).forEach((field) => {
                     if (field !== "non_field_errors") {
-                        const errorValue = errorData[field];
-                        if (Array.isArray(errorValue)) {
-                            const itemErrors = errorValue.map(err => 
-                                (typeof err === 'object' && err !== null) ? JSON.stringify(err) : err
-                            ).join(", ");
-                            errorMessages.push(`${field}: ${itemErrors}`);
-                        } else if (typeof errorValue === "object" && errorValue !== null) {
+                        if (Array.isArray(errorData[field])) {
                             errorMessages.push(
-                                `${field}: ${JSON.stringify(errorValue)}`
+                                `${field}: ${errorData[field].join(", ")}`
+                            );
+                        } else if (typeof errorData[field] === "object") {
+                            errorMessages.push(
+                                `${field}: ${JSON.stringify(errorData[field])}`
                             );
                         } else {
-                            errorMessages.push(`${field}: ${errorValue}`);
+                            errorMessages.push(`${field}: ${errorData[field]}`);
                         }
                     }
                 });
@@ -404,47 +403,6 @@ export const updateReturn = async (returnId, updateData, authToken, signal) => {
     }
 };
 
-/**
- * Get return details with all its items.
- * @param {number} returnId - The ID of the return to fetch.
- * @param {string} authToken - Authentication token.
- * @param {AbortSignal} signal - AbortController signal for request cancellation.
- * @returns {Promise<Object>} - The full return object with its items.
- */
-export const getReturnDetails = async (returnId, authToken, signal) => {
-    if (!authToken) {
-        throw new Error("No authentication token provided");
-    }
-    if (!returnId) {
-        throw new Error("A return ID is required to fetch details.");
-    }
-
-    try {
-        const url = `${API_RETURNS_URL}${returnId}/`; // Uses /sales/returns/{id}/
-        const response = await fetch(url, {
-            method: "GET",
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: `Token ${authToken}`,
-            },
-            signal,
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(
-                errorData.detail ||
-                    `Error ${response.status}: ${response.statusText}`
-            );
-        }
-
-        return await response.json();
-    } catch (error) {
-        console.error(`Error fetching details for return ${returnId}:`, error);
-        throw error;
-    }
-};
-
 // Export all functions as a service object
 export const returnsService = {
     searchSalesForReturns,
@@ -454,7 +412,6 @@ export const returnsService = {
     getReturnStatistics,
     getTodayReturns,
     updateReturn,
-    getReturnDetails,
 };
 
 // Default export
