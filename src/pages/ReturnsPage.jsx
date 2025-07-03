@@ -1,10 +1,13 @@
-import React, { useState, useCallback, useEffect, useMemo } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { returnsService } from "../services/returnsService";
+import { salesService } from "../services/salesService";
 import { useAuth } from "../context/AuthContext";
+import { useProducts } from "../context/ProductsContext";
 import { FaHistory, FaUndo, FaFileInvoiceDollar } from "react-icons/fa";
 
 const ReturnsPage = () => {
     const { authToken } = useAuth();
+    const { updateStockAfterSale } = useProducts();
     
     // Search and selection states
     const [searchTerm, setSearchTerm] = useState("");
@@ -29,21 +32,6 @@ const ReturnsPage = () => {
     // Error states
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(null);
-
-    // Calculate return totals
-    const returnTotals = useMemo(() => {
-        const totalAmount = returnItems.reduce((sum, item) => {
-            return sum + (item.return_quantity * parseFloat(item.unit_price));
-        }, 0);
-        
-        return { totalAmount };
-    }, [returnItems]);
-
-    const adjustedTotal = useMemo(() => {
-        if (!saleDetails) return 0;
-        const originalTotal = parseFloat(saleDetails.total_gross || saleDetails.total_net || saleDetails.total || 0);
-        return originalTotal - returnTotals.totalAmount;
-    }, [saleDetails, returnTotals.totalAmount]);
 
     const reasonTranslations = {
         defective: "Producto defectuoso",
@@ -103,35 +91,22 @@ const ReturnsPage = () => {
 
     // Select sale for return
     const handleSelectSale = useCallback(async (sale) => {
-        // Reset previous return state before fetching new data
-        setReturnItems([]);
-        setReturnReason("");
-        setReturnNotes("");
-        setSuccess(null);
-        setError(null);
-
         setSelectedSale(sale);
         setIsLoadingSale(true);
+        setError(null);
         
         try {
-            // Fetch sale details and a list of its associated returns
-            const [saleDetails, returnHistoryList] = await Promise.all([
+            // Fetch sale details and its return history concurrently
+            const [saleDetails, returnHistory] = await Promise.all([
                 returnsService.getSaleForReturn(sale.id, authToken),
                 returnsService.getReturnHistory({ original_sale: sale.id }, authToken)
             ]);
-
-            // Now, fetch the full details for each return to get the items
-            const detailedReturns = await Promise.all(
-                (returnHistoryList.results || []).map(ret => 
-                    returnsService.getReturnDetails(ret.id, authToken)
-                )
-            );
             
             setSaleDetails(saleDetails);
 
-            // Create a map of returned quantities using the detailed returns
+            // Create a map of returned quantities for each sale_item_id
             const returnedQuantitiesMap = {};
-            detailedReturns.forEach(ret => {
+            (returnHistory.results || []).forEach(ret => {
                 (ret.items || []).forEach(returnItem => {
                     const saleItemId = returnItem.sale_item;
                     if (saleItemId) {
@@ -193,41 +168,72 @@ const ReturnsPage = () => {
         
         setIsProcessingReturn(true);
         setError(null);
-        setSuccess(null);
         
         try {
             const returnData = {
-                original_sale: selectedSale.id,
-                location: selectedSale.location,
+                original_sale_id: selectedSale.id,
+                customer_id: selectedSale.customer,
+                location_id: selectedSale.location,
                 reason: returnReason,
                 notes: returnNotes,
                 items: itemsToReturn.map(item => ({
-                    sale_item: item.id,
-                    product: item.product,
-                    quantity_returned: item.return_quantity,
+                    sale_item_id: item.sale_item_id,
+                    product_id: item.product,
+                    quantity: item.return_quantity,
                     unit_price: item.unit_price
                 }))
             };
             
+            console.log("Return data being sent:", returnData);
+            console.log("Selected sale:", selectedSale);
+            console.log("Return items:", itemsToReturn);
+            
             const result = await returnsService.createReturn(returnData, authToken);
             
-            setSuccess(`Devolución #${result.id} creada exitosamente. El inventario ha sido actualizado.`);
+            setSuccess(`Devolución #${result.id} creada. Actualizando venta original...`);
 
-            // Forzar la recarga de datos para reflejar los cambios
-            await loadAllSales(); // Recarga la lista de ventas de la izquierda (para el total)
-            await handleSelectSale(selectedSale); // Recarga los detalles de la venta de la derecha
+            // 1. Update original sale items to trigger backend recalculation
+            try {
+                const updatePromises = itemsToReturn.map(item => {
+                    const newQuantity = item.original_quantity - item.return_quantity;
+                    if (newQuantity > 0) {
+                        return salesService.updateSaleItem(item.sale_item_id, { quantity: newQuantity }, authToken);
+                    } else {
+                        return salesService.deleteSaleItem(item.sale_item_id, authToken);
+                    }
+                });
+                
+                await Promise.all(updatePromises);
+                setSuccess(`Devolución #${result.id} procesada y Venta #${selectedSale.id} actualizada.`);
 
-            // Limpiar solo los campos del formulario de devolución
+            } catch (updateError) {
+                console.error("Failed to update original sale items:", updateError);
+                setError(`Devolución creada, pero falló la actualización de la venta original: ${updateError.message}`);
+            }
+
+            // 2. Refresh sales list to get updated totals from backend
+            await loadAllSales();
+
+            // 3. Update stock in UI
+            itemsToReturn.forEach(item => {
+                updateStockAfterSale(item.product, item.return_quantity);
+            });
+            
+            // 4. Reset form
+            setSelectedSale(null);
+            setSaleDetails(null);
+            setReturnItems([]);
             setReturnReason("");
             setReturnNotes("");
+            setSearchTerm("");
             
         } catch (error) {
             console.error("Error processing return:", error);
-            setError(`Error al procesar la devolución: ${error.message}`);
+            setError("Error al procesar la devolución: " + error.message);
         } finally {
             setIsProcessingReturn(false);
         }
-    }, [selectedSale, returnItems, returnReason, returnNotes, authToken, loadAllSales, handleSelectSale]);
+    }, [selectedSale, returnItems, returnReason, returnNotes, authToken, updateStockAfterSale, loadAllSales]);
 
     // Load return history
     const loadReturnHistory = useCallback(async () => {
@@ -237,19 +243,8 @@ const ReturnsPage = () => {
         setError(null);
         
         try {
-            // 1. Obtener la lista básica de devoluciones
-            const historyList = await returnsService.getReturnHistory({}, authToken);
-            
-            // 2. Obtener los detalles completos para cada devolución
-            const detailedHistory = await Promise.all(
-                (historyList.results || []).map(ret => 
-                    returnsService.getReturnDetails(ret.id, authToken)
-                )
-            );
-            
-            // 3. Actualizar el estado con los datos detallados
-            setReturnHistory(detailedHistory);
-
+            const history = await returnsService.getReturnHistory({}, authToken);
+            setReturnHistory(history.results || []);
         } catch (error) {
             console.error("Error loading return history:", error);
             setError("Error al cargar historial de devoluciones: " + error.message);
@@ -259,31 +254,38 @@ const ReturnsPage = () => {
     }, [authToken]);
 
     // Format date
-    const formatDate = (dateString, customOptions) => {
+    const formatDate = (dateString) => {
         if (!dateString) return "Fecha no disponible";
-        const defaultOptions = {
+        try {
+            return new Date(dateString).toLocaleDateString('es-ES', {
                 year: 'numeric',
                 month: 'short',
                 day: 'numeric',
                 hour: '2-digit',
                 minute: '2-digit'
-        };
-        const options = customOptions || defaultOptions;
-        try {
-            return new Date(dateString).toLocaleDateString('es-ES', options);
+            });
         } catch (error) {
             console.error("Error formatting date:", dateString, error);
             return "Fecha inválida";
         }
     };
 
-    const formatCurrency = (amount) => {
-        const numericAmount = parseFloat(amount);
-        if (isNaN(numericAmount)) {
-            return '$0';
-        }
-        return `$${numericAmount.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-    };
+    // Calculate totals
+    const calculateReturnTotals = useCallback(() => {
+        const itemsToReturn = returnItems.filter(item => item.return_quantity > 0);
+        const totalQuantity = itemsToReturn.reduce((total, item) => total + item.return_quantity, 0);
+        const totalAmount = itemsToReturn.reduce((total, item) => 
+            total + (parseFloat(item.unit_price) * item.return_quantity), 0
+        );
+        
+        return {
+            itemCount: itemsToReturn.length,
+            totalQuantity,
+            totalAmount: totalAmount.toFixed(2)
+        };
+    }, [returnItems]);
+
+    const returnTotals = calculateReturnTotals();
 
     // Load sales on component mount
     useEffect(() => {
@@ -522,7 +524,7 @@ const ReturnsPage = () => {
                                                     </div>
                                                     <div style={{ textAlign: "right" }}>
                                                         <div style={{ fontWeight: "600", color: "#27ae60" }}>
-                                                            {formatCurrency(parseFloat(sale.total_gross || sale.total_net || sale.total || 0))}
+                                                            ${parseFloat(sale.total_gross || sale.total_net || sale.total || 0).toLocaleString()}
                                                         </div>
                                                         <div style={{ fontSize: "12px", color: "#6c757d" }}>
                                                             {sale.sale_type}
@@ -584,137 +586,70 @@ const ReturnsPage = () => {
                                 ) : saleDetails ? (
                                     <div>
                                         {/* Sale Info */}
-                                        <div className="bg-white p-6 rounded-lg shadow-md mb-6">
-                                            <h3 className="text-xl font-semibold text-gray-800 mb-4">Detalles de la Venta #{selectedSale.id}</h3>
-                                            <div className="flex justify-between items-start">
-                                                <div className="text-sm space-y-1">
-                                                    <div><strong>Cliente:</strong> {saleDetails.customer_details?.name || "N/A"}</div>
-                                                    <div><strong>Sede:</strong> {saleDetails.location_details?.name}</div>
+                                        <div style={{ marginBottom: "20px", padding: "15px", backgroundColor: "#f8f9fa", borderRadius: "6px" }}>
+                                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", fontSize: "14px" }}>
+                                                <div><strong>Cliente:</strong> {saleDetails.customer_details?.name}</div>
                                                 <div><strong>Fecha:</strong> {formatDate(saleDetails.sale_date || saleDetails.created_at)}</div>
-                                                </div>
-                                                <div className="text-right text-sm space-y-1">
-                                                    <div>
-                                                        <strong>Total Original:</strong> {formatCurrency(parseFloat(saleDetails.total_gross || saleDetails.total_net || saleDetails.total || 0))}
-                                                    </div>
-                                                    <div className="text-red-600 font-semibold">
-                                                        <strong>Monto a Devolver:</strong> -{formatCurrency(returnTotals.totalAmount)}
-                                                    </div>
-                                                    <div className="border-t mt-2 pt-2 font-bold text-base">
-                                                        <strong>Total Ajustado:</strong> {formatCurrency(adjustedTotal)}
-                                                    </div>
-                                                </div>
+                                                <div><strong>Sede:</strong> {saleDetails.location_details?.name}</div>
+                                                <div><strong>Total:</strong> ${parseFloat(saleDetails.total_gross || saleDetails.total_net || saleDetails.total || 0).toLocaleString()}</div>
                                             </div>
                                         </div>
 
-                                        {/* Formulario de Devolución */}
+                                        {/* Return Items */}
                                         <h4 style={{ margin: "0 0 10px 0", fontSize: "16px", color: "#2c3e50" }}>
                                             Productos a devolver:
                                         </h4>
-                                        <div className="bg-white p-6 rounded-lg shadow-md">
-                                            <div className="md:col-span-2">
-                                                <h4 className="text-xl font-semibold text-gray-800 mb-4">Productos a devolver:</h4>
-                                                {isLoadingSale ? (
-                                                    <p>Cargando detalles...</p>
-                                                ) : (
-                                                    <div className="space-y-4">
+                                        <div style={{ maxHeight: "300px", overflowY: "auto", marginBottom: "20px" }}>
                                             {returnItems.map((item, index) => (
                                                 <div
-                                                                key={`${item.id}-${item.batch_details?.id || index}`}
-                                                                className="p-4 border rounded-md bg-gray-50 shadow-sm transition-colors duration-150"
-                                                            >
-                                                                {/* Top section with product info and quantity */}
-                                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
-                                                                    {/* Columna de Información del Producto */}
-                                                                    <div className="md:col-span-2">
-                                                                        <p className="font-semibold text-lg text-gray-800">
-                                                                            {item.product_details?.name || "Producto no disponible"}
-                                                                        </p>
-                                                                        
-                                                                        {item.batch_details && (
-                                                                            <div className="mt-2 inline-block bg-blue-100 text-blue-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full">
-                                                                                Lote: {item.batch_details.batch_number} | Vence: {formatDate(item.batch_details.expiry_date, { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' })}
-                                                                            </div>
-                                                                        )}
-
-                                                                        <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-500 mt-3">
-                                                                            <div>
-                                                                                <span className="font-semibold text-gray-700">SKU:</span>
-                                                                                <span className="ml-1 text-gray-600">{item.product_details?.sku || "N/A"}</span>
-                                                                            </div>
-                                                                            <div>
-                                                                                <span className="font-semibold text-gray-700">Precio:</span>
-                                                                                <span className="ml-1 text-gray-600">{formatCurrency(parseFloat(item.unit_price))}</span>
-                                                                            </div>
-                                                                            <div>
-                                                                                <span className="font-semibold text-gray-700">Vendidos:</span>
-                                                                                <span className="ml-1 text-gray-600">{item.original_quantity}</span>
+                                                    key={index}
+                                                    style={{
+                                                        padding: "12px",
+                                                        border: "1px solid #dee2e6",
+                                                        borderRadius: "4px",
+                                                        marginBottom: "8px",
+                                                        backgroundColor: "white",
+                                                    }}
+                                                >
+                                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                                        <div style={{ flex: 1 }}>
+                                                            <div style={{ fontWeight: "600", fontSize: "14px", color: "#2c3e50" }}>
+                                                                {item.product_details?.name || "Producto"}
                                                             </div>
-                                                                            <div>
-                                                                                <span className="font-semibold text-gray-700">Devueltos:</span>
-                                                                                <span className="ml-1 text-gray-600">{item.already_returned}</span>
+                                                            <div style={{ fontSize: "12px", color: "#6c757d" }}>
+                                                                SKU: {item.product_details?.sku} | Precio: ${item.unit_price}
                                                             </div>
+                                                            <div style={{ fontSize: "12px", color: "#6c757d", marginTop: '4px' }}>
+                                                                Cant. Vendida: <strong>{item.original_quantity}</strong> | Ya devueltos: <strong>{item.already_returned}</strong>
                                                             </div>
                                                         </div>
-
-                                                                    {/* Columna de Cantidad a Devolver */}
-                                                                    <div className="flex items-center justify-start md:justify-end space-x-3">
-                                                                        <label htmlFor={`return-qty-${item.id}-${item.batch_details?.id || index}`} className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                                                        <div style={{ marginLeft: "15px" }}>
+                                                            <label style={{ fontSize: "12px", color: "#6c757d", marginBottom: "4px", display: "block" }}>
                                                                 Cantidad a devolver:
                                                             </label>
                                                             <input
                                                                 type="number"
-                                                                            id={`return-qty-${item.id}-${item.batch_details?.id || index}`}
-                                                                            className="w-24 p-2 border border-gray-300 rounded-md text-center focus:ring-blue-500 focus:border-blue-500 transition"
-                                                                            value={item.return_quantity}
-                                                                            onChange={(e) => handleUpdateReturnQuantity(index, parseInt(e.target.value, 10) || 0)}
                                                                 min="0"
                                                                 max={item.max_quantity}
-                                                                            aria-label={`Cantidad a devolver para ${item.product_details?.name}`}
+                                                                value={item.return_quantity}
+                                                                onChange={(e) => handleUpdateReturnQuantity(index, parseInt(e.target.value) || 0)}
+                                                                style={{
+                                                                    width: "80px",
+                                                                    padding: "4px 8px",
+                                                                    border: "1px solid #dee2e6",
+                                                                    borderRadius: "4px",
+                                                                    fontSize: "14px",
+                                                                    textAlign: "center",
+                                                                }}
                                                             />
                                                         </div>
-                                                                </div>
-
-                                                                {/* --- START: Inventory Impact Feedback --- */}
-                                                                <div className="mt-4 pt-3 border-t border-dashed border-gray-300">
-                                                                    {item.return_quantity > 0 ? (
-                                                                        <div>
-                                                                            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Impacto en inventario</p>
-                                                                            <div className="space-y-2">
-                                                                                {item.product_details?.product_type === 'composite' ? (
-                                                                                    <>
-                                                                                        <div className="flex items-center text-sm text-green-800 bg-green-100 p-2 rounded-md">
-                                                                                            <span className="font-bold mr-2">Kit:</span>
-                                                                                            <span>Se restaurarán <strong>{item.return_quantity}</strong> ud(s) de <strong>{item.product_details.name}</strong>.</span>
-                                                                                        </div>
-                                                                                        {item.product_details.components?.map(comp => (
-                                                                                            <div key={comp.component_product.id} className="flex items-center text-sm text-blue-800 bg-blue-100 p-2 rounded-md ml-4">
-                                                                                                <span className="font-bold mr-2">Componente:</span>
-                                                                                                <span>Se restaurarán <strong>{item.return_quantity * comp.quantity}</strong> ud(s) de <strong>{comp.component_product.name}</strong>.</span>
-                                                                                            </div>
-                                                                                        ))}
-                                                                                    </>
-                                                                                ) : (
-                                                                                    <div className="flex items-center text-sm text-green-800 bg-green-100 p-2 rounded-md">
-                                                                                        <span className="font-bold mr-2">Producto:</span>
-                                                                                        <span>Se restaurarán <strong>{item.return_quantity}</strong> ud(s) al lote original.</span>
-                                                                                    </div>
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
-                                                                    ) : (
-                                                                        <p className="text-xs text-center text-gray-400 italic py-2">Ajuste la cantidad para ver el impacto en el inventario.</p>
-                                                                    )}
-                                                                </div>
-                                                                {/* --- END: Inventory Impact Feedback --- */}
-                                                            </div>
-                                                        ))}
                                                     </div>
-                                                )}
                                                 </div>
+                                            ))}
                                         </div>
 
                                         {/* Return Details */}
-                                        <div className="mt-6">
+                                        <div style={{ marginBottom: "20px" }}>
                                             <label style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "#2c3e50", marginBottom: "8px" }}>
                                                 Motivo de la devolución:
                                             </label>
@@ -767,7 +702,8 @@ const ReturnsPage = () => {
                                                 </div>
                                                 <div style={{ fontSize: "14px", color: "#856404" }}>
                                                     Productos: {returnTotals.itemCount} | 
-                                                    Monto total: {formatCurrency(returnTotals.totalAmount)}
+                                                    Cantidad total: {returnTotals.totalQuantity} | 
+                                                    Monto total: ${returnTotals.totalAmount}
                                                 </div>
                                             </div>
                                         )}
@@ -844,18 +780,20 @@ const ReturnsPage = () => {
                                     <th style={{ padding: "12px", textAlign: "left" }}>Notas</th>
                                 </tr>
                             </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                                {returnHistory.map((ret) => (
-                                    <tr key={ret.id} className="hover:bg-gray-50">
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">#{ret.id}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            #{ret.original_sale_details?.id || ret.original_sale}
+                            <tbody>
+                                {returnHistory.map(ret => (
+                                    <tr key={ret.id} style={{ borderBottom: "1px solid #e9ecef" }}>
+                                        <td style={{ padding: "12px" }}>#{ret.id}</td>
+                                        <td style={{ padding: "12px" }}>#{ret.original_sale}</td>
+                                        <td style={{ padding: "12px" }}>{ret.customer_details?.name || "N/A"}</td>
+                                        <td style={{ padding: "12px" }}>{formatDate(ret.return_date)}</td>
+                                        <td style={{ padding: "12px", textAlign: "right", fontWeight: "bold" }}>
+                                            ${parseFloat(ret.total_amount || 0).toLocaleString()}
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{ret.customer_details?.name || "N/A"}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(ret.return_date)}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatCurrency(ret.total_amount)}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{reasonTranslations[ret.reason] || ret.reason}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{ret.notes || "Sin notas"}</td>
+                                        <td style={{ padding: "12px" }}>{reasonTranslations[ret.reason] || ret.reason}</td>
+                                        <td style={{ padding: "12px", maxWidth: "200px", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                                            {ret.notes || "Sin notas"}
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>

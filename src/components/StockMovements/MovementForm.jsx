@@ -14,6 +14,15 @@ const MovementForm = ({
     handleBatchesChange,
     handleAddBatch,
     handleRemoveBatch,
+    requiresBatchControl,
+    // Nuevos props para lotes disponibles en movimientos de salida
+    availableBatches = [],
+    selectedBatches = [],
+    isLoadingBatches = false,
+    showBatchSection = false,
+    handleBatchQuantityChange = () => {},
+    handleSelectCompleteBatch = () => {},
+    getTotalSelectedQuantity = () => 0,
 }) => {
     // Estado local para controlar la visibilidad del botón de agregar lote
     const [showAddBatchButton, setShowAddBatchButton] = useState(true);
@@ -174,11 +183,13 @@ const MovementForm = ({
                     </div>
                 </div>
 
-                {/* Segunda fila: Tipo de Movimiento y Cantidad */}
+                {/* Segunda fila: Tipo de Movimiento y Campos Condicionales */}
                 <div
                     style={{
                         display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
+                        gridTemplateColumns: selectedProduct
+                            ? "1fr 1fr"
+                            : "1fr",
                         gap: "24px",
                     }}
                 >
@@ -206,9 +217,8 @@ const MovementForm = ({
                         <div
                             style={{
                                 display: "flex",
-                                flexDirection: "row",
-                                gap: "16px",
-                                justifyContent: "space-around",
+                                gap: "12px",
+                                flexDirection: "column",
                             }}
                         >
                             {[
@@ -293,94 +303,204 @@ const MovementForm = ({
                         </div>
                     </div>
 
-                    {/* Cantidad */}
-                    <div
-                        style={{
-                            backgroundColor: "#f8f9fa",
-                            padding: "20px",
-                            borderRadius: "8px",
-                            border: "1px solid #e9ecef",
-                        }}
-                    >
-                        <label
-                            htmlFor="quantity"
+                    {/* Campos Condicionales: Solo aparecen cuando hay un producto seleccionado */}
+                    {selectedProduct && (
+                        <div
                             style={{
-                                display: "block",
-                                marginBottom: "8px",
-                                fontWeight: "600",
-                                color: "#2c3e50",
-                                fontSize: "16px",
+                                backgroundColor: "#f8f9fa",
+                                padding: "20px",
+                                borderRadius: "8px",
+                                border: "1px solid #e9ecef",
                             }}
                         >
-                            Cantidad <span style={{ color: "#dc3545" }}>*</span>
-                        </label>
-                        <div style={{ position: "relative" }}>
-                            <input
-                                type="number"
-                                id="quantity"
-                                name="quantity"
-                                value={formData.quantity}
-                                onChange={handleInputChange}
-                                min="1"
-                                style={{
-                                    width: "100%",
-                                    padding: "14px 16px",
-                                    paddingRight: "60px",
-                                    boxSizing: "border-box",
-                                    borderRadius: "8px",
-                                    border: "2px solid #e9ecef",
-                                    fontSize: "16px",
-                                    fontWeight: "500",
-                                    color: "#495057",
-                                    transition: "all 0.2s ease",
-                                    outline: "none",
-                                }}
-                                placeholder="0"
-                                required
-                                onFocus={(e) => {
-                                    e.currentTarget.style.borderColor =
-                                        "#2c3e50";
-                                    e.currentTarget.style.boxShadow =
-                                        "0 0 0 3px rgba(44, 62, 80, 0.1)";
-                                }}
-                                onBlur={(e) => {
-                                    e.currentTarget.style.borderColor =
-                                        "#e9ecef";
-                                    e.currentTarget.style.boxShadow = "none";
-                                }}
-                            />
-                            <span
-                                style={{
-                                    position: "absolute",
-                                    right: "16px",
-                                    top: "50%",
-                                    transform: "translateY(-50%)",
-                                    color: "#6c757d",
-                                    fontSize: "14px",
-                                    fontWeight: "500",
-                                    backgroundColor: "#e9ecef",
-                                    padding: "2px 6px",
-                                    borderRadius: "4px",
-                                    pointerEvents: "none",
-                                }}
-                            >
-                                und
-                            </span>
+                            {!requiresBatchControl ? (
+                                // Para productos SIN control de lotes
+                                <div>
+                                    <label
+                                        htmlFor="quantity"
+                                        style={{
+                                            display: "block",
+                                            marginBottom: "8px",
+                                            fontWeight: "600",
+                                            color: "#2c3e50",
+                                            fontSize: "16px",
+                                        }}
+                                    >
+                                        Cantidad{" "}
+                                        <span style={{ color: "#dc3545" }}>
+                                            *
+                                        </span>
+                                    </label>
+                                    <div
+                                        style={{
+                                            position: "relative",
+                                            marginBottom: "16px",
+                                        }}
+                                    >
+                                        <input
+                                            type="number"
+                                            id="quantity"
+                                            name="quantity"
+                                            value={formData.quantity}
+                                            onChange={handleInputChange}
+                                            min="1"
+                                            style={{
+                                                width: "100%",
+                                                padding: "14px 16px",
+                                                paddingRight: "60px",
+                                                boxSizing: "border-box",
+                                                borderRadius: "8px",
+                                                border: "2px solid #e9ecef",
+                                                fontSize: "16px",
+                                                fontWeight: "500",
+                                                color: "#495057",
+                                                transition: "all 0.2s ease",
+                                                outline: "none",
+                                            }}
+                                            placeholder="0"
+                                            required
+                                            onFocus={(e) => {
+                                                e.currentTarget.style.borderColor =
+                                                    "#2c3e50";
+                                                e.currentTarget.style.boxShadow =
+                                                    "0 0 0 3px rgba(44, 62, 80, 0.1)";
+                                            }}
+                                            onBlur={(e) => {
+                                                e.currentTarget.style.borderColor =
+                                                    "#e9ecef";
+                                                e.currentTarget.style.boxShadow =
+                                                    "none";
+                                            }}
+                                        />
+                                        <span
+                                            style={{
+                                                position: "absolute",
+                                                right: "16px",
+                                                top: "50%",
+                                                transform: "translateY(-50%)",
+                                                color: "#6c757d",
+                                                fontSize: "14px",
+                                                fontWeight: "500",
+                                                backgroundColor: "#e9ecef",
+                                                padding: "2px 6px",
+                                                borderRadius: "4px",
+                                                pointerEvents: "none",
+                                            }}
+                                        >
+                                            und
+                                        </span>
+                                    </div>
+
+                                    {/* Campo de fecha de vencimiento opcional para productos sin lotes */}
+                                    {formData.movementType === "in" && (
+                                        <div>
+                                            <label
+                                                htmlFor="expiryDate"
+                                                style={{
+                                                    display: "block",
+                                                    marginBottom: "8px",
+                                                    fontWeight: "600",
+                                                    color: "#2c3e50",
+                                                    fontSize: "16px",
+                                                }}
+                                            >
+                                                Fecha de Vencimiento{" "}
+                                                <span
+                                                    style={{
+                                                        color: "#6c757d",
+                                                        fontWeight: "400",
+                                                        fontSize: "14px",
+                                                    }}
+                                                >
+                                                    (opcional)
+                                                </span>
+                                            </label>
+                                            <input
+                                                type="date"
+                                                id="expiryDate"
+                                                name="expiryDate"
+                                                value={formData.expiryDate}
+                                                onChange={handleInputChange}
+                                                style={{
+                                                    width: "100%",
+                                                    padding: "14px 16px",
+                                                    boxSizing: "border-box",
+                                                    borderRadius: "8px",
+                                                    border: "2px solid #e9ecef",
+                                                    fontSize: "16px",
+                                                    fontWeight: "500",
+                                                    color: "#495057",
+                                                    transition: "all 0.2s ease",
+                                                    outline: "none",
+                                                }}
+                                                onFocus={(e) => {
+                                                    e.currentTarget.style.borderColor =
+                                                        "#2c3e50";
+                                                    e.currentTarget.style.boxShadow =
+                                                        "0 0 0 3px rgba(44, 62, 80, 0.1)";
+                                                }}
+                                                onBlur={(e) => {
+                                                    e.currentTarget.style.borderColor =
+                                                        "#e9ecef";
+                                                    e.currentTarget.style.boxShadow =
+                                                        "none";
+                                                }}
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                // Para productos CON control de lotes
+                                <div>
+                                    <div
+                                        style={{
+                                            padding: "12px",
+                                            backgroundColor: "#e8f5e8",
+                                            border: "2px solid #28a745",
+                                            borderRadius: "8px",
+                                            textAlign: "center",
+                                        }}
+                                    >
+                                        <div
+                                            style={{
+                                                fontSize: "16px",
+                                                fontWeight: "600",
+                                                color: "#28a745",
+                                                marginBottom: "4px",
+                                            }}
+                                        >
+                                            🏷️ Producto con Control de Lotes
+                                        </div>
+                                        <div
+                                            style={{
+                                                fontSize: "14px",
+                                                color: "#155724",
+                                            }}
+                                        >
+                                            Configure los lotes y cantidades en
+                                            la sección inferior
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
-                    </div>
+                    )}
                 </div>
 
-                {/* Tercera fila: Sección de Lotes (solo para movimientos de entrada) y Notas */}
+                {/* Tercera fila: Sección de Lotes (solo para productos con control de lotes) y Notas */}
                 <div
                     style={{
                         display: "grid",
                         gridTemplateColumns:
-                            formData.movementType === "in" ? "3fr 2fr" : "1fr",
+                            formData.movementType === "in" &&
+                            requiresBatchControl
+                                ? "3fr 2fr"
+                                : "1fr",
                         gap: "24px",
                     }}
                 >
-                    {/* Sección de Lotes (solo para movimientos de entrada) */}
-                    {formData.movementType === "in" && (
+                    {/* Sección de Lotes (solo para movimientos de entrada con control de lotes) */}
+                    {formData.movementType === "in" && requiresBatchControl && (
                         <div
                             style={{
                                 backgroundColor: "#f0f9ff",
@@ -407,15 +527,15 @@ const MovementForm = ({
                                         margin: "0",
                                     }}
                                 >
-                                    Especifique los lotes y fechas de
-                                    vencimiento para este movimiento de entrada
+                                    Especifique los lotes, fechas de vencimiento
+                                    y cantidades para cada lote
                                 </p>
                             </div>
 
                             {/* Lista de lotes */}
                             <div
                                 style={{
-                                    maxHeight: "300px",
+                                    maxHeight: "400px",
                                     overflowY: "auto",
                                 }}
                             >
@@ -474,21 +594,21 @@ const MovementForm = ({
                                         <div
                                             style={{
                                                 display: "grid",
-                                                gridTemplateColumns: "1fr 1fr",
+                                                gridTemplateColumns:
+                                                    "1fr 1fr 1fr",
                                                 gap: "16px",
                                                 marginBottom: "12px",
                                             }}
                                         >
-                                            {/* Número de lote */}
+                                            {/* Número de Lote */}
                                             <div>
                                                 <label
-                                                    htmlFor={`batch_number_${index}`}
                                                     style={{
                                                         display: "block",
-                                                        marginBottom: "6px",
+                                                        marginBottom: "4px",
+                                                        fontSize: "12px",
                                                         fontWeight: "600",
-                                                        color: "#2c3e50",
-                                                        fontSize: "14px",
+                                                        color: "#0d47a1",
                                                     }}
                                                 >
                                                     Número de Lote{" "}
@@ -502,7 +622,6 @@ const MovementForm = ({
                                                 </label>
                                                 <input
                                                     type="text"
-                                                    id={`batch_number_${index}`}
                                                     value={batch.batch_number}
                                                     onChange={(e) =>
                                                         handleBatchesChange(
@@ -511,34 +630,28 @@ const MovementForm = ({
                                                             e.target.value
                                                         )
                                                     }
+                                                    placeholder="Ej: LT-001"
                                                     style={{
                                                         width: "100%",
-                                                        padding: "12px 14px",
-                                                        borderRadius: "8px",
-                                                        border: "2px solid #e9ecef",
+                                                        padding: "8px 10px",
+                                                        border: "1px solid #ccc",
+                                                        borderRadius: "4px",
                                                         fontSize: "14px",
-                                                        fontWeight: "500",
-                                                        color: "#495057",
-                                                        transition:
-                                                            "all 0.2s ease",
-                                                        outline: "none",
                                                         boxSizing: "border-box",
                                                     }}
-                                                    placeholder="Ej: LOT2024001"
                                                     required
                                                 />
                                             </div>
 
-                                            {/* Fecha de vencimiento */}
+                                            {/* Fecha de Vencimiento */}
                                             <div>
                                                 <label
-                                                    htmlFor={`expiry_date_${index}`}
                                                     style={{
                                                         display: "block",
-                                                        marginBottom: "6px",
+                                                        marginBottom: "4px",
+                                                        fontSize: "12px",
                                                         fontWeight: "600",
-                                                        color: "#2c3e50",
-                                                        fontSize: "14px",
+                                                        color: "#0d47a1",
                                                     }}
                                                 >
                                                     Fecha de Vencimiento{" "}
@@ -552,7 +665,6 @@ const MovementForm = ({
                                                 </label>
                                                 <input
                                                     type="date"
-                                                    id={`expiry_date_${index}`}
                                                     value={batch.expiry_date}
                                                     onChange={(e) =>
                                                         handleBatchesChange(
@@ -563,22 +675,86 @@ const MovementForm = ({
                                                     }
                                                     style={{
                                                         width: "100%",
-                                                        padding: "12px 14px",
-                                                        borderRadius: "8px",
-                                                        border: "2px solid #e9ecef",
+                                                        padding: "8px 10px",
+                                                        border: "1px solid #ccc",
+                                                        borderRadius: "4px",
                                                         fontSize: "14px",
-                                                        fontWeight: "500",
-                                                        color: "#495057",
-                                                        transition:
-                                                            "all 0.2s ease",
-                                                        outline: "none",
                                                         boxSizing: "border-box",
                                                     }}
                                                     required
                                                 />
                                             </div>
+
+                                            {/* Cantidad del Lote */}
+                                            <div>
+                                                <label
+                                                    style={{
+                                                        display: "block",
+                                                        marginBottom: "4px",
+                                                        fontSize: "12px",
+                                                        fontWeight: "600",
+                                                        color: "#0d47a1",
+                                                    }}
+                                                >
+                                                    Cantidad{" "}
+                                                    <span
+                                                        style={{
+                                                            color: "#dc3545",
+                                                        }}
+                                                    >
+                                                        *
+                                                    </span>
+                                                </label>
+                                                <div
+                                                    style={{
+                                                        position: "relative",
+                                                    }}
+                                                >
+                                                    <input
+                                                        type="number"
+                                                        value={batch.quantity}
+                                                        onChange={(e) =>
+                                                            handleBatchesChange(
+                                                                index,
+                                                                "quantity",
+                                                                e.target.value
+                                                            )
+                                                        }
+                                                        placeholder="0"
+                                                        min="1"
+                                                        style={{
+                                                            width: "100%",
+                                                            padding:
+                                                                "8px 30px 8px 10px",
+                                                            border: "1px solid #ccc",
+                                                            borderRadius: "4px",
+                                                            fontSize: "14px",
+                                                            boxSizing:
+                                                                "border-box",
+                                                        }}
+                                                        required
+                                                    />
+                                                    <span
+                                                        style={{
+                                                            position:
+                                                                "absolute",
+                                                            right: "8px",
+                                                            top: "50%",
+                                                            transform:
+                                                                "translateY(-50%)",
+                                                            color: "#6c757d",
+                                                            fontSize: "12px",
+                                                            pointerEvents:
+                                                                "none",
+                                                        }}
+                                                    >
+                                                        und
+                                                    </span>
+                                                </div>
+                                            </div>
                                         </div>
 
+                                        {/* Campos opcionales */}
                                         <div
                                             style={{
                                                 display: "grid",
@@ -586,35 +762,24 @@ const MovementForm = ({
                                                 gap: "16px",
                                             }}
                                         >
-                                            {/* Fecha de fabricación (opcional) */}
+                                            {/* Fecha de Fabricación */}
                                             <div>
                                                 <label
-                                                    htmlFor={`manufacturing_date_${index}`}
                                                     style={{
                                                         display: "block",
-                                                        marginBottom: "6px",
+                                                        marginBottom: "4px",
+                                                        fontSize: "12px",
                                                         fontWeight: "600",
-                                                        color: "#2c3e50",
-                                                        fontSize: "14px",
+                                                        color: "#6c757d",
                                                     }}
                                                 >
-                                                    Fecha de Fabricación{" "}
-                                                    <span
-                                                        style={{
-                                                            color: "#6c757d",
-                                                            fontWeight: "400",
-                                                            fontSize: "12px",
-                                                        }}
-                                                    >
-                                                        (opcional)
-                                                    </span>
+                                                    Fecha de Fabricación
+                                                    (opcional)
                                                 </label>
                                                 <input
                                                     type="date"
-                                                    id={`manufacturing_date_${index}`}
                                                     value={
-                                                        batch.manufacturing_date ||
-                                                        ""
+                                                        batch.manufacturing_date
                                                     }
                                                     onChange={(e) =>
                                                         handleBatchesChange(
@@ -625,49 +790,33 @@ const MovementForm = ({
                                                     }
                                                     style={{
                                                         width: "100%",
-                                                        padding: "12px 14px",
-                                                        borderRadius: "8px",
-                                                        border: "2px solid #e9ecef",
+                                                        padding: "8px 10px",
+                                                        border: "1px solid #ccc",
+                                                        borderRadius: "4px",
                                                         fontSize: "14px",
-                                                        fontWeight: "500",
-                                                        color: "#495057",
-                                                        transition:
-                                                            "all 0.2s ease",
-                                                        outline: "none",
                                                         boxSizing: "border-box",
                                                     }}
                                                 />
                                             </div>
 
-                                            {/* Referencia del proveedor (opcional) */}
+                                            {/* Referencia del Proveedor */}
                                             <div>
                                                 <label
-                                                    htmlFor={`supplier_reference_${index}`}
                                                     style={{
                                                         display: "block",
-                                                        marginBottom: "6px",
+                                                        marginBottom: "4px",
+                                                        fontSize: "12px",
                                                         fontWeight: "600",
-                                                        color: "#2c3e50",
-                                                        fontSize: "14px",
+                                                        color: "#6c757d",
                                                     }}
                                                 >
-                                                    Referencia del Proveedor{" "}
-                                                    <span
-                                                        style={{
-                                                            color: "#6c757d",
-                                                            fontWeight: "400",
-                                                            fontSize: "12px",
-                                                        }}
-                                                    >
-                                                        (opcional)
-                                                    </span>
+                                                    Referencia del Proveedor
+                                                    (opcional)
                                                 </label>
                                                 <input
                                                     type="text"
-                                                    id={`supplier_reference_${index}`}
                                                     value={
-                                                        batch.supplier_reference ||
-                                                        ""
+                                                        batch.supplier_reference
                                                     }
                                                     onChange={(e) =>
                                                         handleBatchesChange(
@@ -676,20 +825,15 @@ const MovementForm = ({
                                                             e.target.value
                                                         )
                                                     }
+                                                    placeholder="Ej: REF-12345"
                                                     style={{
                                                         width: "100%",
-                                                        padding: "12px 14px",
-                                                        borderRadius: "8px",
-                                                        border: "2px solid #e9ecef",
+                                                        padding: "8px 10px",
+                                                        border: "1px solid #ccc",
+                                                        borderRadius: "4px",
                                                         fontSize: "14px",
-                                                        fontWeight: "500",
-                                                        color: "#495057",
-                                                        transition:
-                                                            "all 0.2s ease",
-                                                        outline: "none",
                                                         boxSizing: "border-box",
                                                     }}
-                                                    placeholder="Ej: PROV-REF-001"
                                                 />
                                             </div>
                                         </div>
@@ -697,42 +841,522 @@ const MovementForm = ({
                                 ))}
                             </div>
 
-                            {/* Botón para agregar más lotes */}
-                            {showAddBatchButton && (
-                                <button
-                                    type="button"
-                                    onClick={handleAddBatch}
+                            {/* Botón para agregar nuevo lote */}
+                            <button
+                                type="button"
+                                onClick={handleAddBatch}
+                                style={{
+                                    width: "100%",
+                                    padding: "12px",
+                                    backgroundColor: "#2196f3",
+                                    color: "#fff",
+                                    border: "none",
+                                    borderRadius: "6px",
+                                    fontSize: "14px",
+                                    fontWeight: "600",
+                                    cursor: "pointer",
+                                    transition: "background-color 0.2s ease",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    gap: "8px",
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor =
+                                        "#1976d2";
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor =
+                                        "#2196f3";
+                                }}
+                            >
+                                <span>➕</span> Agregar Nuevo Lote
+                            </button>
+
+                            {/* Resumen de cantidades */}
+                            {batchesData.length > 0 && (
+                                <div
                                     style={{
-                                        background: "none",
-                                        border: "2px dashed #90caf9",
-                                        borderRadius: "8px",
-                                        padding: "12px 16px",
-                                        width: "100%",
-                                        color: "#1565c0",
-                                        cursor: "pointer",
-                                        fontSize: "14px",
-                                        fontWeight: "600",
-                                        display: "flex",
-                                        alignItems: "center",
-                                        justifyContent: "center",
-                                        gap: "8px",
-                                        transition: "all 0.2s ease",
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        e.currentTarget.style.backgroundColor =
-                                            "#e3f2fd";
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.currentTarget.style.backgroundColor =
-                                            "transparent";
+                                        marginTop: "16px",
+                                        padding: "12px",
+                                        backgroundColor: "#e8f5e8",
+                                        border: "1px solid #4caf50",
+                                        borderRadius: "6px",
                                     }}
                                 >
-                                    <span style={{ fontSize: "18px" }}>+</span>{" "}
-                                    Agregar Otro Lote
-                                </button>
+                                    <div
+                                        style={{
+                                            fontSize: "14px",
+                                            fontWeight: "600",
+                                            color: "#2e7d32",
+                                            marginBottom: "4px",
+                                        }}
+                                    >
+                                        📊 Resumen de Cantidades
+                                    </div>
+                                    <div
+                                        style={{
+                                            fontSize: "13px",
+                                            color: "#388e3c",
+                                        }}
+                                    >
+                                        <strong>Total de unidades:</strong>{" "}
+                                        {batchesData.reduce(
+                                            (sum, batch) =>
+                                                sum +
+                                                parseInt(batch.quantity || 0),
+                                            0
+                                        )}{" "}
+                                        unidades
+                                    </div>
+                                    <div
+                                        style={{
+                                            fontSize: "12px",
+                                            color: "#4caf50",
+                                            marginTop: "4px",
+                                        }}
+                                    >
+                                        {
+                                            batchesData.filter(
+                                                (batch) =>
+                                                    batch.quantity &&
+                                                    parseInt(batch.quantity) > 0
+                                            ).length
+                                        }{" "}
+                                        lote(s) con cantidad válida
+                                    </div>
+                                </div>
                             )}
                         </div>
                     )}
+
+                    {/* Sección de Lotes Disponibles para Movimientos de Salida */}
+                    {requiresBatchControl &&
+                        formData.movementType === "out" &&
+                        selectedProduct &&
+                        formData.location && (
+                            <div
+                                style={{
+                                    backgroundColor: "#fff3e0",
+                                    padding: "20px",
+                                    borderRadius: "8px",
+                                    border: "1px solid #ffcc80",
+                                }}
+                            >
+                                <div style={{ marginBottom: "16px" }}>
+                                    <h3
+                                        style={{
+                                            fontSize: "18px",
+                                            fontWeight: "600",
+                                            margin: "0 0 8px 0",
+                                            color: "#e65100",
+                                        }}
+                                    >
+                                        Lotes Disponibles para Salida
+                                    </h3>
+                                    <p
+                                        style={{
+                                            fontSize: "14px",
+                                            color: "#f57c00",
+                                            margin: "0",
+                                        }}
+                                    >
+                                        Seleccione los lotes y cantidades que
+                                        desea sacar del inventario
+                                    </p>
+                                </div>
+
+                                {isLoadingBatches ? (
+                                    <div
+                                        style={{
+                                            textAlign: "center",
+                                            padding: "20px",
+                                            color: "#ff9800",
+                                        }}
+                                    >
+                                        <span>⏳</span> Cargando lotes
+                                        disponibles...
+                                    </div>
+                                ) : showBatchSection &&
+                                  availableBatches.length > 0 ? (
+                                    <>
+                                        {/* Lista de lotes disponibles */}
+                                        <div
+                                            style={{
+                                                maxHeight: "400px",
+                                                overflowY: "auto",
+                                            }}
+                                        >
+                                            {selectedBatches.map(
+                                                (batch, index) => {
+                                                    const isExpired =
+                                                        new Date(
+                                                            batch.expiry_date
+                                                        ) < new Date();
+                                                    const isNearExpiry =
+                                                        new Date(
+                                                            batch.expiry_date
+                                                        ) <=
+                                                        new Date(
+                                                            Date.now() +
+                                                                30 *
+                                                                    24 *
+                                                                    60 *
+                                                                    60 *
+                                                                    1000
+                                                        );
+
+                                                    return (
+                                                        <div
+                                                            key={batch.batch_id}
+                                                            style={{
+                                                                backgroundColor:
+                                                                    "#fff",
+                                                                padding: "16px",
+                                                                borderRadius:
+                                                                    "8px",
+                                                                border: `2px solid ${
+                                                                    isExpired
+                                                                        ? "#f44336"
+                                                                        : isNearExpiry
+                                                                        ? "#ff9800"
+                                                                        : "#4caf50"
+                                                                }`,
+                                                                marginBottom:
+                                                                    "16px",
+                                                            }}
+                                                        >
+                                                            <div
+                                                                style={{
+                                                                    display:
+                                                                        "flex",
+                                                                    justifyContent:
+                                                                        "space-between",
+                                                                    alignItems:
+                                                                        "center",
+                                                                    marginBottom:
+                                                                        "12px",
+                                                                }}
+                                                            >
+                                                                <div>
+                                                                    <h4
+                                                                        style={{
+                                                                            fontSize:
+                                                                                "16px",
+                                                                            fontWeight:
+                                                                                "600",
+                                                                            margin: "0 0 4px 0",
+                                                                            color: "#e65100",
+                                                                        }}
+                                                                    >
+                                                                        Lote:{" "}
+                                                                        {
+                                                                            batch.batch_number
+                                                                        }
+                                                                    </h4>
+                                                                    <div
+                                                                        style={{
+                                                                            fontSize:
+                                                                                "13px",
+                                                                            color: "#666",
+                                                                        }}
+                                                                    >
+                                                                        <div>
+                                                                            <strong>
+                                                                                Vencimiento:
+                                                                            </strong>{" "}
+                                                                            {new Date(
+                                                                                batch.expiry_date
+                                                                            ).toLocaleDateString()}
+                                                                            {isExpired && (
+                                                                                <span
+                                                                                    style={{
+                                                                                        color: "#f44336",
+                                                                                        fontWeight:
+                                                                                            "bold",
+                                                                                    }}
+                                                                                >
+                                                                                    {" "}
+                                                                                    (VENCIDO)
+                                                                                </span>
+                                                                            )}
+                                                                            {!isExpired &&
+                                                                                isNearExpiry && (
+                                                                                    <span
+                                                                                        style={{
+                                                                                            color: "#ff9800",
+                                                                                            fontWeight:
+                                                                                                "bold",
+                                                                                        }}
+                                                                                    >
+                                                                                        {" "}
+                                                                                        (PRÓXIMO
+                                                                                        A
+                                                                                        VENCER)
+                                                                                    </span>
+                                                                                )}
+                                                                        </div>
+                                                                        <div>
+                                                                            <strong>
+                                                                                Stock
+                                                                                disponible:
+                                                                            </strong>{" "}
+                                                                            {
+                                                                                batch.quantity
+                                                                            }{" "}
+                                                                            unidades
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <div
+                                                                    style={{
+                                                                        padding:
+                                                                            "8px 12px",
+                                                                        borderRadius:
+                                                                            "20px",
+                                                                        fontSize:
+                                                                            "12px",
+                                                                        fontWeight:
+                                                                            "600",
+                                                                        backgroundColor:
+                                                                            isExpired
+                                                                                ? "#ffebee"
+                                                                                : isNearExpiry
+                                                                                ? "#fff3e0"
+                                                                                : "#e8f5e8",
+                                                                        color: isExpired
+                                                                            ? "#c62828"
+                                                                            : isNearExpiry
+                                                                            ? "#e65100"
+                                                                            : "#2e7d32",
+                                                                    }}
+                                                                >
+                                                                    {isExpired
+                                                                        ? "VENCIDO"
+                                                                        : isNearExpiry
+                                                                        ? "PRÓXIMO"
+                                                                        : "VÁLIDO"}
+                                                                </div>
+                                                            </div>
+
+                                                            <div
+                                                                style={{
+                                                                    display:
+                                                                        "flex",
+                                                                    alignItems:
+                                                                        "center",
+                                                                    gap: "12px",
+                                                                }}
+                                                            >
+                                                                <div
+                                                                    style={{
+                                                                        flex: 1,
+                                                                    }}
+                                                                >
+                                                                    <label
+                                                                        style={{
+                                                                            display:
+                                                                                "block",
+                                                                            marginBottom:
+                                                                                "4px",
+                                                                            fontSize:
+                                                                                "12px",
+                                                                            fontWeight:
+                                                                                "600",
+                                                                            color: "#e65100",
+                                                                        }}
+                                                                    >
+                                                                        Cantidad
+                                                                        a sacar
+                                                                    </label>
+                                                                    <input
+                                                                        type="number"
+                                                                        min="0"
+                                                                        max={
+                                                                            batch.quantity
+                                                                        }
+                                                                        value={
+                                                                            batch.selectedQuantity
+                                                                        }
+                                                                        onChange={(
+                                                                            e
+                                                                        ) =>
+                                                                            handleBatchQuantityChange(
+                                                                                index,
+                                                                                e
+                                                                                    .target
+                                                                                    .value
+                                                                            )
+                                                                        }
+                                                                        placeholder="0"
+                                                                        style={{
+                                                                            width: "100%",
+                                                                            padding:
+                                                                                "8px 10px",
+                                                                            border: "1px solid #ccc",
+                                                                            borderRadius:
+                                                                                "4px",
+                                                                            fontSize:
+                                                                                "14px",
+                                                                            boxSizing:
+                                                                                "border-box",
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() =>
+                                                                        handleSelectCompleteBatch(
+                                                                            index
+                                                                        )
+                                                                    }
+                                                                    style={{
+                                                                        padding:
+                                                                            "8px 12px",
+                                                                        backgroundColor:
+                                                                            "#ff9800",
+                                                                        color: "#fff",
+                                                                        border: "none",
+                                                                        borderRadius:
+                                                                            "4px",
+                                                                        fontSize:
+                                                                            "12px",
+                                                                        fontWeight:
+                                                                            "600",
+                                                                        cursor: "pointer",
+                                                                        whiteSpace:
+                                                                            "nowrap",
+                                                                        transition:
+                                                                            "background-color 0.2s ease",
+                                                                    }}
+                                                                    onMouseEnter={(
+                                                                        e
+                                                                    ) => {
+                                                                        e.currentTarget.style.backgroundColor =
+                                                                            "#f57c00";
+                                                                    }}
+                                                                    onMouseLeave={(
+                                                                        e
+                                                                    ) => {
+                                                                        e.currentTarget.style.backgroundColor =
+                                                                            "#ff9800";
+                                                                    }}
+                                                                >
+                                                                    Todo el lote
+                                                                </button>
+                                                            </div>
+
+                                                            {/* Indicador de transferencia parcial */}
+                                                            {batch.isPartial &&
+                                                                batch.selectedQuantity >
+                                                                    0 && (
+                                                                    <div
+                                                                        style={{
+                                                                            marginTop:
+                                                                                "8px",
+                                                                            padding:
+                                                                                "6px 10px",
+                                                                            backgroundColor:
+                                                                                "#e3f2fd",
+                                                                            border: "1px solid #2196f3",
+                                                                            borderRadius:
+                                                                                "4px",
+                                                                            fontSize:
+                                                                                "12px",
+                                                                            color: "#1976d2",
+                                                                            fontWeight:
+                                                                                "500",
+                                                                        }}
+                                                                    >
+                                                                        ⚠️
+                                                                        Transferencia
+                                                                        parcial:
+                                                                        Se
+                                                                        sacarán{" "}
+                                                                        {
+                                                                            batch.selectedQuantity
+                                                                        }{" "}
+                                                                        de{" "}
+                                                                        {
+                                                                            batch.quantity
+                                                                        }{" "}
+                                                                        unidades
+                                                                    </div>
+                                                                )}
+                                                        </div>
+                                                    );
+                                                }
+                                            )}
+                                        </div>
+
+                                        {/* Resumen de cantidades seleccionadas */}
+                                        {getTotalSelectedQuantity() > 0 && (
+                                            <div
+                                                style={{
+                                                    marginTop: "16px",
+                                                    padding: "12px",
+                                                    backgroundColor: "#fff3e0",
+                                                    border: "1px solid #ff9800",
+                                                    borderRadius: "6px",
+                                                }}
+                                            >
+                                                <div
+                                                    style={{
+                                                        fontSize: "14px",
+                                                        fontWeight: "600",
+                                                        color: "#e65100",
+                                                        marginBottom: "4px",
+                                                    }}
+                                                >
+                                                    📊 Resumen de Salida
+                                                </div>
+                                                <div
+                                                    style={{
+                                                        fontSize: "13px",
+                                                        color: "#f57c00",
+                                                    }}
+                                                >
+                                                    <strong>
+                                                        Total a sacar:
+                                                    </strong>{" "}
+                                                    {getTotalSelectedQuantity()}{" "}
+                                                    unidades
+                                                </div>
+                                                <div
+                                                    style={{
+                                                        fontSize: "12px",
+                                                        color: "#ff9800",
+                                                        marginTop: "4px",
+                                                    }}
+                                                >
+                                                    {
+                                                        selectedBatches.filter(
+                                                            (batch) =>
+                                                                batch.selectedQuantity >
+                                                                0
+                                                        ).length
+                                                    }{" "}
+                                                    lote(s) seleccionado(s)
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
+                                ) : (
+                                    <div
+                                        style={{
+                                            textAlign: "center",
+                                            padding: "20px",
+                                            color: "#666",
+                                            backgroundColor: "#f5f5f5",
+                                            borderRadius: "8px",
+                                        }}
+                                    >
+                                        <span>📦</span> No hay lotes disponibles
+                                        en esta ubicación
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                     {/* Notas */}
                     <div
