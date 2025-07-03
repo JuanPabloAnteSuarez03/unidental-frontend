@@ -3,6 +3,8 @@ import { useAuth } from "../context/AuthContext";
 import { useProducts } from "../context/ProductsContext";
 import inventoryService from "../services/inventoryService";
 import { createProductBatch } from "../services/productBatchService";
+import batchesService from "../services/batchesService";
+import advancedInventoryService from "../services/advancedInventoryService";
 import MovementsHeader from "../components/StockMovements/MovementsHeader";
 import MovementNotification from "../components/StockMovements/MovementNotification";
 import MovementForm from "../components/StockMovements/MovementForm";
@@ -16,20 +18,30 @@ const MovimientosDeStockPage = () => {
         product: "",
         location: "",
         movementType: "in",
-        quantity: "",
-        expiryDate: "",
+        quantity: "", // Solo se mostrará para productos sin lotes
+        expiryDate: "", // Solo se mostrará para productos sin lotes
         notes: "",
     });
 
-    // Estado para los lotes
+    // Estado para los lotes (solo para productos que requieren control de lotes)
     const [batchesData, setBatchesData] = useState([
         {
             batch_number: "",
             expiry_date: "",
             manufacturing_date: "",
             supplier_reference: "",
+            quantity: "", // Cantidad específica para este lote
         },
     ]);
+
+    // Estados para lotes disponibles en movimientos de salida
+    const [availableBatches, setAvailableBatches] = useState([]);
+    const [selectedBatches, setSelectedBatches] = useState([]);
+    const [isLoadingBatches, setIsLoadingBatches] = useState(false);
+    const [showBatchSection, setShowBatchSection] = useState(false);
+
+    // Estado para verificar si el producto seleccionado requiere control de lotes
+    const [requiresBatchControl, setRequiresBatchControl] = useState(false);
 
     // Estado para filtros del historial
     const [filters, setFilters] = useState({
@@ -84,15 +96,49 @@ const MovimientosDeStockPage = () => {
         setFormData({
             ...formData,
             product: product.name,
+            quantity: "", // Limpiar cantidad al cambiar producto
+            expiryDate: "", // Limpiar fecha de vencimiento al cambiar producto
         });
+
+        // Verificar si el producto requiere control de lotes
+        const productRequiresBatches =
+            batchesService.requiresBatchControl(product);
+        setRequiresBatchControl(productRequiresBatches);
+
+        // Reiniciar estados de lotes
+        setAvailableBatches([]);
+        setSelectedBatches([]);
+        setShowBatchSection(false);
+
+        // Reiniciar lotes para movimientos de entrada según el tipo de producto
+        if (productRequiresBatches) {
+            setBatchesData([
+                {
+                    batch_number: "",
+                    expiry_date: "",
+                    manufacturing_date: "",
+                    supplier_reference: "",
+                    quantity: "",
+                },
+            ]);
+        } else {
+            setBatchesData([]);
+        }
     };
 
     // Función para limpiar selección de producto
     const handleProductSelectionCleared = () => {
         setSelectedProduct(null);
+        setRequiresBatchControl(false);
+        setAvailableBatches([]);
+        setSelectedBatches([]);
+        setShowBatchSection(false);
+        setBatchesData([]);
         setFormData({
             ...formData,
             product: "",
+            quantity: "",
+            expiryDate: "",
         });
     };
 
@@ -100,28 +146,50 @@ const MovimientosDeStockPage = () => {
     const handleInputChange = (e) => {
         const { name, value } = e.target;
 
-        // Si se cambia el tipo de movimiento a "salida", limpiar la fecha de vencimiento
-        if (name === "movementType" && value === "out") {
-            setFormData({
-                ...formData,
-                [name]: value,
-                expiryDate: "", // Limpiar fecha de vencimiento para salidas
-            });
+        // Actualizar formData
+        const updatedFormData = {
+            ...formData,
+            [name]: value,
+        };
 
-            // Reiniciar los lotes cuando se cambia a salida
-            setBatchesData([
-                {
-                    batch_number: "",
-                    expiry_date: "",
-                    manufacturing_date: "",
-                    supplier_reference: "",
-                },
-            ]);
-        } else {
-            setFormData({
-                ...formData,
-                [name]: value,
-            });
+        // Si se cambia el tipo de movimiento
+        if (name === "movementType") {
+            if (value === "out") {
+                // Limpiar campos específicos para salidas
+                updatedFormData.expiryDate = "";
+
+                // Reiniciar lotes de entrada
+                if (requiresBatchControl) {
+                    setBatchesData([
+                        {
+                            batch_number: "",
+                            expiry_date: "",
+                            manufacturing_date: "",
+                            supplier_reference: "",
+                            quantity: "",
+                        },
+                    ]);
+                }
+            } else {
+                // Para movimientos de entrada, limpiar selección de lotes de salida
+                setAvailableBatches([]);
+                setSelectedBatches([]);
+                setShowBatchSection(false);
+            }
+        }
+
+        setFormData(updatedFormData);
+
+        // Si se cambió la ubicación o el tipo de movimiento, verificar si cargar lotes
+        if (
+            (name === "location" || name === "movementType") &&
+            selectedProduct &&
+            requiresBatchControl &&
+            updatedFormData.movementType === "out" &&
+            updatedFormData.location
+        ) {
+            // Cargar lotes disponibles para movimientos de salida
+            setTimeout(() => loadAvailableBatches(), 100);
         }
     };
 
@@ -144,6 +212,7 @@ const MovimientosDeStockPage = () => {
                 expiry_date: "",
                 manufacturing_date: "",
                 supplier_reference: "",
+                quantity: "",
             },
         ]);
     };
@@ -219,17 +288,11 @@ const MovimientosDeStockPage = () => {
         e.preventDefault();
 
         // Validación básica - todos los campos son obligatorios excepto notas
-        if (
-            !selectedProduct ||
-            !formData.location ||
-            !formData.movementType ||
-            !formData.quantity
-        ) {
+        if (!selectedProduct || !formData.location || !formData.movementType) {
             setNotification({
                 show: true,
                 type: "error",
-                message:
-                    "Por favor complete todos los campos obligatorios (todos excepto notas)",
+                message: "Por favor complete todos los campos obligatorios",
             });
             setTimeout(() => {
                 setNotification({ show: false, type: "", message: "" });
@@ -237,34 +300,78 @@ const MovimientosDeStockPage = () => {
             return;
         }
 
-        // Validación adicional para los lotes en caso de movimiento de entrada
+        // Validaciones específicas según el tipo de producto y movimiento
         if (formData.movementType === "in") {
-            const invalidBatches = batchesData.filter(
-                (batch) => !batch.batch_number || !batch.expiry_date
-            );
+            if (requiresBatchControl) {
+                // Para productos con control de lotes
+                const invalidBatches = batchesData.filter(
+                    (batch) =>
+                        !batch.batch_number ||
+                        !batch.expiry_date ||
+                        !batch.quantity
+                );
 
-            if (invalidBatches.length > 0) {
-                setNotification({
-                    show: true,
-                    type: "error",
-                    message:
-                        "Por favor complete el número de lote y fecha de vencimiento para todos los lotes",
-                });
-                setTimeout(() => {
-                    setNotification({ show: false, type: "", message: "" });
-                }, 5000);
-                return;
+                if (batchesData.length === 0 || invalidBatches.length > 0) {
+                    setNotification({
+                        show: true,
+                        type: "error",
+                        message:
+                            "Por favor complete el número de lote, fecha de vencimiento y cantidad para todos los lotes",
+                    });
+                    setTimeout(() => {
+                        setNotification({ show: false, type: "", message: "" });
+                    }, 5000);
+                    return;
+                }
+            } else {
+                // Para productos sin control de lotes
+                if (!formData.quantity) {
+                    setNotification({
+                        show: true,
+                        type: "error",
+                        message:
+                            "Por favor ingrese la cantidad para el movimiento de entrada",
+                    });
+                    setTimeout(() => {
+                        setNotification({ show: false, type: "", message: "" });
+                    }, 5000);
+                    return;
+                }
+            }
+        } else {
+            // Para movimientos de salida
+            if (requiresBatchControl) {
+                // Para productos con control de lotes en salida - validar lotes seleccionados
+                const totalSelected = getTotalSelectedQuantity();
+
+                if (totalSelected <= 0) {
+                    setNotification({
+                        show: true,
+                        type: "error",
+                        message:
+                            "Debe seleccionar al menos una cantidad de lotes para el movimiento de salida",
+                    });
+                    setTimeout(() => {
+                        setNotification({ show: false, type: "", message: "" });
+                    }, 5000);
+                    return;
+                }
+            } else {
+                // Para productos sin control de lotes
+                if (!formData.quantity) {
+                    setNotification({
+                        show: true,
+                        type: "error",
+                        message:
+                            "Por favor ingrese la cantidad para el movimiento de salida",
+                    });
+                    setTimeout(() => {
+                        setNotification({ show: false, type: "", message: "" });
+                    }, 5000);
+                    return;
+                }
             }
         }
-
-        // Preparar los datos del movimiento para la API
-        const movementData = {
-            product: selectedProduct.id, // Usar el ID del producto
-            location: formData.location, // Usar el ID de la ubicación
-            movement_type: formData.movementType, // Mantener el valor exacto seleccionado
-            quantity: parseInt(formData.quantity),
-            notes: formData.notes || "", // Asegurar que sea string vacío si no hay notas
-        };
 
         try {
             // Mostrar estado de carga
@@ -274,18 +381,15 @@ const MovimientosDeStockPage = () => {
                 message: "Registrando movimiento...",
             });
 
-            // Llamar a la API para crear el movimiento
-            const createdMovement =
-                await inventoryService.createInventoryMovement(
-                    movementData,
-                    authToken
-                );
+            if (requiresBatchControl && formData.movementType === "in") {
+                // FLUJO PARA PRODUCTOS CON CONTROL DE LOTES - ENTRADA
 
-            // Si es un movimiento de entrada, crear los lotes
-            if (formData.movementType === "in" && batchesData.length > 0) {
-                try {
-                    // Crear lotes en la API
-                    const batchPromises = batchesData.map((batch) => {
+                // Crear cada lote y su movimiento correspondiente
+                const createdMovements = [];
+
+                for (const batch of batchesData) {
+                    try {
+                        // 1. Crear el lote primero
                         const batchData = {
                             product: selectedProduct.id,
                             batch_number: batch.batch_number,
@@ -297,30 +401,126 @@ const MovimientosDeStockPage = () => {
                                 supplier_reference: batch.supplier_reference,
                             }),
                         };
-                        return createProductBatch(batchData, authToken);
-                    });
 
-                    await Promise.all(batchPromises);
+                        const createdBatch = await createProductBatch(
+                            batchData,
+                            authToken
+                        );
 
-                    // Mostrar mensaje de éxito
-                    setNotification({
-                        show: true,
-                        type: "success",
-                        message:
-                            "Movimiento y lotes registrados con éxito en la base de datos",
-                    });
-                } catch (batchError) {
-                    console.error("Error al crear lotes:", batchError);
+                        // 2. Crear movimiento específico para este lote
+                        const movementData = {
+                            product: selectedProduct.id,
+                            location: formData.location,
+                            movement_type: formData.movementType,
+                            quantity: parseInt(batch.quantity),
+                            batch: createdBatch.id, // Especificar el lote
+                            notes: formData.notes || "",
+                        };
 
-                    // Mostrar mensaje de éxito parcial
-                    setNotification({
-                        show: true,
-                        type: "warning",
-                        message:
-                            "Movimiento registrado con éxito, pero hubo problemas al registrar los lotes",
-                    });
+                        const createdMovement =
+                            await inventoryService.createInventoryMovement(
+                                movementData,
+                                authToken
+                            );
+
+                        createdMovements.push(createdMovement);
+                    } catch (error) {
+                        console.error(
+                            `Error al procesar lote ${batch.batch_number}:`,
+                            error
+                        );
+                        throw new Error(
+                            `Error al procesar lote ${batch.batch_number}: ${error.message}`
+                        );
+                    }
                 }
+
+                // Mostrar mensaje de éxito
+                const totalQuantity = batchesData.reduce(
+                    (sum, batch) => sum + parseInt(batch.quantity || 0),
+                    0
+                );
+
+                setNotification({
+                    show: true,
+                    type: "success",
+                    message: `${createdMovements.length} movimiento(s) y lote(s) registrados con éxito. Total: ${totalQuantity} unidades`,
+                });
+            } else if (
+                requiresBatchControl &&
+                formData.movementType === "out"
+            ) {
+                // FLUJO PARA PRODUCTOS CON CONTROL DE LOTES - SALIDA
+
+                // Crear movimientos de salida por cada lote seleccionado
+                const createdMovements = [];
+
+                for (const batch of selectedBatches) {
+                    if (batch.selectedQuantity > 0) {
+                        try {
+                            // Crear movimiento específico para este lote
+                            const movementData = {
+                                product: selectedProduct.id,
+                                location: formData.location,
+                                movement_type: formData.movementType,
+                                quantity: parseInt(batch.selectedQuantity),
+                                batch: batch.batch_id, // Especificar el lote existente
+                                notes:
+                                    formData.notes ||
+                                    `Salida de lote ${batch.batch_number}${
+                                        batch.isPartial
+                                            ? " (parcial)"
+                                            : " (completo)"
+                                    }`,
+                            };
+
+                            const createdMovement =
+                                await inventoryService.createInventoryMovement(
+                                    movementData,
+                                    authToken
+                                );
+
+                            createdMovements.push(createdMovement);
+                        } catch (error) {
+                            console.error(
+                                `Error al procesar salida del lote ${batch.batch_number}:`,
+                                error
+                            );
+                            throw new Error(
+                                `Error al procesar salida del lote ${batch.batch_number}: ${error.message}`
+                            );
+                        }
+                    }
+                }
+
+                // Mostrar mensaje de éxito
+                const totalQuantity = getTotalSelectedQuantity();
+
+                setNotification({
+                    show: true,
+                    type: "success",
+                    message: `${createdMovements.length} movimiento(s) de salida registrados con éxito. Total: ${totalQuantity} unidades`,
+                });
             } else {
+                // FLUJO PARA PRODUCTOS SIN CONTROL DE LOTES
+                const movementData = {
+                    product: selectedProduct.id,
+                    location: formData.location,
+                    movement_type: formData.movementType,
+                    quantity: parseInt(formData.quantity),
+                    notes: formData.notes || "",
+                    // Agregar fecha de vencimiento si existe (para productos sin lotes)
+                    ...(formData.expiryDate &&
+                        formData.movementType === "in" && {
+                            expiry_date: formData.expiryDate,
+                        }),
+                };
+
+                await inventoryService.createInventoryMovement(
+                    movementData,
+                    authToken
+                );
+
                 // Mostrar mensaje de éxito
                 setNotification({
                     show: true,
@@ -340,15 +540,12 @@ const MovimientosDeStockPage = () => {
                 notes: "",
             });
 
-            // Reiniciar los lotes
-            setBatchesData([
-                {
-                    batch_number: "",
-                    expiry_date: "",
-                    manufacturing_date: "",
-                    supplier_reference: "",
-                },
-            ]);
+            // Reiniciar todos los estados de lotes
+            setBatchesData([]);
+            setAvailableBatches([]);
+            setSelectedBatches([]);
+            setShowBatchSection(false);
+            setRequiresBatchControl(false);
 
             // Limpiar también la selección del producto
             setSelectedProduct(null);
@@ -371,32 +568,39 @@ const MovimientosDeStockPage = () => {
                     error.message.includes("product")
                 ) {
                     errorMessage =
-                        "Error con el producto seleccionado: " + error.message;
+                        "❌Error con el producto seleccionado: " +
+                        error.message;
                 } else if (
                     error.message.includes("ubicación") ||
                     error.message.includes("location")
                 ) {
                     errorMessage =
-                        "Error con la ubicación seleccionada: " + error.message;
+                        "❌Error con la ubicación seleccionada: " +
+                        error.message;
                 } else if (
                     error.message.includes("cantidad") ||
                     error.message.includes("quantity")
                 ) {
-                    errorMessage = "Error con la cantidad: " + error.message;
+                    errorMessage = "❌Error con la cantidad: " + error.message;
                 } else if (
                     error.message.includes("vencimiento") ||
                     error.message.includes("expiry")
                 ) {
                     errorMessage =
-                        "Error con la fecha de vencimiento: " + error.message;
+                        "❌Error con la fecha de vencimiento: " + error.message;
                 } else if (
                     error.message.includes("conexión") ||
                     error.message.includes("network")
                 ) {
                     errorMessage =
-                        "Error de conexión: Verifique su conexión a internet y vuelva a intentarlo";
+                        "❌Error de conexión: Verifique su conexión a internet y vuelva a intentarlo";
+                } else if (
+                    error.message.includes("lote") ||
+                    error.message.includes("batch")
+                ) {
+                    errorMessage = "❌Error con el lote: " + error.message;
                 } else {
-                    errorMessage = error.message;
+                    errorMessage = "❌" + error.message;
                 }
             }
 
@@ -591,6 +795,132 @@ const MovimientosDeStockPage = () => {
         }
     };
 
+    // Función para cargar lotes disponibles en la ubicación seleccionada (para movimientos de salida)
+    const loadAvailableBatches = useCallback(async () => {
+        if (
+            !selectedProduct ||
+            !formData.location ||
+            !requiresBatchControl ||
+            formData.movementType !== "out" ||
+            !authToken
+        ) {
+            setAvailableBatches([]);
+            setSelectedBatches([]);
+            setShowBatchSection(false);
+            return;
+        }
+
+        console.log("=== DEBUG loadAvailableBatches ===");
+        console.log("Selected Product:", selectedProduct);
+        console.log(
+            "Form Location:",
+            formData.location,
+            "Type:",
+            typeof formData.location
+        );
+        console.log("Requires Batch Control:", requiresBatchControl);
+        console.log("Movement Type:", formData.movementType);
+
+        setIsLoadingBatches(true);
+        try {
+            // Convertir locationId a número si es necesario
+            const locationId = parseInt(formData.location);
+            console.log(
+                "Converted Location ID:",
+                locationId,
+                "Type:",
+                typeof locationId
+            );
+
+            const batches =
+                await advancedInventoryService.getAvailableBatchesFIFO(
+                    selectedProduct.id,
+                    locationId,
+                    authToken
+                );
+
+            console.log("Received batches:", batches);
+            setAvailableBatches(batches);
+
+            // Inicializar lotes seleccionados con cantidad 0
+            setSelectedBatches(
+                batches.map((batch) => ({
+                    ...batch,
+                    selectedQuantity: 0,
+                    isPartial: false, // Para indicar si se saca completo o parcial
+                }))
+            );
+
+            // Mostrar sección de lotes si hay lotes disponibles
+            setShowBatchSection(batches.length > 0);
+        } catch (error) {
+            console.error("Error al cargar lotes disponibles:", error);
+            setAvailableBatches([]);
+            setSelectedBatches([]);
+            setShowBatchSection(false);
+        } finally {
+            setIsLoadingBatches(false);
+        }
+    }, [
+        selectedProduct,
+        formData.location,
+        formData.movementType,
+        requiresBatchControl,
+        authToken,
+    ]);
+
+    // Función para manejar cambios en la cantidad de lotes seleccionados
+    const handleBatchQuantityChange = (batchIndex, quantity) => {
+        const updatedBatches = [...selectedBatches];
+        const batch = updatedBatches[batchIndex];
+        const newQuantity = parseInt(quantity) || 0;
+
+        // No permitir cantidad mayor al stock disponible
+        const finalQuantity = Math.min(newQuantity, batch.quantity);
+
+        updatedBatches[batchIndex] = {
+            ...batch,
+            selectedQuantity: finalQuantity,
+            isPartial: finalQuantity > 0 && finalQuantity < batch.quantity,
+        };
+
+        setSelectedBatches(updatedBatches);
+    };
+
+    // Función para seleccionar lote completo
+    const handleSelectCompleteBatch = (batchIndex) => {
+        const updatedBatches = [...selectedBatches];
+        const batch = updatedBatches[batchIndex];
+
+        updatedBatches[batchIndex] = {
+            ...batch,
+            selectedQuantity: batch.quantity,
+            isPartial: false,
+        };
+
+        setSelectedBatches(updatedBatches);
+    };
+
+    // Función para calcular el total de unidades seleccionadas
+    const getTotalSelectedQuantity = () => {
+        return selectedBatches.reduce(
+            (total, batch) => total + batch.selectedQuantity,
+            0
+        );
+    };
+
+    // Efecto para cargar lotes cuando cambien las dependencias
+    useEffect(() => {
+        if (
+            selectedProduct &&
+            formData.location &&
+            requiresBatchControl &&
+            formData.movementType === "out"
+        ) {
+            loadAvailableBatches();
+        }
+    }, [loadAvailableBatches]);
+
     return (
         <div
             style={{
@@ -635,6 +965,14 @@ const MovimientosDeStockPage = () => {
                         handleBatchesChange={handleBatchesChange}
                         handleAddBatch={handleAddBatch}
                         handleRemoveBatch={handleRemoveBatch}
+                        requiresBatchControl={requiresBatchControl}
+                        availableBatches={availableBatches}
+                        selectedBatches={selectedBatches}
+                        isLoadingBatches={isLoadingBatches}
+                        showBatchSection={showBatchSection}
+                        handleBatchQuantityChange={handleBatchQuantityChange}
+                        handleSelectCompleteBatch={handleSelectCompleteBatch}
+                        getTotalSelectedQuantity={getTotalSelectedQuantity}
                     />
                 </div>
 

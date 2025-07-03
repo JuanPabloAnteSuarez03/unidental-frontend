@@ -13,8 +13,11 @@ import MovimientosDeStockPage from "../pages/MovimientosDeStockPage";
 import TransferenciasInternasPage from "../pages/TransferenciasInternasPage";
 import NuevoProductoPage from "../pages/NuevoProductoPage";
 import AlertasPage from "../pages/AlertasPage";
-
 import AlertasStockPage from "../pages/AlertasStockPage";
+import SuppliersPage from "../pages/SuppliersPage";
+import SupplierDetailPage from "../pages/SupplierDetailPage";
+import AnalisisPreciosPage from "../pages/AnalisisPreciosPage";
+import OrdenesDeCompraPage from "../pages/OrdenesDeCompraPage";
 
 const AppRouter = () => {
     return (
@@ -45,7 +48,6 @@ const AppRouter = () => {
                     path="/inventario/alertas-vencimiento"
                     element={<AlertasPage />}
                 />
-
                 <Route
                     path="/inventario/alertas-stock"
                     element={<AlertasStockPage />}
@@ -55,6 +57,23 @@ const AppRouter = () => {
                 {/* Rutas de clientes */}
                 <Route path="/clientes/lista" element={<CustomersListPage />} />
                 <Route path="/clientes/nuevo" element={<NewCustomerPage />} />
+                {/* Rutas de proveedores */}
+                <Route
+                    path="/compras/proveedores"
+                    element={<SuppliersPage />}
+                />
+                <Route
+                    path="/compras/proveedores/:supplierName"
+                    element={<SupplierDetailPage />}
+                />
+                <Route
+                    path="/compras/analisis-precios"
+                    element={<AnalisisPreciosPage />}
+                />
+                <Route
+                    path="/compras/ordenes"
+                    element={<OrdenesDeCompraPage />}
+                />
             </Route>
         </Routes>
     );

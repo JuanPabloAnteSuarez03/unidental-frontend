@@ -18,11 +18,11 @@ const SalesPage = () => {
     const [saleType, setSaleType] = useState("normal"); // Tipos de venta según backend
     const [shouldInvoice, setShouldInvoice] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    
+
     // Estados para la factura
     const [showInvoice, setShowInvoice] = useState(false);
     const [invoiceData, setInvoiceData] = useState(null);
-    
+
     // Ref para acceder a la función updateProductsStock
     const productSelectorRef = useRef(null);
 
@@ -30,20 +30,22 @@ const SalesPage = () => {
     useEffect(() => {
         const loadLocations = async () => {
             if (!authToken) return;
-            
+
             setIsLoadingLocations(true);
             try {
                 const data = await inventoryService.getLocations(authToken);
                 // Filtrar solo las sedes (type: "sede")
-                const sedes = data.filter(location => location.type === "sede");
+                const sedes = data.filter(
+                    (location) => location.type === "sede"
+                );
                 setLocations(sedes);
-                
+
                 // Si solo hay una sede, seleccionarla automáticamente
                 if (sedes.length === 1) {
                     console.log("Auto-selecting single location:", sedes[0]);
                     setSelectedLocation(sedes[0]);
                 }
-                
+
                 console.log("Available locations loaded:", sedes);
             } catch (error) {
                 console.error("Error al cargar ubicaciones:", error);
@@ -56,76 +58,86 @@ const SalesPage = () => {
         loadLocations();
     }, [authToken]);
 
-    const handleAddProduct = useCallback((product, quantity, unitPrice, additionalData = {}) => {
-        console.log("handleAddProduct - Recibido:", { 
-            product: product.name, 
-            quantity, 
-            quantityType: typeof quantity,
-            unitPrice, 
-            unitPriceType: typeof unitPrice,
-            additionalData
-        });
+    const handleAddProduct = useCallback(
+        (product, quantity, unitPrice, additionalData = {}) => {
+            console.log("handleAddProduct - Recibido:", {
+                product: product.name,
+                quantity,
+                quantityType: typeof quantity,
+                unitPrice,
+                unitPriceType: typeof unitPrice,
+                additionalData,
+            });
 
-        setSaleItems(prevItems => {
-            // Para productos con lotes o componentes, no agrupar automáticamente
-            // ya que pueden tener diferentes lotes o configuraciones
-            const shouldGroup = !additionalData.batches && !additionalData.components;
-            
-            let existingIndex = -1;
-            if (shouldGroup) {
-                existingIndex = prevItems.findIndex(
-                    item => item.product_id === product.id && 
-                           !item.batches && 
-                           !item.components
-            );
-            }
+            setSaleItems((prevItems) => {
+                // Para productos con lotes o componentes, no agrupar automáticamente
+                // ya que pueden tener diferentes lotes o configuraciones
+                const shouldGroup =
+                    !additionalData.batches && !additionalData.components;
 
-            if (existingIndex !== -1) {
-                const newItems = [...prevItems];
-                newItems[existingIndex] = {
-                    ...newItems[existingIndex],
-                    quantity: newItems[existingIndex].quantity + quantity,
+                let existingIndex = -1;
+                if (shouldGroup) {
+                    existingIndex = prevItems.findIndex(
+                        (item) =>
+                            item.product_id === product.id &&
+                            !item.batches &&
+                            !item.components
+                    );
+                }
+
+                if (existingIndex !== -1) {
+                    const newItems = [...prevItems];
+                    newItems[existingIndex] = {
+                        ...newItems[existingIndex],
+                        quantity: newItems[existingIndex].quantity + quantity,
+                    };
+                    return newItems;
+                }
+
+                const newItem = {
+                    product_id: product.id,
+                    quantity: quantity,
+                    unit_price: unitPrice,
+                    product_details: {
+                        name: product.name,
+                        sku: product.sku,
+                        barcode: product.barcode || "",
+                        description: product.description || "",
+                        category_name: product.category_name,
+                        category: product.category || 0,
+                        unit: product.unit,
+                        product_type: product.product_type || "simple",
+                        requires_batch_control:
+                            product.requires_batch_control || false,
+                    },
+                    // Agregar información de lotes si existe
+                    ...(additionalData.batches && {
+                        batches: additionalData.batches,
+                    }),
+                    // Agregar información de componentes si existe
+                    ...(additionalData.components && {
+                        components: additionalData.components,
+                    }),
                 };
-                return newItems;
-            }
 
-            const newItem = {
-                product_id: product.id,
-                quantity: quantity,
-                unit_price: unitPrice,
-                product_details: {
-                    name: product.name,
-                    sku: product.sku,
-                    barcode: product.barcode || "",
-                    description: product.description || "",
-                    category_name: product.category_name,
-                    category: product.category || 0,
-                    unit: product.unit,
-                    product_type: product.product_type || 'simple',
-                    requires_batch_control: product.requires_batch_control || false
-                },
-                // Agregar información de lotes si existe
-                ...(additionalData.batches && { batches: additionalData.batches }),
-                // Agregar información de componentes si existe
-                ...(additionalData.components && { components: additionalData.components })
-            };
+                console.log("handleAddProduct - Nuevo item creado:", newItem);
 
-            console.log("handleAddProduct - Nuevo item creado:", newItem);
-            
-            return [...prevItems, newItem];
-        });
-    }, []);
+                return [...prevItems, newItem];
+            });
+        },
+        []
+    );
 
     const handleRemoveItem = useCallback((index) => {
-        setSaleItems(prevItems => prevItems.filter((_, i) => i !== index));
+        setSaleItems((prevItems) => prevItems.filter((_, i) => i !== index));
     }, []);
 
     const handleUpdateItem = useCallback((index, updates) => {
-        setSaleItems(prevItems => {
+        setSaleItems((prevItems) => {
             const newItems = [...prevItems];
             newItems[index] = {
                 ...newItems[index],
-                ...updates
+                ...updates,
             };
             return newItems;
         });
@@ -133,9 +145,14 @@ const SalesPage = () => {
 
     const calculateTotals = useCallback(() => {
         const itemCount = saleItems.length;
-        const totalQuantity = saleItems.reduce((total, item) => total + item.quantity, 0);
-        const subtotal = saleItems.reduce((total, item) => 
-            total + (parseFloat(item.unit_price) * item.quantity), 0
+        const totalQuantity = saleItems.reduce(
+            (total, item) => total + item.quantity,
+            0
+        );
+        const subtotal = saleItems.reduce(
+            (total, item) =>
+                total + parseFloat(item.unit_price) * item.quantity,
+            0
         );
         const tax = 0; // Por ahora sin impuestos
         const total = subtotal + tax;
@@ -145,18 +162,18 @@ const SalesPage = () => {
             totalQuantity,
             subtotal: subtotal.toFixed(2),
             tax: tax.toFixed(2),
-            total: total.toFixed(2)
+            total: total.toFixed(2),
         };
     }, [saleItems]);
 
     const handleSubmitSale = async () => {
         if (isSubmitting) return;
-        
+
         if (!selectedLocation) {
             alert("Por favor seleccione una sede.");
             return;
         }
-        
+
         if (saleItems.length === 0) {
             alert("Por favor agregue al menos un producto a la venta.");
             return;
@@ -167,104 +184,160 @@ const SalesPage = () => {
         try {
             // DIAGNÓSTICO: Verificar conectividad del backend antes de enviar la venta
             console.log("🔍 DIAGNÓSTICO: Iniciando verificaciones previas...");
-            
+
             // 1. Test de conectividad básica
             try {
-                console.log("🔍 DIAGNÓSTICO: Probando conectividad con endpoint de ubicaciones...");
-                const locationsResponse = await fetch('/api/inventory/locations/', {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `Token ${authToken}`,
-                        'Content-Type': 'application/json'
+                console.log(
+                    "🔍 DIAGNÓSTICO: Probando conectividad con endpoint de ubicaciones..."
+                );
+                const locationsResponse = await fetch(
+                    "/api/inventory/locations/",
+                    {
+                        method: "GET",
+                        headers: {
+                            Authorization: `Token ${authToken}`,
+                            "Content-Type": "application/json",
+                        },
                     }
-                });
-                console.log("🔍 DIAGNÓSTICO: Status de ubicaciones:", locationsResponse.status);
-                
+                );
+                console.log(
+                    "🔍 DIAGNÓSTICO: Status de ubicaciones:",
+                    locationsResponse.status
+                );
+
                 if (!locationsResponse.ok) {
-                    console.warn("⚠️ DIAGNÓSTICO: Problema con conectividad del backend");
-                    throw new Error(`Backend no responde correctamente (status: ${locationsResponse.status})`);
+                    console.warn(
+                        "⚠️ DIAGNÓSTICO: Problema con conectividad del backend"
+                    );
+                    throw new Error(
+                        `Backend no responde correctamente (status: ${locationsResponse.status})`
+                    );
                 }
             } catch (connectError) {
-                console.error("❌ DIAGNÓSTICO: Error de conectividad:", connectError);
-                throw new Error("No se puede conectar con el servidor. Por favor, verifique su conexión e intente nuevamente.");
+                console.error(
+                    "❌ DIAGNÓSTICO: Error de conectividad:",
+                    connectError
+                );
+                throw new Error(
+                    "No se puede conectar con el servidor. Por favor, verifique su conexión e intente nuevamente."
+                );
             }
 
             // 2. Verificar cada producto en la venta
             for (const item of saleItems) {
                 try {
-                    console.log(`🔍 DIAGNÓSTICO: Verificando producto ${item.product_id}...`);
-                    const productResponse = await fetch(`/api/catalogs/products/${item.product_id}/`, {
-                        method: 'GET',
-                        headers: {
-                            'Authorization': `Token ${authToken}`,
-                            'Content-Type': 'application/json'
+                    console.log(
+                        `🔍 DIAGNÓSTICO: Verificando producto ${item.product_id}...`
+                    );
+                    const productResponse = await fetch(
+                        `/api/catalogs/products/${item.product_id}/`,
+                        {
+                            method: "GET",
+                            headers: {
+                                Authorization: `Token ${authToken}`,
+                                "Content-Type": "application/json",
+                            },
                         }
-                    });
-                    
+                    );
+
                     if (!productResponse.ok) {
-                        console.error(`❌ DIAGNÓSTICO: Producto ${item.product_id} no encontrado (status: ${productResponse.status})`);
-                        throw new Error(`El producto con ID ${item.product_id} no existe o no está disponible.`);
+                        console.error(
+                            `❌ DIAGNÓSTICO: Producto ${item.product_id} no encontrado (status: ${productResponse.status})`
+                        );
+                        throw new Error(
+                            `El producto con ID ${item.product_id} no existe o no está disponible.`
+                        );
                     }
-                    
+
                     const productData = await productResponse.json();
-                    console.log(`✅ DIAGNÓSTICO: Producto ${item.product_id} existe:`, productData.name);
+                    console.log(
+                        `✅ DIAGNÓSTICO: Producto ${item.product_id} existe:`,
+                        productData.name
+                    );
                 } catch (productError) {
-                    console.error(`❌ DIAGNÓSTICO: Error verificando producto ${item.product_id}:`, productError);
+                    console.error(
+                        `❌ DIAGNÓSTICO: Error verificando producto ${item.product_id}:`,
+                        productError
+                    );
                     throw productError;
                 }
             }
 
             // 3. Verificar stock disponible
-            console.log("🔍 DIAGNÓSTICO: Verificando stock para todos los productos...");
+            console.log(
+                "🔍 DIAGNÓSTICO: Verificando stock para todos los productos..."
+            );
             try {
-                const stockResponse = await fetch(`/api/inventory/stock/?location=${selectedLocation.id}`, {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `Token ${authToken}`,
-                        'Content-Type': 'application/json'
+                const stockResponse = await fetch(
+                    `/api/inventory/stock/?location=${selectedLocation.id}`,
+                    {
+                        method: "GET",
+                        headers: {
+                            Authorization: `Token ${authToken}`,
+                            "Content-Type": "application/json",
+                        },
                     }
-                });
-                
+                );
+
                 if (stockResponse.ok) {
                     const stockData = await stockResponse.json();
-                    console.log("🔍 DIAGNÓSTICO: Stock response obtenido:", stockData);
-                    
+                    console.log(
+                        "🔍 DIAGNÓSTICO: Stock response obtenido:",
+                        stockData
+                    );
+
                     for (const item of saleItems) {
-                        const productStock = stockData.results ? 
-                            stockData.results.find(s => s.product === item.product_id) :
-                            stockData.find(s => s.product === item.product_id);
-                        
+                        const productStock = stockData.results
+                            ? stockData.results.find(
+                                  (s) => s.product === item.product_id
+                              )
+                            : stockData.find(
+                                  (s) => s.product === item.product_id
+                              );
+
                         if (productStock) {
-                            console.log(`🔍 DIAGNÓSTICO: Stock para producto ${item.product_id}: ${productStock.quantity} disponible, solicitado: ${item.quantity}`);
+                            console.log(
+                                `🔍 DIAGNÓSTICO: Stock para producto ${item.product_id}: ${productStock.quantity} disponible, solicitado: ${item.quantity}`
+                            );
                             if (productStock.quantity < item.quantity) {
-                                console.warn(`⚠️ DIAGNÓSTICO: Stock insuficiente para producto ${item.product_id}`);
+                                console.warn(
+                                    `⚠️ DIAGNÓSTICO: Stock insuficiente para producto ${item.product_id}`
+                                );
                             }
                         } else {
-                            console.warn(`⚠️ DIAGNÓSTICO: No se encontró stock para producto ${item.product_id}`);
+                            console.warn(
+                                `⚠️ DIAGNÓSTICO: No se encontró stock para producto ${item.product_id}`
+                            );
                         }
                     }
                 } else {
-                    console.warn("⚠️ DIAGNÓSTICO: No se pudo obtener información de stock");
+                    console.warn(
+                        "⚠️ DIAGNÓSTICO: No se pudo obtener información de stock"
+                    );
                 }
             } catch (stockError) {
-                console.warn("⚠️ DIAGNÓSTICO: Error obteniendo stock:", stockError);
+                console.warn(
+                    "⚠️ DIAGNÓSTICO: Error obteniendo stock:",
+                    stockError
+                );
             }
 
-            console.log("✅ DIAGNÓSTICO: Verificaciones completadas, procediendo con la venta...");
+            console.log(
+                "✅ DIAGNÓSTICO: Verificaciones completadas, procediendo con la venta..."
+            );
 
             // Mapear items según el formato esperado
             const mappedItems = [];
-            
-            saleItems.forEach(item => {
+
+            saleItems.forEach((item) => {
                 // Si el producto tiene lotes seleccionados
-                if (item.batches && item.batches.length > 0) {
-                    item.batches.forEach(batch => {
-                        // El backend espera 'batch' con el id del lote.
+                if (item.selectedBatches && item.selectedBatches.length > 0) {
+                    item.selectedBatches.forEach((batch) => {
                         mappedItems.push({
                             product: item.product_id,
-                            batch: batch.batch_id, // Asegurarse que es el ID del lote
+                            batch: batch.batch_id,
                             quantity: batch.quantity,
-                            unit_price: item.unit_price.toString()
+                            unit_price: item.unit_price.toString(),
                         });
                     });
                 } else {
@@ -272,27 +345,30 @@ const SalesPage = () => {
                     mappedItems.push({
                         product: item.product_id,
                         quantity: item.quantity,
-                        unit_price: item.unit_price.toString()
+                        unit_price: item.unit_price.toString(),
                     });
                 }
             });
 
             console.log("handleSubmitSale - mappedItems:", mappedItems);
-            
+
             const saleData = {
                 customer: selectedCustomer ? selectedCustomer.id : null,
                 location: selectedLocation.id,
                 sale_type: saleType,
                 should_invoice: shouldInvoice,
-                items: mappedItems
+                items: mappedItems,
             };
 
             console.log("Datos de la venta a enviar:", saleData);
             console.log("Items en la venta:", saleData.items);
-            console.log("JSON completo que se enviará:", JSON.stringify(saleData, null, 2));
+            console.log(
+                "JSON completo que se enviará:",
+                JSON.stringify(saleData, null, 2)
+            );
 
             const response = await salesService.createSale(saleData, authToken);
-            
+
             // Si la venta requiere factura, mostrar el modal de factura
             if (shouldInvoice) {
                 setInvoiceData({
@@ -301,43 +377,54 @@ const SalesPage = () => {
                     locationData: selectedLocation,
                     saleItems: saleItems,
                     totals: totals,
-                    saleType: saleType
+                    saleType: saleType,
                 });
                 setShowInvoice(true);
             } else {
                 alert(`¡Venta registrada exitosamente! ID: ${response.id}`);
             }
-            
+
             // Actualizar stock localmente
             if (productSelectorRef.current) {
                 productSelectorRef.current.updateProductsStock(saleItems);
             }
-            
+
             // Reset form
             setSelectedCustomer(null);
             setSaleItems([]);
             setSaleType("normal");
             setShouldInvoice(false);
             // No resetear la sede seleccionada para facilitar múltiples ventas consecutivas
-            
         } catch (error) {
             console.error("Error al registrar venta:", error);
-            
+
             // Mejorar mensaje de error para problemas de stock
             let errorMessage = "Error al registrar la venta: ";
-            
+
             if (error.message.includes("Problemas de stock")) {
-                errorMessage = "❌ No se pudo registrar la venta:\n\n" + error.message + "\n\nPor favor, verifique el stock disponible de los productos.";
-            } else if (error.message.includes("stock") || error.message.includes("inventory")) {
+                errorMessage =
+                    "❌ No se pudo registrar la venta:\n\n" +
+                    error.message +
+                    "\n\nPor favor, verifique el stock disponible de los productos.";
+            } else if (
+                error.message.includes("stock") ||
+                error.message.includes("inventory")
+            ) {
                 errorMessage = "❌ Problema de inventario: " + error.message;
-            } else if (error.message.includes("conectar") || error.message.includes("servidor")) {
+            } else if (
+                error.message.includes("conectar") ||
+                error.message.includes("servidor")
+            ) {
                 errorMessage = "❌ Problema de conexión: " + error.message;
-            } else if (error.message.includes("no existe") || error.message.includes("no encontrado")) {
+            } else if (
+                error.message.includes("no existe") ||
+                error.message.includes("no encontrado")
+            ) {
                 errorMessage = "❌ Problema con el producto: " + error.message;
             } else {
-                errorMessage += (error.message || "Error desconocido");
+                errorMessage += error.message || "Error desconocido";
             }
-            
+
             alert(errorMessage);
         } finally {
             setIsSubmitting(false);
@@ -348,10 +435,12 @@ const SalesPage = () => {
     const handleCloseInvoice = useCallback(() => {
         setShowInvoice(false);
         setInvoiceData(null);
-        
+
         // Mostrar mensaje de éxito después de cerrar la factura
         if (invoiceData) {
-            alert(`¡Venta registrada exitosamente! ID: ${invoiceData.saleData.id}`);
+            alert(
+                `¡Venta registrada exitosamente! ID: ${invoiceData.saleData.id}`
+            );
         }
     }, [invoiceData]);
 
@@ -398,13 +487,14 @@ const SalesPage = () => {
                     }
                 `}
             </style>
-            
+
             <div
                 style={{
                     padding: "20px",
                     maxWidth: "1400px",
                     margin: "0 auto",
-                    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+                    fontFamily:
+                        "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
                     backgroundColor: "#f8f9fa",
                     minHeight: "calc(100vh - 140px)",
                 }}
@@ -438,21 +528,30 @@ const SalesPage = () => {
                             margin: 0,
                         }}
                     >
-                        Complete la información de la venta y agregue los productos
+                        Complete la información de la venta y agregue los
+                        productos
                     </p>
                 </div>
 
                 {/* Contenido principal */}
-                <div 
+                <div
                     className="sales-grid"
-                    style={{ 
-                        display: "grid", 
-                        gridTemplateColumns: "minmax(0, 1fr) minmax(300px, 350px)", 
-                        gap: "20px"
+                    style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                            "minmax(0, 1fr) minmax(300px, 350px)",
+                        gap: "20px",
                     }}
                 >
                     {/* Columna izquierda */}
-                    <div style={{ display: "flex", flexDirection: "column", gap: "20px", minWidth: 0 }}>
+                    <div
+                        style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "20px",
+                            minWidth: 0,
+                        }}
+                    >
                         {/* Selector de Cliente */}
                         <div
                             style={{
@@ -499,7 +598,7 @@ const SalesPage = () => {
                             >
                                 2. Seleccionar Sede
                             </h3>
-                            
+
                             {isLoadingLocations ? (
                                 <div
                                     style={{
@@ -512,26 +611,41 @@ const SalesPage = () => {
                                     Cargando sedes...
                                 </div>
                             ) : (
-                                <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
+                                <div
+                                    style={{
+                                        display: "flex",
+                                        flexWrap: "wrap",
+                                        gap: "10px",
+                                    }}
+                                >
                                     {locations.map((location) => (
                                         <button
                                             key={location.id}
                                             onClick={() => {
-                                                console.log("Location selected:", location);
+                                                console.log(
+                                                    "Location selected:",
+                                                    location
+                                                );
                                                 setSelectedLocation(location);
                                             }}
                                             style={{
                                                 padding: "10px 15px",
-                                                border: selectedLocation?.id === location.id 
-                                                    ? "2px solid #3498db" 
-                                                    : "1px solid #dee2e6",
+                                                border:
+                                                    selectedLocation?.id ===
+                                                    location.id
+                                                        ? "2px solid #3498db"
+                                                        : "1px solid #dee2e6",
                                                 borderRadius: "6px",
-                                                backgroundColor: selectedLocation?.id === location.id 
-                                                    ? "#e8f4fd" 
-                                                    : "white",
-                                                color: selectedLocation?.id === location.id 
-                                                    ? "#2c3e50" 
-                                                    : "#6c757d",
+                                                backgroundColor:
+                                                    selectedLocation?.id ===
+                                                    location.id
+                                                        ? "#e8f4fd"
+                                                        : "white",
+                                                color:
+                                                    selectedLocation?.id ===
+                                                    location.id
+                                                        ? "#2c3e50"
+                                                        : "#6c757d",
                                                 cursor: "pointer",
                                                 fontSize: "14px",
                                                 fontWeight: "500",
@@ -542,14 +656,17 @@ const SalesPage = () => {
                                             }}
                                         >
                                             <span style={{ fontSize: "16px" }}>
-                                                {selectedLocation?.id === location.id ? "🏢" : "🏪"}
+                                                {selectedLocation?.id ===
+                                                location.id
+                                                    ? "🏢"
+                                                    : "🏪"}
                                             </span>
                                             {location.name}
                                         </button>
                                     ))}
                                 </div>
                             )}
-                            
+
                             {selectedLocation && (
                                 <div
                                     style={{
@@ -562,9 +679,15 @@ const SalesPage = () => {
                                         color: "#155724",
                                     }}
                                 >
-                                    ✅ <strong>Sede seleccionada:</strong> {selectedLocation.name}
+                                    ✅ <strong>Sede seleccionada:</strong>{" "}
+                                    {selectedLocation.name}
                                     {selectedLocation.address && (
-                                        <div style={{ marginTop: "4px", fontSize: "12px" }}>
+                                        <div
+                                            style={{
+                                                marginTop: "4px",
+                                                fontSize: "12px",
+                                            }}
+                                        >
                                             📍 {selectedLocation.address}
                                         </div>
                                     )}
@@ -647,9 +770,13 @@ const SalesPage = () => {
                             >
                                 5. Opciones de Venta
                             </h3>
-                            <div 
+                            <div
                                 className="sales-payment-grid"
-                                style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}
+                                style={{
+                                    display: "grid",
+                                    gridTemplateColumns: "1fr 1fr",
+                                    gap: "15px",
+                                }}
                             >
                                 {/* Tipo de venta */}
                                 <div>
@@ -666,7 +793,9 @@ const SalesPage = () => {
                                     </label>
                                     <select
                                         value={saleType}
-                                        onChange={(e) => setSaleType(e.target.value)}
+                                        onChange={(e) =>
+                                            setSaleType(e.target.value)
+                                        }
                                         style={{
                                             width: "100%",
                                             boxSizing: "border-box",
@@ -678,8 +807,12 @@ const SalesPage = () => {
                                             color: "#2c3e50",
                                         }}
                                     >
-                                        <option value="normal">💵 Venta Normal</option>
-                                        <option value="credit">💳 Venta a Crédito</option>
+                                        <option value="normal">
+                                            💵 Venta Normal
+                                        </option>
+                                        <option value="credit">
+                                            💳 Venta a Crédito
+                                        </option>
                                     </select>
                                 </div>
 
@@ -704,16 +837,27 @@ const SalesPage = () => {
                                             padding: "10px",
                                             border: "1px solid #dee2e6",
                                             borderRadius: "4px",
-                                            backgroundColor: shouldInvoice ? "#e8f4fd" : "white",
+                                            backgroundColor: shouldInvoice
+                                                ? "#e8f4fd"
+                                                : "white",
                                         }}
                                     >
                                         <input
                                             type="checkbox"
                                             checked={shouldInvoice}
-                                            onChange={(e) => setShouldInvoice(e.target.checked)}
+                                            onChange={(e) =>
+                                                setShouldInvoice(
+                                                    e.target.checked
+                                                )
+                                            }
                                             style={{ marginRight: "8px" }}
                                         />
-                                        <span style={{ fontSize: "14px", color: "#2c3e50" }}>
+                                        <span
+                                            style={{
+                                                fontSize: "14px",
+                                                color: "#2c3e50",
+                                            }}
+                                        >
                                             📄 Requiere factura
                                         </span>
                                     </label>
@@ -723,9 +867,13 @@ const SalesPage = () => {
                     </div>
 
                     {/* Columna derecha - Resumen */}
-                    <div 
+                    <div
                         className="sales-summary"
-                        style={{ position: "sticky", top: "20px", height: "fit-content" }}
+                        style={{
+                            position: "sticky",
+                            top: "20px",
+                            height: "fit-content",
+                        }}
                     >
                         <SaleSummary
                             totals={totals}
@@ -734,7 +882,11 @@ const SalesPage = () => {
                             selectedLocation={selectedLocation}
                             onSubmit={handleSubmitSale}
                             isLoading={isSubmitting}
-                            disabled={!selectedCustomer || !selectedLocation || saleItems.length === 0}
+                            disabled={
+                                !selectedCustomer ||
+                                !selectedLocation ||
+                                saleItems.length === 0
+                            }
                         />
                     </div>
                 </div>
@@ -757,4 +909,4 @@ const SalesPage = () => {
     );
 };
 
-export default SalesPage; 
+export default SalesPage;

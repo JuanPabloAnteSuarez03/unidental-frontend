@@ -1152,7 +1152,17 @@ export const getIntelligentPrice = async (productId, authToken) => {
     }
 
     try {
-        // 1. Intentar obtener último precio de venta
+        // 1. NUEVO: Intentar obtener precio de venta del producto (sale_price)
+        const productSalePrice = await getProductSalePrice(productId, authToken);
+        if (productSalePrice.price > 0) {
+            return {
+                price: productSalePrice.price,
+                source: "product_sale_price",
+                source_label: "Precio de venta del producto",
+            };
+        }
+
+        // 2. Intentar obtener último precio de venta histórico
         const lastSalePrice = await getLastSalePrice(productId, authToken);
         if (lastSalePrice.price > 0) {
             return {
@@ -1162,7 +1172,7 @@ export const getIntelligentPrice = async (productId, authToken) => {
             };
         }
 
-        // 2. Intentar obtener último precio de compra
+        // 3. Intentar obtener último precio de compra
         const lastPurchasePrice = await getLastPurchasePrice(
             productId,
             authToken
@@ -1175,11 +1185,50 @@ export const getIntelligentPrice = async (productId, authToken) => {
             };
         }
 
-        // 3. Usar precios del producto (fallback)
+        // 4. Usar precios del producto (fallback)
         return await getProductIntelligentPriceFallback(productId, authToken);
     } catch (error) {
         console.error("Error fetching intelligent price:", error);
         return await getProductIntelligentPriceFallback(productId, authToken);
+    }
+};
+
+/**
+ * Get product sale price (sale_price field from product model)
+ * @param {number} productId - Product ID
+ * @param {string} authToken - Authentication token
+ * @returns {Promise<Object>} - Price information
+ */
+const getProductSalePrice = async (productId, authToken) => {
+    try {
+        // Obtener el producto individual para usar el campo sale_price
+        const productUrl = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.INVENTORY}${productId}/`;
+
+        const response = await fetch(productUrl, {
+            headers: {
+                Authorization: `Token ${authToken}`,
+                "Content-Type": "application/json",
+            },
+        });
+
+        if (!response.ok) {
+            return { price: 0, source: "none" };
+        }
+
+        const product = await response.json();
+
+        // Verificar si existe sale_price y es mayor a 0
+        if (product.sale_price && parseFloat(product.sale_price) > 0) {
+            return {
+                price: parseFloat(product.sale_price),
+                source: "product_sale_price",
+            };
+        }
+
+        return { price: 0, source: "none" };
+    } catch (error) {
+        console.error("Error fetching product sale price:", error);
+        return { price: 0, source: "none" };
     }
 };
 
@@ -1292,8 +1341,14 @@ const getProductIntelligentPriceFallback = async (productId, authToken) => {
 
         const product = await response.json();
 
-        // Lógica de fallback: selling_price > cost_price > 0
-        if (product.selling_price && product.selling_price > 0) {
+        // Lógica de fallback: sale_price > selling_price > cost_price > 0
+        if (product.sale_price && parseFloat(product.sale_price) > 0) {
+            return {
+                price: parseFloat(product.sale_price),
+                source: "product_sale_price",
+                source_label: "Precio de venta del producto",
+            };
+        } else if (product.selling_price && product.selling_price > 0) {
             return {
                 price: product.selling_price,
                 source: "suggested",
@@ -1447,6 +1502,66 @@ export const validateStockForTransfer = async (
     }
 };
 
+/**
+ * Get batches with stock for a specific product at a specific location
+ * @param {number} productId - Product ID
+ * @param {number} locationId - Location ID
+ * @param {string} authToken - Authentication token
+ * @returns {Promise<Array>} - Array of batches with stock information
+ */
+export const getBatchesWithStockAtLocation = async (
+    productId,
+    locationId,
+    authToken
+) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    if (!productId || !locationId) {
+        throw new Error("Product ID and Location ID are required");
+    }
+
+    const API_BATCHES_BY_LOCATION_URL = `${API_CONFIG.BASE_URL}/inventory/movements/by_batches/`;
+
+    try {
+        // Build URL with product and location filters
+        const params = new URLSearchParams();
+        params.append("product", productId);
+        params.append("location", locationId);
+
+        const url = `${API_BATCHES_BY_LOCATION_URL}?${params.toString()}`;
+
+        const response = await fetch(url, {
+            headers: {
+                Authorization: `Token ${authToken}`,
+                "Content-Type": "application/json",
+            },
+        });
+
+        if (!response.ok) {
+            throw new Error(`Error ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        // Filter out batches with zero stock and add additional properties
+        const batchesWithStock = data
+            .filter((batch) => batch.quantity > 0)
+            .map((batch) => ({
+                ...batch,
+                availableStock: batch.quantity,
+                selectedQuantity: 0,
+                useFullBatch: false,
+            }));
+
+        return batchesWithStock;
+    } catch (error) {
+        console.error("Error fetching batches with stock at location:", error);
+        throw error;
+    }
+};
+
 // Export as default
 const inventoryService = {
     getProducts,
@@ -1471,6 +1586,7 @@ const inventoryService = {
     getProductStockAtLocation,
     getProductStockByLocations,
     validateStockForTransfer,
+    getBatchesWithStockAtLocation,
 };
 
 export default inventoryService;
