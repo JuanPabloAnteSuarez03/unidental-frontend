@@ -5,6 +5,8 @@ import API_CONFIG from "../config/api.js";
 
 const AuthContext = createContext(null);
 
+export { AuthContext };
+
 export const AuthProvider = ({ children }) => {
     const [authToken, setAuthToken] = useState(
         localStorage.getItem("authToken")
