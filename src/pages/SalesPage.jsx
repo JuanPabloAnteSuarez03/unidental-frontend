@@ -18,6 +18,7 @@ const SalesPage = () => {
     const [saleType, setSaleType] = useState("normal"); // Tipos de venta según backend
     const [shouldInvoice, setShouldInvoice] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [dueDate, setDueDate] = useState("");
 
     // Estados para la factura
     const [showInvoice, setShowInvoice] = useState(false);
@@ -113,6 +114,7 @@ const SalesPage = () => {
                     // Agregar información de lotes si existe
                     ...(additionalData.batches && {
                         batches: additionalData.batches,
+                        selectedBatches: additionalData.batches, // <-- AÑADIDO
                     }),
                     // Agregar información de componentes si existe
                     ...(additionalData.components && {
@@ -352,10 +354,12 @@ const SalesPage = () => {
 
             console.log("handleSubmitSale - mappedItems:", mappedItems);
 
+            // No enviar sale_type: 'credit' al backend
             const saleData = {
                 customer: selectedCustomer ? selectedCustomer.id : null,
                 location: selectedLocation.id,
-                sale_type: saleType,
+                // sale_type: saleType, // Eliminar este campo si es 'credit'
+                ...(saleType === "normal" ? { sale_type: "normal" } : {}),
                 should_invoice: shouldInvoice,
                 items: mappedItems,
             };
@@ -369,8 +373,35 @@ const SalesPage = () => {
 
             const response = await salesService.createSale(saleData, authToken);
 
-            // Si la venta requiere factura, mostrar el modal de factura
-            if (shouldInvoice) {
+            // Si la venta es a crédito, crear la cuenta de crédito
+            if (saleType === "credit") {
+                try {
+                    // Usar el total_gross de la venta registrada como monto
+                    const creditData = {
+                        sale_id: response.id,
+                        original_amount: parseFloat(response.total_gross),
+                    };
+                    if (dueDate) {
+                        creditData.due_date = dueDate;
+                    }
+                    console.log("Datos del crédito a enviar:", creditData);
+                    console.log(
+                        "JSON completo que se enviará (crédito):",
+                        JSON.stringify(creditData, null, 2)
+                    );
+                    await salesService.createCreditFromSale(
+                        creditData,
+                        authToken
+                    );
+                    alert(
+                        `¡Venta y crédito registrados exitosamente! ID venta: ${response.id}`
+                    );
+                } catch (creditError) {
+                    alert(
+                        `La venta fue registrada (ID: ${response.id}), pero hubo un error al crear el crédito: ${creditError.message}`
+                    );
+                }
+            } else if (shouldInvoice) {
                 setInvoiceData({
                     saleData: response,
                     customerData: selectedCustomer,
@@ -394,6 +425,7 @@ const SalesPage = () => {
             setSaleItems([]);
             setSaleType("normal");
             setShouldInvoice(false);
+            setDueDate(""); // Resetear la fecha de vencimiento
             // No resetear la sede seleccionada para facilitar múltiples ventas consecutivas
         } catch (error) {
             console.error("Error al registrar venta:", error);
@@ -793,9 +825,11 @@ const SalesPage = () => {
                                     </label>
                                     <select
                                         value={saleType}
-                                        onChange={(e) =>
-                                            setSaleType(e.target.value)
-                                        }
+                                        onChange={(e) => {
+                                            setSaleType(e.target.value);
+                                            if (e.target.value !== "credit")
+                                                setDueDate("");
+                                        }}
                                         style={{
                                             width: "100%",
                                             boxSizing: "border-box",
@@ -863,6 +897,41 @@ const SalesPage = () => {
                                     </label>
                                 </div>
                             </div>
+                            {/* Fecha de vencimiento solo si es crédito */}
+                            {saleType === "credit" && (
+                                <div style={{ marginTop: "18px" }}>
+                                    <label
+                                        htmlFor="due-date-input"
+                                        style={{
+                                            display: "block",
+                                            fontSize: "14px",
+                                            fontWeight: "600",
+                                            color: "#2c3e50",
+                                            marginBottom: "8px",
+                                        }}
+                                    >
+                                        Fecha de Vencimiento (opcional)
+                                    </label>
+                                    <input
+                                        id="due-date-input"
+                                        type="date"
+                                        value={dueDate}
+                                        onChange={(e) =>
+                                            setDueDate(e.target.value)
+                                        }
+                                        style={{
+                                            width: "100%",
+                                            boxSizing: "border-box",
+                                            padding: "10px",
+                                            border: "1px solid #dee2e6",
+                                            borderRadius: "4px",
+                                            fontSize: "14px",
+                                            backgroundColor: "white",
+                                            color: "#2c3e50",
+                                        }}
+                                    />
+                                </div>
+                            )}
                         </div>
                     </div>
 

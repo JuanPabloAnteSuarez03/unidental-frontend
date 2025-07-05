@@ -71,6 +71,10 @@ const MainLayout = ({ children }) => {
                     name: "Cuentas por Cobrar (Créditos)",
                     path: "/ventas/creditos",
                 },
+                {
+                    name: "Total de Ventas",
+                    path: "/ventas/total",
+                },
             ],
         },
         clientes: {

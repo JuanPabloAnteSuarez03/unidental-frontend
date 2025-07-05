@@ -79,6 +79,9 @@ const API_CONFIG = {
         RETURNS_BY_LOCATION: "/sales/returns/by_location/",
         RETURN_ITEMS: "/sales/return-items/",
         RETURN_ITEMS_TOP_PRODUCTS: "/sales/return-items/top_returned_products/",
+
+        // Ventas - Créditos
+        CREDITS_ACCOUNTS: "/credits/accounts/",
     },
 };
 

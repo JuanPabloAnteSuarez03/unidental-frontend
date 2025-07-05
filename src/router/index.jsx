@@ -18,6 +18,8 @@ import SuppliersPage from "../pages/SuppliersPage";
 import SupplierDetailPage from "../pages/SupplierDetailPage";
 import AnalisisPreciosPage from "../pages/AnalisisPreciosPage";
 import OrdenesDeCompraPage from "../pages/OrdenesDeCompraPage";
+import SalesCreditsPage from "../pages/SalesCreditsPage";
+import TotalVentasPage from "../pages/TotalVentasPage";
 
 const AppRouter = () => {
     return (
@@ -54,9 +56,12 @@ const AppRouter = () => {
                 />
                 <Route path="/ventas" element={<SalesPage />} />
                 <Route path="/ventas/devoluciones" element={<ReturnsPage />} />
+                <Route path="/ventas/creditos" element={<SalesCreditsPage />} />
+                <Route path="/ventas/total" element={<TotalVentasPage />} />
                 {/* Rutas de clientes */}
                 <Route path="/clientes/lista" element={<CustomersListPage />} />
                 <Route path="/clientes/nuevo" element={<NewCustomerPage />} />
+
                 {/* Rutas de proveedores */}
                 <Route
                     path="/compras/proveedores"

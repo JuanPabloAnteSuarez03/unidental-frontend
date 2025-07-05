@@ -148,28 +148,70 @@ export const getAllSuppliers = async (authToken) => {
     }
 
     try {
-        const response = await fetch(`${API_SUPPLIERS_URL}?page_size=1000`, {
-            headers: {
-                Authorization: `Token ${authToken}`,
-                "Content-Type": "application/json",
-            },
-        });
+        console.log("🔄 Cargando TODOS los proveedores...");
+        const allSuppliers = [];
+        let nextUrl = `${API_SUPPLIERS_URL}?page_size=100`; // Usar 100 por página para optimizar
+        let pageCount = 0;
+        const maxPages = 100; // Límite de seguridad
 
-        if (!response.ok) {
-            throw new Error(`Error ${response.status}: ${response.statusText}`);
+        while (nextUrl && pageCount < maxPages) {
+            pageCount++;
+            console.log(`📄 Cargando página ${pageCount} de proveedores...`);
+
+            const response = await fetch(nextUrl, {
+                headers: {
+                    Authorization: `Token ${authToken}`,
+                    "Content-Type": "application/json",
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error(
+                    `Error ${response.status}: ${response.statusText}`
+                );
+            }
+
+            const data = await response.json();
+            const suppliers = data.results || [];
+
+            // Agregar proveedores de esta página
+            allSuppliers.push(...suppliers);
+            console.log(
+                `✅ Página ${pageCount}: ${suppliers.length} proveedores cargados`
+            );
+
+            // Verificar si hay más páginas
+            nextUrl = data.next ? data.next : null;
+
+            // Si no hay más páginas, terminar
+            if (!nextUrl) {
+                console.log(
+                    `🏁 No hay más páginas. Total de proveedores cargados: ${allSuppliers.length}`
+                );
+                break;
+            }
         }
 
-        const data = await response.json();
+        // Advertencia si llegamos al límite
+        if (pageCount >= maxPages) {
+            console.warn(
+                `⚠️ Se alcanzó el límite de ${maxPages} páginas. Es posible que no se hayan cargado todos los proveedores.`
+            );
+        }
 
         // Actualizar cache con todos los datos
         suppliersCache = {
-            data: data.results || [],
-            totalCount: data.count || 0,
+            data: allSuppliers,
+            totalCount: allSuppliers.length,
             lastFetch: Date.now(),
             searchTerm: null,
         };
 
-        return data.results || [];
+        console.log(
+            `🎉 Carga completa finalizada: ${allSuppliers.length} proveedores cargados en ${pageCount} páginas`
+        );
+
+        return allSuppliers;
     } catch (error) {
         console.error("Error fetching all suppliers:", error);
         throw error;

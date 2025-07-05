@@ -1152,17 +1152,7 @@ export const getIntelligentPrice = async (productId, authToken) => {
     }
 
     try {
-        // 1. NUEVO: Intentar obtener precio de venta del producto (sale_price)
-        const productSalePrice = await getProductSalePrice(productId, authToken);
-        if (productSalePrice.price > 0) {
-            return {
-                price: productSalePrice.price,
-                source: "product_sale_price",
-                source_label: "Precio de venta del producto",
-            };
-        }
-
-        // 2. Intentar obtener último precio de venta histórico
+        // 1. Intentar obtener último precio de venta
         const lastSalePrice = await getLastSalePrice(productId, authToken);
         if (lastSalePrice.price > 0) {
             return {
@@ -1172,7 +1162,7 @@ export const getIntelligentPrice = async (productId, authToken) => {
             };
         }
 
-        // 3. Intentar obtener último precio de compra
+        // 2. Intentar obtener último precio de compra
         const lastPurchasePrice = await getLastPurchasePrice(
             productId,
             authToken
@@ -1185,50 +1175,11 @@ export const getIntelligentPrice = async (productId, authToken) => {
             };
         }
 
-        // 4. Usar precios del producto (fallback)
+        // 3. Usar precios del producto (fallback)
         return await getProductIntelligentPriceFallback(productId, authToken);
     } catch (error) {
         console.error("Error fetching intelligent price:", error);
         return await getProductIntelligentPriceFallback(productId, authToken);
-    }
-};
-
-/**
- * Get product sale price (sale_price field from product model)
- * @param {number} productId - Product ID
- * @param {string} authToken - Authentication token
- * @returns {Promise<Object>} - Price information
- */
-const getProductSalePrice = async (productId, authToken) => {
-    try {
-        // Obtener el producto individual para usar el campo sale_price
-        const productUrl = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.INVENTORY}${productId}/`;
-
-        const response = await fetch(productUrl, {
-            headers: {
-                Authorization: `Token ${authToken}`,
-                "Content-Type": "application/json",
-            },
-        });
-
-        if (!response.ok) {
-            return { price: 0, source: "none" };
-        }
-
-        const product = await response.json();
-
-        // Verificar si existe sale_price y es mayor a 0
-        if (product.sale_price && parseFloat(product.sale_price) > 0) {
-            return {
-                price: parseFloat(product.sale_price),
-                source: "product_sale_price",
-            };
-        }
-
-        return { price: 0, source: "none" };
-    } catch (error) {
-        console.error("Error fetching product sale price:", error);
-        return { price: 0, source: "none" };
     }
 };
 
@@ -1341,14 +1292,8 @@ const getProductIntelligentPriceFallback = async (productId, authToken) => {
 
         const product = await response.json();
 
-        // Lógica de fallback: sale_price > selling_price > cost_price > 0
-        if (product.sale_price && parseFloat(product.sale_price) > 0) {
-            return {
-                price: parseFloat(product.sale_price),
-                source: "product_sale_price",
-                source_label: "Precio de venta del producto",
-            };
-        } else if (product.selling_price && product.selling_price > 0) {
+        // Lógica de fallback: selling_price > cost_price > 0
+        if (product.selling_price && product.selling_price > 0) {
             return {
                 price: product.selling_price,
                 source: "suggested",

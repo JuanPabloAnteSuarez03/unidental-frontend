@@ -3,6 +3,16 @@ import { getSuppliers, getPurchaseOptions } from "../services/suppliersService";
 import { useAuth } from "../context/AuthContext";
 import { getLocations } from "../services/inventoryService";
 
+// Función para normalizar tildes y caracteres especiales
+const normalizeText = (text) => {
+    if (!text) return "";
+    return text
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "") // Remover diacríticos (tildes)
+        .toLowerCase()
+        .trim();
+};
+
 const OrdenesDeCompraPage = () => {
     const { authToken } = useAuth();
     const [selectedSupplier, setSelectedSupplier] = useState(null);
@@ -14,6 +24,14 @@ const OrdenesDeCompraPage = () => {
     const [locations, setLocations] = useState([]);
     const [isLoadingLocations, setIsLoadingLocations] = useState(false);
     const [selectedLocation, setSelectedLocation] = useState("");
+    const [searchTerm, setSearchTerm] = useState("");
+    const [searchResults, setSearchResults] = useState([]);
+    const [isSearching, setIsSearching] = useState(false);
+    const [searchMode, setSearchMode] = useState("supplier"); // 'supplier' o 'product'
+
+    // Estados para búsqueda local sin tildes
+    const [allProducts, setAllProducts] = useState([]); // Lista completa de productos
+    const [isLoadingAllProducts, setIsLoadingAllProducts] = useState(false);
 
     const [notes, setNotes] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -27,7 +45,8 @@ const OrdenesDeCompraPage = () => {
     const [ordersPage, setOrdersPage] = useState(1);
     const [ordersTotalPages, setOrdersTotalPages] = useState(1);
     const [ordersCount, setOrdersCount] = useState(0);
-    const ORDERS_PAGE_SIZE = 10;
+    const [goToPage, setGoToPage] = useState("");
+    const ORDERS_PAGE_SIZE = 25;
     // Estado para el panel de detalle de orden
     const [selectedOrder, setSelectedOrder] = useState(null);
     const [showOrderDetail, setShowOrderDetail] = useState(false);
@@ -106,7 +125,9 @@ const OrdenesDeCompraPage = () => {
                 setOrders(data.results || []);
                 setOrdersCount(data.count || 0);
                 setOrdersTotalPages(
-                    data.count ? Math.ceil(data.count / ORDERS_PAGE_SIZE) : 1
+                    data.count
+                        ? Math.max(1, Math.ceil(data.count / ORDERS_PAGE_SIZE))
+                        : 1
                 );
             })
             .catch((err) =>
@@ -227,6 +248,117 @@ const OrdenesDeCompraPage = () => {
         };
         return map[status] || status;
     };
+
+    // Función auxiliar para obtener el precio de una opción de compra
+    const getPurchasePrice = (option) => {
+        const price = option.purchase_price || 0;
+        return Number(price);
+    };
+
+    // Función para ir a una página específica
+    const handleGoToPage = () => {
+        const page = parseInt(goToPage);
+        if (page && page >= 1 && page <= ordersTotalPages) {
+            setOrdersPage(page);
+            setGoToPage("");
+        }
+    };
+
+    // Función para manejar Enter en el campo de página
+    const handlePageKeyPress = (e) => {
+        if (e.key === "Enter") {
+            handleGoToPage();
+        }
+    };
+
+    // Cargar todos los productos para búsqueda local
+    const loadAllProducts = async () => {
+        setIsLoadingAllProducts(true);
+        try {
+            const response = await fetch(
+                "https://unidental-backend.onrender.com/api/suppliers/purchase-options/?page_size=1000",
+                {
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Token ${authToken}`,
+                    },
+                }
+            );
+            if (!response.ok) {
+                throw new Error("Error al cargar productos");
+            }
+            const data = await response.json();
+            setAllProducts(data.results || []);
+        } catch (error) {
+            console.error("Error loading all products:", error);
+            setAllProducts([]);
+        } finally {
+            setIsLoadingAllProducts(false);
+        }
+    };
+
+    // Buscar productos localmente sin tildes
+    const handleProductSearch = () => {
+        if (!searchTerm.trim()) {
+            setSearchResults([]);
+            return;
+        }
+
+        setIsSearching(true);
+
+        // Simular delay para mostrar loading
+        setTimeout(() => {
+            const normalizedSearchTerm = normalizeText(searchTerm);
+
+            const filteredProducts = allProducts.filter((product) => {
+                // Buscar en diferentes campos del producto
+                const productName = product.product_name || product.name || "";
+                const sku = product.sku || product.product_sku || "";
+                const description =
+                    product.description || product.product_description || "";
+
+                // Normalizar los campos del producto
+                const normalizedProductName = normalizeText(productName);
+                const normalizedSku = normalizeText(sku);
+                const normalizedDescription = normalizeText(description);
+
+                // Verificar si el término de búsqueda coincide en algún campo
+                return (
+                    normalizedProductName.includes(normalizedSearchTerm) ||
+                    normalizedSku.includes(normalizedSearchTerm) ||
+                    normalizedDescription.includes(normalizedSearchTerm)
+                );
+            });
+
+            setSearchResults(filteredProducts);
+            setIsSearching(false);
+        }, 300);
+    };
+
+    // Efecto para cargar todos los productos cuando se cambia al modo de búsqueda
+    useEffect(() => {
+        if (
+            searchMode === "product" &&
+            allProducts.length === 0 &&
+            !isLoadingAllProducts
+        ) {
+            loadAllProducts();
+        }
+    }, [searchMode, authToken]);
+
+    // Efecto para buscar productos cuando cambia el término de búsqueda
+    useEffect(() => {
+        const timeoutId = setTimeout(() => {
+            if (
+                searchMode === "product" &&
+                searchTerm.trim() &&
+                allProducts.length > 0
+            ) {
+                handleProductSearch();
+            }
+        }, 300);
+        return () => clearTimeout(timeoutId);
+    }, [searchTerm, searchMode, allProducts]);
 
     return (
         <>
@@ -467,6 +599,9 @@ const OrdenesDeCompraPage = () => {
                                             setSelectedSupplier(
                                                 supplier || null
                                             );
+                                            setSearchMode("supplier");
+                                            setSearchTerm("");
+                                            setSearchResults([]);
                                         }}
                                         style={{
                                             width: "100%",
@@ -554,6 +689,126 @@ const OrdenesDeCompraPage = () => {
                                     </div>
                                 )}
                             </div>
+
+                            {/* Búsqueda directa de productos */}
+                            <div
+                                style={{
+                                    background: "#fff",
+                                    borderRadius: "8px",
+                                    padding: "20px",
+                                    boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                                    border: "1px solid #dee2e6",
+                                }}
+                            >
+                                <div
+                                    style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "8px",
+                                        marginBottom: "16px",
+                                        padding: "12px 16px",
+                                        background:
+                                            "linear-gradient(135deg, #27ae60 0%, #2c3e50 100%)",
+                                        borderRadius: "8px",
+                                        color: "white",
+                                    }}
+                                >
+                                    <span style={{ fontSize: "18px" }}>🔍</span>
+                                    <h3
+                                        style={{
+                                            fontSize: "16px",
+                                            fontWeight: "700",
+                                            margin: 0,
+                                            color: "white",
+                                        }}
+                                    >
+                                        Buscar Producto
+                                    </h3>
+                                </div>
+
+                                <div style={{ position: "relative" }}>
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar por nombre o SKU..."
+                                        value={searchTerm}
+                                        onChange={(e) => {
+                                            setSearchTerm(e.target.value);
+                                            setSearchMode("product");
+                                            setSelectedSupplier(null);
+                                        }}
+                                        style={{
+                                            width: "100%",
+                                            padding: "12px 16px",
+                                            borderRadius: "6px",
+                                            border: "2px solid #e3eaf3",
+                                            fontSize: "14px",
+                                            fontWeight: "500",
+                                            color: "#2c3e50",
+                                            background: "#f8f9fa",
+                                            outline: "none",
+                                            transition: "all 0.2s ease",
+                                            boxSizing: "border-box",
+                                        }}
+                                        onFocus={(e) => {
+                                            e.target.style.borderColor =
+                                                "#27ae60";
+                                            e.target.style.backgroundColor =
+                                                "white";
+                                            e.target.style.boxShadow =
+                                                "0 0 0 3px rgba(39, 174, 96, 0.1)";
+                                        }}
+                                        onBlur={(e) => {
+                                            e.target.style.borderColor =
+                                                "#e3eaf3";
+                                            e.target.style.backgroundColor =
+                                                "#f8f9fa";
+                                            e.target.style.boxShadow = "none";
+                                        }}
+                                    />
+                                    {isSearching && (
+                                        <div
+                                            style={{
+                                                position: "absolute",
+                                                right: "16px",
+                                                top: "50%",
+                                                transform: "translateY(-50%)",
+                                                width: "16px",
+                                                height: "16px",
+                                                border: "2px solid #e9ecef",
+                                                borderTop: "2px solid #27ae60",
+                                                borderRadius: "50%",
+                                                animation:
+                                                    "spin 1s linear infinite",
+                                            }}
+                                        ></div>
+                                    )}
+                                </div>
+
+                                {searchMode === "product" && (
+                                    <div
+                                        style={{
+                                            marginTop: "12px",
+                                            padding: "8px 12px",
+                                            backgroundColor:
+                                                isLoadingAllProducts
+                                                    ? "#fff3cd"
+                                                    : "#e8f5e9",
+                                            borderRadius: "6px",
+                                            border: isLoadingAllProducts
+                                                ? "1px solid #ffeaa7"
+                                                : "1px solid #c8e6c9",
+                                            color: isLoadingAllProducts
+                                                ? "#856404"
+                                                : "#2e7d32",
+                                            fontSize: "14px",
+                                        }}
+                                    >
+                                        {isLoadingAllProducts
+                                            ? "Cargando productos para búsqueda..."
+                                            : "Listo para buscar productos (búsqueda sin tildes)"}
+                                    </div>
+                                )}
+                            </div>
                             {/* Tabla de productos */}
                             <div
                                 style={{
@@ -576,9 +831,263 @@ const OrdenesDeCompraPage = () => {
                                         letterSpacing: "-0.5px",
                                     }}
                                 >
-                                    Productos del Proveedor
+                                    {searchMode === "product"
+                                        ? "Opciones de Compra Encontradas"
+                                        : "Productos del Proveedor"}
                                 </h2>
-                                {!selectedSupplier ? (
+                                {searchMode === "product" ? (
+                                    // Modo búsqueda directa
+                                    !searchTerm ? (
+                                        <div
+                                            style={{
+                                                color: "#888",
+                                                fontSize: 16,
+                                                textAlign: "center",
+                                                padding: "60px 20px",
+                                            }}
+                                        >
+                                            Ingresa un término de búsqueda para
+                                            encontrar opciones de compra
+                                            <br />
+                                            <small
+                                                style={{
+                                                    fontSize: "14px",
+                                                    color: "#666",
+                                                }}
+                                            >
+                                                (Búsqueda sin tildes - puedes
+                                                escribir "articulador" para
+                                                encontrar "Artículador")
+                                            </small>
+                                        </div>
+                                    ) : isSearching ? (
+                                        <div
+                                            style={{
+                                                color: "#888",
+                                                fontSize: 16,
+                                                textAlign: "center",
+                                                padding: "60px 20px",
+                                            }}
+                                        >
+                                            Buscando opciones de compra...
+                                        </div>
+                                    ) : searchResults.length === 0 ? (
+                                        <div
+                                            style={{
+                                                color: "#888",
+                                                fontSize: 16,
+                                                textAlign: "center",
+                                                padding: "60px 20px",
+                                            }}
+                                        >
+                                            No se encontraron opciones de compra
+                                            para "{searchTerm}"
+                                            <br />
+                                            <small
+                                                style={{
+                                                    fontSize: "14px",
+                                                    color: "#666",
+                                                }}
+                                            >
+                                                (Búsqueda sin tildes - puedes
+                                                escribir "articulador" para
+                                                encontrar "Artículador")
+                                            </small>
+                                        </div>
+                                    ) : (
+                                        <div
+                                            style={{
+                                                borderRadius: 12,
+                                                overflow: "hidden",
+                                                border: "1px solid #e9ecef",
+                                                boxShadow:
+                                                    "0 2px 8px rgba(0,0,0,0.06)",
+                                            }}
+                                        >
+                                            <table
+                                                style={{
+                                                    width: "100%",
+                                                    borderCollapse: "collapse",
+                                                    backgroundColor: "#fff",
+                                                }}
+                                            >
+                                                <thead>
+                                                    <tr
+                                                        style={{
+                                                            background:
+                                                                "linear-gradient(135deg, #27ae60 0%, #2c3e50 100%)",
+                                                            color: "white",
+                                                        }}
+                                                    >
+                                                        <th
+                                                            style={{
+                                                                padding: "16px",
+                                                                textAlign:
+                                                                    "left",
+                                                                fontWeight:
+                                                                    "600",
+                                                            }}
+                                                        >
+                                                            Producto
+                                                        </th>
+
+                                                        <th
+                                                            style={{
+                                                                padding: "16px",
+                                                                textAlign:
+                                                                    "left",
+                                                                fontWeight:
+                                                                    "600",
+                                                            }}
+                                                        >
+                                                            Proveedor
+                                                        </th>
+                                                        <th
+                                                            style={{
+                                                                padding: "16px",
+                                                                textAlign:
+                                                                    "left",
+                                                                fontWeight:
+                                                                    "600",
+                                                            }}
+                                                        >
+                                                            Precio
+                                                        </th>
+                                                        <th
+                                                            style={{
+                                                                padding: "16px",
+                                                                textAlign:
+                                                                    "center",
+                                                                fontWeight:
+                                                                    "600",
+                                                            }}
+                                                        >
+                                                            Acción
+                                                        </th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {searchResults.map(
+                                                        (option) => (
+                                                            <tr
+                                                                key={option.id}
+                                                                style={{
+                                                                    borderBottom:
+                                                                        "1px solid #e9ecef",
+                                                                }}
+                                                            >
+                                                                <td
+                                                                    style={{
+                                                                        padding:
+                                                                            "16px",
+                                                                        color: "#2c3e50",
+                                                                        fontWeight:
+                                                                            "500",
+                                                                    }}
+                                                                >
+                                                                    {option.product_name ||
+                                                                        option
+                                                                            .product
+                                                                            ?.name ||
+                                                                        "-"}
+                                                                </td>
+
+                                                                <td
+                                                                    style={{
+                                                                        padding:
+                                                                            "16px",
+                                                                        color: "#6c757d",
+                                                                    }}
+                                                                >
+                                                                    {option.supplier_name ||
+                                                                        option
+                                                                            .supplier
+                                                                            ?.name ||
+                                                                        "-"}
+                                                                </td>
+                                                                <td
+                                                                    style={{
+                                                                        padding:
+                                                                            "16px",
+                                                                        color: "#2c3e50",
+                                                                        fontWeight:
+                                                                            "600",
+                                                                    }}
+                                                                >
+                                                                    $
+                                                                    {getPurchasePrice(
+                                                                        option
+                                                                    ).toLocaleString()}
+                                                                </td>
+                                                                <td
+                                                                    style={{
+                                                                        padding:
+                                                                            "16px",
+                                                                        textAlign:
+                                                                            "center",
+                                                                    }}
+                                                                >
+                                                                    <button
+                                                                        onClick={() =>
+                                                                            handleAddProduct(
+                                                                                {
+                                                                                    ...option,
+                                                                                    purchase_option:
+                                                                                        option.id,
+                                                                                    product_name:
+                                                                                        option.product_name ||
+                                                                                        option
+                                                                                            .product
+                                                                                            ?.name,
+                                                                                    purchase_price:
+                                                                                        getPurchasePrice(
+                                                                                            option
+                                                                                        ),
+                                                                                }
+                                                                            )
+                                                                        }
+                                                                        style={{
+                                                                            background:
+                                                                                "#27ae60",
+                                                                            color: "white",
+                                                                            border: "none",
+                                                                            borderRadius:
+                                                                                "6px",
+                                                                            padding:
+                                                                                "8px 16px",
+                                                                            fontSize:
+                                                                                "14px",
+                                                                            fontWeight:
+                                                                                "600",
+                                                                            cursor: "pointer",
+                                                                            transition:
+                                                                                "all 0.2s ease",
+                                                                        }}
+                                                                        onMouseOver={(
+                                                                            e
+                                                                        ) =>
+                                                                            (e.target.style.background =
+                                                                                "#229954")
+                                                                        }
+                                                                        onMouseOut={(
+                                                                            e
+                                                                        ) =>
+                                                                            (e.target.style.background =
+                                                                                "#27ae60")
+                                                                        }
+                                                                    >
+                                                                        Agregar
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        )
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )
+                                ) : // Modo proveedor (funcionalidad existente)
+                                !selectedSupplier ? (
                                     <div
                                         style={{
                                             color: "#888",
@@ -2329,16 +2838,45 @@ const OrdenesDeCompraPage = () => {
                                     )}
                                 </tbody>
                             </table>
-                            {/* Paginación */}
+                            {/* Paginación Mejorada */}
                             {ordersTotalPages > 1 && (
                                 <div
                                     style={{
                                         display: "flex",
                                         justifyContent: "center",
-                                        gap: 16,
+                                        alignItems: "center",
+                                        gap: 12,
                                         marginBottom: 24,
+                                        flexWrap: "wrap",
                                     }}
                                 >
+                                    {/* Botón Primera Página */}
+                                    <button
+                                        onClick={() => setOrdersPage(1)}
+                                        disabled={ordersPage === 1}
+                                        style={{
+                                            padding: "8px 12px",
+                                            borderRadius: 6,
+                                            border: "1.5px solid #e3eaf3",
+                                            background:
+                                                ordersPage === 1
+                                                    ? "#f8f9fa"
+                                                    : "#fff",
+                                            color: "#2c3e50",
+                                            fontWeight: 600,
+                                            fontSize: "14px",
+                                            cursor:
+                                                ordersPage === 1
+                                                    ? "not-allowed"
+                                                    : "pointer",
+                                            transition: "all 0.2s ease",
+                                        }}
+                                        title="Primera página"
+                                    >
+                                        ⏮
+                                    </button>
+
+                                    {/* Botón Anterior */}
                                     <button
                                         onClick={() =>
                                             setOrdersPage((p) =>
@@ -2347,7 +2885,7 @@ const OrdenesDeCompraPage = () => {
                                         }
                                         disabled={ordersPage === 1}
                                         style={{
-                                            padding: "8px 18px",
+                                            padding: "8px 12px",
                                             borderRadius: 6,
                                             border: "1.5px solid #e3eaf3",
                                             background:
@@ -2355,26 +2893,169 @@ const OrdenesDeCompraPage = () => {
                                                     ? "#f8f9fa"
                                                     : "#fff",
                                             color: "#2c3e50",
-                                            fontWeight: 700,
+                                            fontWeight: 600,
+                                            fontSize: "14px",
                                             cursor:
                                                 ordersPage === 1
                                                     ? "not-allowed"
                                                     : "pointer",
+                                            transition: "all 0.2s ease",
                                         }}
+                                        title="Página anterior"
                                     >
-                                        ← Anterior
+                                        ←
                                     </button>
-                                    <span
+
+                                    {/* Números de Página */}
+                                    <div
                                         style={{
-                                            fontWeight: 600,
-                                            fontSize: 16,
-                                            color: "#2c3e50",
-                                            alignSelf: "center",
+                                            display: "flex",
+                                            gap: 4,
+                                            alignItems: "center",
                                         }}
                                     >
-                                        Página {ordersPage} de{" "}
-                                        {ordersTotalPages}
-                                    </span>
+                                        {(() => {
+                                            const pages = [];
+                                            const maxVisible = 5;
+                                            let start = Math.max(
+                                                1,
+                                                ordersPage -
+                                                    Math.floor(maxVisible / 2)
+                                            );
+                                            let end = Math.min(
+                                                ordersTotalPages,
+                                                start + maxVisible - 1
+                                            );
+
+                                            if (end - start + 1 < maxVisible) {
+                                                start = Math.max(
+                                                    1,
+                                                    end - maxVisible + 1
+                                                );
+                                            }
+
+                                            // Primera página si no está visible
+                                            if (start > 1) {
+                                                pages.push(
+                                                    <button
+                                                        key="1"
+                                                        onClick={() =>
+                                                            setOrdersPage(1)
+                                                        }
+                                                        style={{
+                                                            padding: "8px 12px",
+                                                            borderRadius: 6,
+                                                            border: "1.5px solid #e3eaf3",
+                                                            background: "#fff",
+                                                            color: "#2c3e50",
+                                                            fontWeight: 600,
+                                                            fontSize: "14px",
+                                                            cursor: "pointer",
+                                                            transition:
+                                                                "all 0.2s ease",
+                                                        }}
+                                                    >
+                                                        1
+                                                    </button>
+                                                );
+                                                if (start > 2) {
+                                                    pages.push(
+                                                        <span
+                                                            key="dots1"
+                                                            style={{
+                                                                color: "#6c757d",
+                                                                fontSize:
+                                                                    "14px",
+                                                            }}
+                                                        >
+                                                            ...
+                                                        </span>
+                                                    );
+                                                }
+                                            }
+
+                                            // Páginas visibles
+                                            for (let i = start; i <= end; i++) {
+                                                pages.push(
+                                                    <button
+                                                        key={i}
+                                                        onClick={() =>
+                                                            setOrdersPage(i)
+                                                        }
+                                                        style={{
+                                                            padding: "8px 12px",
+                                                            borderRadius: 6,
+                                                            border: "1.5px solid #e3eaf3",
+                                                            background:
+                                                                ordersPage === i
+                                                                    ? "#2c3e50"
+                                                                    : "#fff",
+                                                            color:
+                                                                ordersPage === i
+                                                                    ? "#fff"
+                                                                    : "#2c3e50",
+                                                            fontWeight: 600,
+                                                            fontSize: "14px",
+                                                            cursor: "pointer",
+                                                            transition:
+                                                                "all 0.2s ease",
+                                                        }}
+                                                    >
+                                                        {i}
+                                                    </button>
+                                                );
+                                            }
+
+                                            // Última página si no está visible
+                                            if (end < ordersTotalPages) {
+                                                if (
+                                                    end <
+                                                    ordersTotalPages - 1
+                                                ) {
+                                                    pages.push(
+                                                        <span
+                                                            key="dots2"
+                                                            style={{
+                                                                color: "#6c757d",
+                                                                fontSize:
+                                                                    "14px",
+                                                            }}
+                                                        >
+                                                            ...
+                                                        </span>
+                                                    );
+                                                }
+                                                pages.push(
+                                                    <button
+                                                        key={ordersTotalPages}
+                                                        onClick={() =>
+                                                            setOrdersPage(
+                                                                ordersTotalPages
+                                                            )
+                                                        }
+                                                        style={{
+                                                            padding: "8px 12px",
+                                                            borderRadius: 6,
+                                                            border: "1.5px solid #e3eaf3",
+                                                            background: "#fff",
+                                                            color: "#2c3e50",
+                                                            fontWeight: 600,
+                                                            fontSize: "14px",
+                                                            cursor: "pointer",
+                                                            transition:
+                                                                "all 0.2s ease",
+                                                        }}
+                                                    >
+                                                        {ordersTotalPages}
+                                                    </button>
+                                                );
+                                            }
+
+                                            return pages;
+                                        })()}
+                                    </div>
+
+                                    {/* Botón Siguiente */}
                                     <button
                                         onClick={() =>
                                             setOrdersPage((p) =>
@@ -2388,7 +3069,7 @@ const OrdenesDeCompraPage = () => {
                                             ordersPage === ordersTotalPages
                                         }
                                         style={{
-                                            padding: "8px 18px",
+                                            padding: "8px 12px",
                                             borderRadius: 6,
                                             border: "1.5px solid #e3eaf3",
                                             background:
@@ -2396,15 +3077,155 @@ const OrdenesDeCompraPage = () => {
                                                     ? "#f8f9fa"
                                                     : "#fff",
                                             color: "#2c3e50",
-                                            fontWeight: 700,
+                                            fontWeight: 600,
+                                            fontSize: "14px",
                                             cursor:
                                                 ordersPage === ordersTotalPages
                                                     ? "not-allowed"
                                                     : "pointer",
+                                            transition: "all 0.2s ease",
+                                        }}
+                                        title="Página siguiente"
+                                    >
+                                        →
+                                    </button>
+
+                                    {/* Información de Página */}
+                                    <div
+                                        style={{
+                                            marginLeft: 16,
+                                            padding: "8px 12px",
+                                            background: "#f8f9fa",
+                                            borderRadius: 6,
+                                            border: "1px solid #e9ecef",
                                         }}
                                     >
-                                        Siguiente →
-                                    </button>
+                                        <span
+                                            style={{
+                                                fontWeight: 600,
+                                                fontSize: "14px",
+                                                color: "#6c757d",
+                                            }}
+                                        >
+                                            Página {ordersPage} de{" "}
+                                            {ordersTotalPages}
+                                        </span>
+                                    </div>
+
+                                    {/* Campo para ir a página específica */}
+                                    <div
+                                        style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: 8,
+                                            marginLeft: 16,
+                                        }}
+                                    >
+                                        <span
+                                            style={{
+                                                fontSize: "14px",
+                                                color: "#6c757d",
+                                                fontWeight: 500,
+                                            }}
+                                        >
+                                            Ir a:
+                                        </span>
+                                        <input
+                                            type="number"
+                                            value={goToPage}
+                                            onChange={(e) => {
+                                                let val = e.target.value;
+                                                // Limitar el valor máximo al total de páginas
+                                                if (
+                                                    val !== "" &&
+                                                    Number(val) >
+                                                        ordersTotalPages
+                                                ) {
+                                                    val = ordersTotalPages;
+                                                }
+                                                // Limitar el valor mínimo a 1
+                                                if (
+                                                    val !== "" &&
+                                                    Number(val) < 1
+                                                ) {
+                                                    val = 1;
+                                                }
+                                                setGoToPage(val);
+                                            }}
+                                            onKeyPress={handlePageKeyPress}
+                                            placeholder="Página"
+                                            min="1"
+                                            max={ordersTotalPages}
+                                            style={{
+                                                width: "70px",
+                                                padding: "8px 10px",
+                                                borderRadius: 6,
+                                                border: "2px solid #b2bec3",
+                                                fontSize: "15px",
+                                                textAlign: "center",
+                                                outline: "none",
+                                                background: "#f8f9fa",
+                                                color: "#2c3e50",
+                                                fontWeight: 600,
+                                                boxShadow:
+                                                    "0 1px 4px rgba(44,62,80,0.04)",
+                                                transition:
+                                                    "border 0.2s, box-shadow 0.2s",
+                                            }}
+                                            onFocus={(e) => {
+                                                e.target.style.border =
+                                                    "2px solid #2c3e50";
+                                                e.target.style.background =
+                                                    "#fff";
+                                            }}
+                                            onBlur={(e) => {
+                                                e.target.style.border =
+                                                    "2px solid #b2bec3";
+                                                e.target.style.background =
+                                                    "#f8f9fa";
+                                            }}
+                                        />
+                                        <button
+                                            onClick={handleGoToPage}
+                                            disabled={
+                                                !goToPage ||
+                                                parseInt(goToPage) < 1 ||
+                                                parseInt(goToPage) >
+                                                    ordersTotalPages
+                                            }
+                                            style={{
+                                                padding: "6px 12px",
+                                                borderRadius: 4,
+                                                border: "1px solid #e3eaf3",
+                                                background:
+                                                    !goToPage ||
+                                                    parseInt(goToPage) < 1 ||
+                                                    parseInt(goToPage) >
+                                                        ordersTotalPages
+                                                        ? "#f8f9fa"
+                                                        : "#2c3e50",
+                                                color:
+                                                    !goToPage ||
+                                                    parseInt(goToPage) < 1 ||
+                                                    parseInt(goToPage) >
+                                                        ordersTotalPages
+                                                        ? "#6c757d"
+                                                        : "#fff",
+                                                fontWeight: 600,
+                                                fontSize: "12px",
+                                                cursor:
+                                                    !goToPage ||
+                                                    parseInt(goToPage) < 1 ||
+                                                    parseInt(goToPage) >
+                                                        ordersTotalPages
+                                                        ? "not-allowed"
+                                                        : "pointer",
+                                                transition: "all 0.2s ease",
+                                            }}
+                                        >
+                                            Ir
+                                        </button>
+                                    </div>
                                 </div>
                             )}
                         </>

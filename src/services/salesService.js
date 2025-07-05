@@ -129,7 +129,7 @@ export const createSale = async (saleData, authToken, signal) => {
             let errorData;
             const responseText = await response.text();
             console.error("createSale - raw error response:", responseText);
-            
+
             try {
                 errorData = JSON.parse(responseText);
                 console.error("createSale - error response JSON:", errorData);
@@ -525,6 +525,141 @@ export const deleteSaleItem = async (saleItemId, authToken) => {
     }
 };
 
+/**
+ * Obtener todas las cuentas de crédito
+ * @param {string} authToken - Token de autenticación
+ * @param {string} search - Término de búsqueda para filtrar por cliente (opcional)
+ * @returns {Promise<Object>} - Lista de cuentas de crédito
+ */
+export const getCreditAccounts = async (authToken, search = "") => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    let url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.CREDITS_ACCOUNTS}`;
+
+    // Agregar parámetro de búsqueda si se proporciona
+    if (search) {
+        url += `?search=${encodeURIComponent(search)}`;
+    }
+
+    try {
+        const response = await fetch(url, {
+            headers: {
+                Authorization: `Token ${authToken}`,
+                "Content-Type": "application/json",
+            },
+        });
+
+        if (!response.ok) {
+            throw new Error(`Error ${response.status}: ${response.statusText}`);
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error("Error fetching credit accounts:", error);
+        throw error;
+    }
+};
+
+/**
+ * Crear una cuenta de crédito (crédito por cobrar)
+ * @param {Object} creditData - Datos del crédito
+ * @param {string} authToken - Token de autenticación
+ * @returns {Promise<Object>} - Crédito creado
+ */
+export const createCreditAccount = async (creditData, authToken) => {
+    if (!authToken) throw new Error("No authentication token provided");
+
+    const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.CREDITS_ACCOUNTS}`;
+    try {
+        const response = await fetch(url, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Token ${authToken}`,
+            },
+            body: JSON.stringify(creditData),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(
+                errorData.detail ||
+                    `Error ${response.status}: ${response.statusText}`
+            );
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error("Error creating credit account:", error);
+        throw error;
+    }
+};
+
+/**
+ * Crear un crédito a partir de una venta
+ * @param {Object} creditData - Datos del crédito (sale, original_amount)
+ * @param {string} authToken - Token de autenticación
+ * @returns {Promise<Object>} - Crédito creado
+ */
+export const createCreditFromSale = async (creditData, authToken) => {
+    if (!authToken) throw new Error("No authentication token provided");
+    const url = `${API_CONFIG.BASE_URL}/credits/accounts/create_credit/`;
+    try {
+        const response = await fetch(url, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Token ${authToken}`,
+            },
+            body: JSON.stringify(creditData),
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(
+                errorData.detail ||
+                    JSON.stringify(errorData) ||
+                    `Error ${response.status}: ${response.statusText}`
+            );
+        }
+        return await response.json();
+    } catch (error) {
+        console.error("Error creating credit from sale:", error);
+        throw error;
+    }
+};
+
+/**
+ * Obtener resumen de deuda por cliente
+ * @param {string} authToken - Token de autenticación
+ * @param {string} [search] - Nombre o término de búsqueda de cliente (opcional)
+ * @returns {Promise<Object>} - Resumen de deuda por cliente
+ */
+export const getDebtSummary = async (authToken, search = "") => {
+    if (!authToken) throw new Error("No authentication token provided");
+    // Construir la URL correctamente según entorno
+    let url = `${API_CONFIG.BASE_URL}/credits/accounts/debt_summary/`;
+    if (search) {
+        url += `?search=${encodeURIComponent(search)}`;
+    }
+    try {
+        const response = await fetch(url, {
+            headers: {
+                Authorization: `Token ${authToken}`,
+                "Content-Type": "application/json",
+            },
+        });
+        if (!response.ok) {
+            throw new Error(`Error ${response.status}: ${response.statusText}`);
+        }
+        return await response.json();
+    } catch (error) {
+        console.error("Error fetching debt summary:", error);
+        throw error;
+    }
+};
+
 // Export all functions as a service object
 export const salesService = {
     getSales,
@@ -537,6 +672,10 @@ export const salesService = {
     getTopProducts,
     updateSaleItem,
     deleteSaleItem,
+    getCreditAccounts,
+    createCreditAccount,
+    createCreditFromSale,
+    getDebtSummary,
 };
 
 // Default export
