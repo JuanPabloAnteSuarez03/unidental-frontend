@@ -20,75 +20,74 @@ import AnalisisPreciosPage from "../pages/AnalisisPreciosPage";
 import OrdenesDeCompraPage from "../pages/OrdenesDeCompraPage";
 import WhatsAppDebtsPage from "../pages/WhatsAppDebtsPage";
 import CreditsSalesWhatsAppPage from "../pages/CreditsSalesWhatsAppPage";
+import SalesCreditsPage from "../pages/SalesCreditsPage";
+import TotalVentasPage from "../pages/TotalVentasPage";
 
 const AppRouter = () => {
-    return (
-        <Routes>
-            <Route path="/" element={<LoginPage />} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/password-reset" element={<ForgotPasswordPage />} />
-            <Route
-                path="/password-reset/confirm/:uid/:token"
-                element={<ResetPasswordConfirmPage />}
-            />
-            {/* Rutas protegidas */}
-            <Route element={<ProtectedRoute />}>
-                <Route path="/inventario" element={<InventoryPage />} />
-                <Route
-                    path="/inventario/movimientos"
-                    element={<MovimientosDeStockPage />}
-                />
-                <Route
-                    path="/inventario/transferencias"
-                    element={<TransferenciasInternasPage />}
-                />
-                <Route
-                    path="/inventario/nuevo-producto"
-                    element={<NuevoProductoPage />}
-                />
-                <Route
-                    path="/inventario/alertas-vencimiento"
-                    element={<AlertasPage />}
-                />
-                <Route
-                    path="/inventario/alertas-stock"
-                    element={<AlertasStockPage />}
-                />
-                <Route path="/ventas" element={<SalesPage />} />
-                <Route path="/ventas/devoluciones" element={<ReturnsPage />} />
-                {/* Rutas de clientes */}
-                <Route path="/clientes/lista" element={<CustomersListPage />} />
-                <Route path="/clientes/nuevo" element={<NewCustomerPage />} />
-                {/* Rutas de proveedores */}
-                <Route
-                    path="/compras/proveedores"
-                    element={<SuppliersPage />}
-                />
-                <Route
-                    path="/compras/proveedores/:supplierName"
-                    element={<SupplierDetailPage />}
-                />
-                <Route
-                    path="/compras/analisis-precios"
-                    element={<AnalisisPreciosPage />}
-                />
-                <Route
-                    path="/compras/ordenes"
-                    element={<OrdenesDeCompraPage />}
-                />
-                {/* Ruta para deudas con WhatsApp */}
-                <Route
-                    path="/compras/deudas-whatsapp"
-                    element={<WhatsAppDebtsPage />}
-                />
-                {/* Ruta para créditos de ventas con WhatsApp */}
-                <Route
-                    path="/ventas/creditos-whatsapp"
-                    element={<CreditsSalesWhatsAppPage />}
-                />
-            </Route>
-        </Routes>
-    );
+  return (
+    <Routes>
+      <Route path="/" element={<LoginPage />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/password-reset" element={<ForgotPasswordPage />} />
+      <Route
+        path="/password-reset/confirm/:uid/:token"
+        element={<ResetPasswordConfirmPage />}
+      />
+      {/* Rutas protegidas */}
+      <Route element={<ProtectedRoute />}>
+        <Route path="/inventario" element={<InventoryPage />} />
+        <Route
+          path="/inventario/movimientos"
+          element={<MovimientosDeStockPage />}
+        />
+        <Route
+          path="/inventario/transferencias"
+          element={<TransferenciasInternasPage />}
+        />
+        <Route
+          path="/inventario/nuevo-producto"
+          element={<NuevoProductoPage />}
+        />
+        <Route
+          path="/inventario/alertas-vencimiento"
+          element={<AlertasPage />}
+        />
+        <Route
+          path="/inventario/alertas-stock"
+          element={<AlertasStockPage />}
+        />
+        <Route path="/ventas" element={<SalesPage />} />
+        <Route path="/ventas/devoluciones" element={<ReturnsPage />} />
+        <Route path="/ventas/creditos" element={<SalesCreditsPage />} />
+        <Route path="/ventas/total" element={<TotalVentasPage />} />
+        {/* Rutas de clientes */}
+        <Route path="/clientes/lista" element={<CustomersListPage />} />
+        <Route path="/clientes/nuevo" element={<NewCustomerPage />} />
+
+        {/* Rutas de proveedores */}
+        <Route path="/compras/proveedores" element={<SuppliersPage />} />
+        <Route
+          path="/compras/proveedores/:supplierName"
+          element={<SupplierDetailPage />}
+        />
+        <Route
+          path="/compras/analisis-precios"
+          element={<AnalisisPreciosPage />}
+        />
+        <Route path="/compras/ordenes" element={<OrdenesDeCompraPage />} />
+        {/* Ruta para deudas con WhatsApp */}
+        <Route
+          path="/compras/deudas-whatsapp"
+          element={<WhatsAppDebtsPage />}
+        />
+        {/* Ruta para créditos de ventas con WhatsApp */}
+        <Route
+          path="/ventas/creditos-whatsapp"
+          element={<CreditsSalesWhatsAppPage />}
+        />
+      </Route>
+    </Routes>
+  );
 };
 
 export default AppRouter;

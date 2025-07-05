@@ -6,6 +6,7 @@ import {
 } from "../services/suppliersService";
 import { getCategories } from "../services/inventoryService";
 import CategoryFilter from "../components/SearchFilters/CategoryFilter";
+import SupplierComparisonTable from "../components/AnalisisPrecios/SupplierComparisonTable";
 
 function getPageFromUrl(url) {
     if (!url) return null;
@@ -13,9 +14,21 @@ function getPageFromUrl(url) {
     return match ? parseInt(match[1], 10) : 1;
 }
 
+// Función para normalizar tildes y caracteres especiales
+const normalizeText = (text) => {
+    if (!text) return "";
+    return text
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "") // Remover diacríticos (tildes)
+        .toLowerCase()
+        .trim();
+};
+
 const AnalisisPreciosPage = () => {
     const { authToken } = useAuth();
     const [data, setData] = useState([]);
+    const [allProducts, setAllProducts] = useState([]); // Lista completa de productos
+    const [filteredData, setFilteredData] = useState([]); // Datos filtrados localmente
     const [raw, setRaw] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -33,6 +46,7 @@ const AnalisisPreciosPage = () => {
 
     // Estados para la sección "otros campos"
     const [suppliers, setSuppliers] = useState([]);
+    const [suppliersLoading, setSuppliersLoading] = useState(false);
     const [leftSupplier, setLeftSupplier] = useState("");
     const [rightSupplier, setRightSupplier] = useState("");
     const [leftTableData, setLeftTableData] = useState([]);
@@ -45,6 +59,14 @@ const AnalisisPreciosPage = () => {
     const [globalSearchInput, setGlobalSearchInput] = useState("");
     const globalSearchDebounceRef = useRef();
 
+    // Estados para búsqueda local en productos de proveedores
+    const [supplierProducts, setSupplierProducts] = useState([]);
+    const [localSearchResults, setLocalSearchResults] = useState([]);
+
+    // Estados para almacenar datos originales de proveedores
+    const [originalLeftData, setOriginalLeftData] = useState([]);
+    const [originalRightData, setOriginalRightData] = useState([]);
+
     // Estado para categorías y filtro de categoría
     const [categories, setCategories] = useState([]);
     const [selectedCategory, setSelectedCategory] = useState([]);
@@ -54,9 +76,14 @@ const AnalisisPreciosPage = () => {
     const [minPrice, setMinPrice] = useState("");
     const [maxPrice, setMaxPrice] = useState("");
 
+    // Estados para paginación
+    const [pageSizeLocal] = useState(25); // Productos por página
+    const [searchResults, setSearchResults] = useState([]); // Resultados de búsqueda del backend
+
     const BASE_URL =
         "https://unidental-backend.onrender.com/api/suppliers/purchase-options/";
 
+    // Función para cargar productos paginados
     const fetchData = async (
         url = null,
         page = 1,
@@ -70,25 +97,32 @@ const AnalisisPreciosPage = () => {
             let finalUrl = url;
             if (!finalUrl) {
                 let params = [];
-                if (searchTerm)
+                if (searchTerm) {
+                    // Enviar el término original al backend (sin normalizar)
                     params.push(`search=${encodeURIComponent(searchTerm)}`);
+                }
                 if (categoryFilter && categoryFilter.length > 0)
                     params.push(`category=${categoryFilter[0]}`);
                 if (page > 1) params.push(`page=${page}`);
+                params.push(`page_size=${pageSizeLocal}`);
                 finalUrl =
                     BASE_URL + (params.length ? "?" + params.join("&") : "");
             }
+
             const response = await fetch(finalUrl, {
                 headers: {
                     "Content-Type": "application/json",
                     Authorization: `Token ${authToken}`,
                 },
             });
+
             if (!response.ok) throw new Error("Error al obtener los datos");
             result = await response.json();
             setRaw(result);
+
             if (Array.isArray(result)) {
                 setData(result);
+                setFilteredData(result);
                 setNextUrl(null);
                 setPrevUrl(null);
                 setCount(result.length);
@@ -97,6 +131,7 @@ const AnalisisPreciosPage = () => {
                 setTotalPages(1);
             } else if (result && Array.isArray(result.results)) {
                 setData(result.results);
+                setFilteredData(result.results);
                 setNextUrl(result.next);
                 setPrevUrl(result.previous);
                 setCount(result.count || 0);
@@ -114,11 +149,12 @@ const AnalisisPreciosPage = () => {
                 setCurrentPage(pageNum);
                 setTotalPages(
                     result.count && result.results.length
-                        ? Math.ceil(result.count / result.results.length)
+                        ? Math.ceil(result.count / pageSizeLocal)
                         : 1
                 );
             } else {
                 setData([]);
+                setFilteredData([]);
                 setNextUrl(null);
                 setPrevUrl(null);
                 setCount(0);
@@ -133,199 +169,76 @@ const AnalisisPreciosPage = () => {
         }
     };
 
-    // Debounce para búsqueda en tiempo real
-    useEffect(() => {
-        if (debounceRef.current) clearTimeout(debounceRef.current);
-        debounceRef.current = setTimeout(() => {
-            setSearch(searchInput);
-        }, 500);
-        return () => clearTimeout(debounceRef.current);
-    }, [searchInput]);
+    // Función para filtrar productos localmente (solo en la página actual)
+    const filterProductsLocally = (searchTerm, categoryFilter = []) => {
+        if (!data.length) return [];
 
-    // Buscar cada vez que cambia el término de búsqueda
-    useEffect(() => {
-        if (authToken && viewMode === "tabla") fetchData(null, 1, search);
-        // eslint-disable-next-line
-    }, [authToken, search, viewMode]);
+        let filtered = [...data];
 
-    // Cargar proveedores cuando se cambia a la vista "otros"
-    useEffect(() => {
-        if (viewMode === "otros" && authToken) {
-            loadSuppliers();
-            setCategoriesLoading(true);
-            getCategories(authToken)
-                .then((cats) => setCategories(cats))
-                .catch(() => setCategories([]))
-                .finally(() => setCategoriesLoading(false));
-        }
-    }, [viewMode, authToken]);
+        // Filtrar por término de búsqueda con normalización local
+        if (searchTerm.trim()) {
+            const normalizedSearchTerm = normalizeText(searchTerm);
 
-    // Cargar datos del proveedor izquierdo cuando cambia
-    useEffect(() => {
-        if (leftSupplier && authToken) {
-            loadSupplierData(leftSupplier, "left");
-        }
-    }, [leftSupplier, authToken]);
+            filtered = filtered.filter((item) => {
+                // Buscar en diferentes campos del producto
+                const productName = getFieldValue(item, "product_name", [
+                    "name",
+                    "product_name",
+                ]);
+                const sku = getFieldValue(item, "sku", ["product_sku"]);
+                const description = getFieldValue(item, "description", [
+                    "product_description",
+                ]);
 
-    // Cargar datos del proveedor derecho cuando cambia
-    useEffect(() => {
-        if (rightSupplier && authToken) {
-            loadSupplierData(rightSupplier, "right");
-        }
-    }, [rightSupplier, authToken]);
+                // Normalizar los campos del producto
+                const normalizedProductName = normalizeText(productName);
+                const normalizedSku = normalizeText(sku);
+                const normalizedDescription = normalizeText(description);
 
-    // Debounce para búsqueda global
-    useEffect(() => {
-        if (globalSearchDebounceRef.current)
-            clearTimeout(globalSearchDebounceRef.current);
-        globalSearchDebounceRef.current = setTimeout(() => {
-            setGlobalSearchTerm(globalSearchInput);
-        }, 500);
-        return () => clearTimeout(globalSearchDebounceRef.current);
-    }, [globalSearchInput]);
-
-    // Buscar en ambas tablas cuando cambia el término de búsqueda global
-    useEffect(() => {
-        if (authToken && viewMode === "otros") {
-            if (globalSearchTerm) {
-                loadGlobalSearchData();
-            } else {
-                // Si no hay término de búsqueda, volver a cargar datos de proveedores específicos
-                if (leftSupplier) {
-                    loadSupplierData(leftSupplier, "left");
-                }
-                if (rightSupplier) {
-                    loadSupplierData(rightSupplier, "right");
-                }
-            }
-        }
-    }, [globalSearchTerm, authToken, viewMode]);
-
-    // Limpiar búsqueda y filtros al cambiar a 'otros'
-    useEffect(() => {
-        if (viewMode === "otros") {
-            setSearchInput("");
-            setSearch("");
-            setData([]);
-            setRaw(null);
-            setCount(0);
-            setPageSize(0);
-            setCurrentPage(1);
-            setTotalPages(1);
-            setLoading(false);
-            setError(null);
-
-            // Limpiar búsqueda global
-            setGlobalSearchInput("");
-            setGlobalSearchTerm("");
-            // No limpiar las tablas aquí, se manejarán en el efecto de búsqueda global
-            setSelectedCategory([]);
-        }
-    }, [viewMode]);
-
-    // Función para cargar proveedores
-    const loadSuppliers = async () => {
-        try {
-            const suppliersData = await getAllSuppliers(authToken);
-            setSuppliers(suppliersData);
-        } catch (err) {
-            console.error("Error loading suppliers:", err);
-        }
-    };
-
-    // Función para cargar datos de búsqueda global
-    const loadGlobalSearchData = async () => {
-        if (!globalSearchTerm.trim() && selectedCategory.length === 0) return;
-        setLeftLoading(true);
-        setRightLoading(true);
-        try {
-            // Buscar en todos los proveedores con el término de búsqueda y categoría
-            let url = `${BASE_URL}?`;
-            const params = [];
-            if (globalSearchTerm.trim())
-                params.push(`search=${encodeURIComponent(globalSearchTerm)}`);
-            if (selectedCategory.length > 0)
-                params.push(`category=${selectedCategory[0]}`);
-            url += params.join("&");
-            const response = await fetch(url, {
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Token ${authToken}`,
-                },
+                // Verificar si el término de búsqueda coincide en algún campo
+                return (
+                    normalizedProductName.includes(normalizedSearchTerm) ||
+                    normalizedSku.includes(normalizedSearchTerm) ||
+                    normalizedDescription.includes(normalizedSearchTerm)
+                );
             });
-            if (!response.ok) throw new Error("Error al buscar datos");
-            const result = await response.json();
-            const data = Array.isArray(result) ? result : result.results || [];
-            // Filtrar datos por proveedor si están seleccionados
-            const leftData = leftSupplier
-                ? data.filter(
-                      (item) =>
-                          item.supplier_id === parseInt(leftSupplier) ||
-                          item.supplier === parseInt(leftSupplier) ||
-                          item.supplier_name ===
-                              suppliers.find(
-                                  (s) => s.id === parseInt(leftSupplier)
-                              )?.name
-                  )
-                : data;
-            const rightData = rightSupplier
-                ? data.filter(
-                      (item) =>
-                          item.supplier_id === parseInt(rightSupplier) ||
-                          item.supplier === parseInt(rightSupplier) ||
-                          item.supplier_name ===
-                              suppliers.find(
-                                  (s) => s.id === parseInt(rightSupplier)
-                              )?.name
-                  )
-                : data;
-            // Ordenar los datos por precio de compra
-            const sortedLeftData = sortByPurchasePrice(leftData);
-            const sortedRightData = sortByPurchasePrice(rightData);
-            setLeftTableData(sortedLeftData);
-            setRightTableData(sortedRightData);
-        } catch (err) {
-            console.error("Error loading global search data:", err);
-            setLeftTableData([]);
-            setRightTableData([]);
-        } finally {
-            setLeftLoading(false);
-            setRightLoading(false);
         }
-    };
 
-    // Función para cargar datos de un proveedor específico
-    const loadSupplierData = async (supplierId, side) => {
-        if (!supplierId) return;
-        const setLoadingState =
-            side === "left" ? setLeftLoading : setRightLoading;
-        const setTableData =
-            side === "left" ? setLeftTableData : setRightTableData;
-        setLoadingState(true);
-        try {
-            let url = `${BASE_URL}?supplier=${supplierId}`;
-            if (selectedCategory.length > 0) {
-                url += `&category=${selectedCategory[0]}`;
-            }
-            const response = await fetch(url, {
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Token ${authToken}`,
-                },
+        // Filtrar por categoría (por ID)
+        if (categoryFilter && categoryFilter.length > 0) {
+            filtered = filtered.filter((item) => {
+                // Obtener el ID de la categoría del producto
+                let itemCategoryId = null;
+                // Si el producto tiene el campo category (ID)
+                if (item.category && typeof item.category === "number") {
+                    itemCategoryId = item.category;
+                } else if (
+                    item.category &&
+                    typeof item.category === "string" &&
+                    !isNaN(Number(item.category))
+                ) {
+                    // Si viene como string numérico
+                    itemCategoryId = Number(item.category);
+                } else if (item.category_name) {
+                    // Si solo tiene el nombre, buscar el ID en categories
+                    const found = categories.find(
+                        (cat) => cat.name === item.category_name
+                    );
+                    if (found) itemCategoryId = found.id;
+                } else if (item.product_category) {
+                    // Si tiene otro campo de nombre
+                    const found = categories.find(
+                        (cat) => cat.name === item.product_category
+                    );
+                    if (found) itemCategoryId = found.id;
+                }
+                return (
+                    itemCategoryId && categoryFilter.includes(itemCategoryId)
+                );
             });
-            if (!response.ok)
-                throw new Error("Error al obtener datos del proveedor");
-            const result = await response.json();
-            const data = Array.isArray(result) ? result : result.results || [];
-            // Ordenar los datos por precio de compra
-            const sortedData = sortByPurchasePrice(data);
-            setTableData(sortedData);
-        } catch (err) {
-            console.error(`Error loading ${side} supplier data:`, err);
-            setTableData([]);
-        } finally {
-            setLoadingState(false);
         }
+
+        return filtered;
     };
 
     // Función auxiliar para obtener el valor correcto de un campo
@@ -373,9 +286,426 @@ const AnalisisPreciosPage = () => {
         });
     };
 
+    // Cargar datos paginados al montar el componente
+    useEffect(() => {
+        if (authToken && viewMode === "tabla") {
+            fetchData(null, 1, "", selectedCategory);
+        }
+    }, [authToken, viewMode]);
+
+    // Debounce para búsqueda en tiempo real
+    useEffect(() => {
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => {
+            setSearch(searchInput);
+        }, 300);
+        return () => clearTimeout(debounceRef.current);
+    }, [searchInput]);
+
+    // Filtrar productos localmente cuando cambia el término de búsqueda
+    useEffect(() => {
+        if (data.length > 0) {
+            const filtered = filterProductsLocally(search, selectedCategory);
+            const sortedFiltered = sortByPurchasePrice(filtered);
+            setFilteredData(sortedFiltered);
+            setCount(sortedFiltered.length);
+        }
+    }, [search, selectedCategory, data]);
+
+    // Cargar proveedores cuando se cambia a la vista "otros"
+    useEffect(() => {
+        if (viewMode === "otros" && authToken) {
+            loadSuppliers();
+            setCategoriesLoading(true);
+            getCategories(authToken)
+                .then((cats) => setCategories(cats))
+                .catch(() => setCategories([]))
+                .finally(() => setCategoriesLoading(false));
+        }
+    }, [viewMode, authToken]);
+
+    // Debounce para búsqueda global
+    useEffect(() => {
+        if (globalSearchDebounceRef.current)
+            clearTimeout(globalSearchDebounceRef.current);
+        globalSearchDebounceRef.current = setTimeout(() => {
+            setGlobalSearchTerm(globalSearchInput);
+        }, 300);
+        return () => clearTimeout(globalSearchDebounceRef.current);
+    }, [globalSearchInput]);
+
+    // Manejar búsqueda local cuando cambia el término de búsqueda
+    useEffect(() => {
+        if (authToken && viewMode === "otros") {
+            if (globalSearchTerm.trim()) {
+                // Usar búsqueda local en productos de proveedores
+                performLocalSearch(globalSearchTerm);
+            } else {
+                // Restaurar datos originales cuando se limpia la búsqueda
+                console.log(
+                    "🔄 Restaurando datos originales de proveedores..."
+                );
+                setLeftTableData(originalLeftData);
+                setRightTableData(originalRightData);
+                setLocalSearchResults([]);
+            }
+        }
+    }, [
+        globalSearchTerm,
+        authToken,
+        viewMode,
+        originalLeftData,
+        originalRightData,
+    ]);
+
+    // Limpiar búsqueda y filtros al cambiar a 'otros'
+    useEffect(() => {
+        if (viewMode === "otros") {
+            setSearchInput("");
+            setSearch("");
+            setData([]);
+            setRaw(null);
+            setCount(0);
+            setPageSize(0);
+            setCurrentPage(1);
+            setTotalPages(1);
+            setLoading(false);
+            setError(null);
+
+            // Limpiar búsqueda global
+            setGlobalSearchInput("");
+            setGlobalSearchTerm("");
+            setSelectedCategory([]);
+        }
+    }, [viewMode]);
+
+    // Función para cargar proveedores
+    const loadSuppliers = async () => {
+        setSuppliersLoading(true);
+        try {
+            const suppliersData = await getAllSuppliers(authToken);
+            setSuppliers(suppliersData);
+        } catch (err) {
+            console.error("Error loading suppliers:", err);
+        } finally {
+            setSuppliersLoading(false);
+        }
+    };
+
+    // Función para cargar datos de búsqueda global (usando búsqueda del backend)
+    const loadGlobalSearchData = async () => {
+        if (!globalSearchTerm.trim()) return;
+
+        console.log("🔍 Iniciando búsqueda global...");
+        console.log("Término de búsqueda:", globalSearchTerm);
+
+        // Si tenemos productos de proveedores cargados, usar búsqueda local
+        const allSupplierProducts = [...leftTableData, ...rightTableData];
+        if (allSupplierProducts.length > 0) {
+            console.log(
+                "📱 Usando búsqueda local en productos de proveedores..."
+            );
+            performLocalSearch(globalSearchTerm);
+            return;
+        }
+
+        // Si no tenemos productos de proveedores, usar búsqueda del backend
+        console.log("🌐 Usando búsqueda del backend...");
+
+        setLeftLoading(true);
+        setRightLoading(true);
+
+        try {
+            const response = await fetch(
+                `${BASE_URL}?search=${encodeURIComponent(
+                    globalSearchTerm
+                )}&page_size=1000`,
+                {
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Token ${authToken}`,
+                    },
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error(
+                    `Error ${response.status}: ${response.statusText}`
+                );
+            }
+
+            const result = await response.json();
+            let data = [];
+
+            if (Array.isArray(result)) {
+                data = result;
+            } else if (result && Array.isArray(result.results)) {
+                data = result.results;
+            } else if (result && result.data && Array.isArray(result.data)) {
+                data = result.data;
+            }
+
+            console.log(
+                `✅ Búsqueda global completada: ${data.length} productos encontrados`
+            );
+
+            // Filtrar por proveedor si están seleccionados
+            const leftData = leftSupplier
+                ? data.filter((item) => {
+                      const itemSupplierId = item.supplier_id || item.supplier;
+                      const itemSupplierName = item.supplier_name;
+                      const selectedSupplierName = suppliers.find(
+                          (s) => s.id === parseInt(leftSupplier)
+                      )?.name;
+
+                      return (
+                          itemSupplierId === parseInt(leftSupplier) ||
+                          itemSupplierName === selectedSupplierName
+                      );
+                  })
+                : data;
+
+            const rightData = rightSupplier
+                ? data.filter((item) => {
+                      const itemSupplierId = item.supplier_id || item.supplier;
+                      const itemSupplierName = item.supplier_name;
+                      const selectedSupplierName = suppliers.find(
+                          (s) => s.id === parseInt(rightSupplier)
+                      )?.name;
+
+                      return (
+                          itemSupplierId === parseInt(rightSupplier) ||
+                          itemSupplierName === selectedSupplierName
+                      );
+                  })
+                : data;
+
+            // Ordenar y mostrar resultados
+            const sortedLeftData = sortByPurchasePrice(leftData);
+            const sortedRightData = sortByPurchasePrice(rightData);
+
+            setLeftTableData(sortedLeftData);
+            setRightTableData(sortedRightData);
+        } catch (error) {
+            console.error("❌ Error en búsqueda global:", error);
+            setLeftTableData([]);
+            setRightTableData([]);
+        } finally {
+            setLeftLoading(false);
+            setRightLoading(false);
+        }
+    };
+
+    // Función auxiliar para obtener todas las páginas de opciones de compra de un proveedor
+    const fetchAllSupplierOptions = async (supplierId) => {
+        let allData = [];
+        let nextUrl = `${BASE_URL}?supplier=${supplierId}`;
+        if (selectedCategory.length > 0) {
+            nextUrl += `&category=${selectedCategory[0]}`;
+        }
+        nextUrl += `&page_size=100`;
+        let pageCount = 0;
+        const maxPages = 100;
+        while (nextUrl && pageCount < maxPages) {
+            pageCount++;
+            const response = await fetch(nextUrl, {
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Token ${authToken}`,
+                },
+            });
+            if (!response.ok)
+                throw new Error(
+                    `Error ${response.status}: ${response.statusText}`
+                );
+            const result = await response.json();
+            let data = [];
+            if (Array.isArray(result)) {
+                data = result;
+            } else if (result && Array.isArray(result.results)) {
+                data = result.results;
+            } else if (result && result.data && Array.isArray(result.data)) {
+                data = result.data;
+            }
+            allData.push(...data);
+            nextUrl = result.next ? result.next : null;
+        }
+        return allData;
+    };
+
+    // Función para cargar datos de un proveedor específico (usando búsqueda del backend)
+    const loadSupplierData = async (supplierId, side) => {
+        if (!supplierId) return;
+        const setLoadingState =
+            side === "left" ? setLeftLoading : setRightLoading;
+        const setTableData =
+            side === "left" ? setLeftTableData : setRightTableData;
+        const setOriginalData =
+            side === "left" ? setOriginalLeftData : setOriginalRightData;
+        const supplierName =
+            suppliers.find((s) => s.id === parseInt(supplierId))?.name ||
+            `ID: ${supplierId}`;
+        setLoadingState(true);
+        try {
+            // Obtener todas las páginas de opciones de compra
+            const allData = await fetchAllSupplierOptions(supplierId);
+            // Filtrar por proveedor específico (por si acaso el backend no filtró correctamente)
+            const filteredData = allData.filter((item) => {
+                const itemSupplierId =
+                    item.supplier_id || item.supplier || item.supplier_id;
+                const itemSupplierName =
+                    item.supplier_name || item.supplier_name;
+                return (
+                    itemSupplierId === parseInt(supplierId) ||
+                    itemSupplierName === supplierName
+                );
+            });
+            const sortedData = sortByPurchasePrice(filteredData);
+            setTableData(sortedData);
+            setOriginalData(sortedData); // Guardar datos originales
+        } catch (err) {
+            setTableData([]);
+            setOriginalData([]); // Limpiar datos originales en caso de error
+        } finally {
+            setLoadingState(false);
+        }
+    };
+
+    // Función de búsqueda local en productos de proveedores seleccionados
+    const performLocalSearch = (searchTerm) => {
+        if (!searchTerm.trim()) {
+            setLocalSearchResults([]);
+            return;
+        }
+
+        console.log(
+            "🔍 Realizando búsqueda local en productos de proveedores..."
+        );
+        console.log("Término de búsqueda:", searchTerm);
+
+        // Obtener todos los productos de los proveedores seleccionados
+        const allSupplierProducts = [...leftTableData, ...rightTableData];
+
+        if (allSupplierProducts.length === 0) {
+            console.log(
+                "⚠️ No hay productos de proveedores cargados para buscar"
+            );
+            setLocalSearchResults([]);
+            return;
+        }
+
+        // Normalizar el término de búsqueda del usuario
+        const normalizedSearchTerm = normalizeText(searchTerm.trim());
+        console.log("Término normalizado:", normalizedSearchTerm);
+
+        // Buscar en los productos de proveedores
+        const results = allSupplierProducts.filter((product) => {
+            // Obtener campos de búsqueda del producto
+            const productName =
+                getFieldValue(product, "product_name", [
+                    "name",
+                    "product_name",
+                ]) || "";
+            const productSku =
+                getFieldValue(product, "sku", ["product_sku"]) || "";
+            const productDescription =
+                getFieldValue(product, "description", [
+                    "product_description",
+                ]) || "";
+            const productCategory =
+                getFieldValue(product, "category", [
+                    "category_name",
+                    "product_category",
+                ]) || "";
+
+            // Normalizar todos los campos del producto
+            const normalizedName = normalizeText(productName);
+            const normalizedSku = normalizeText(productSku);
+            const normalizedDescription = normalizeText(productDescription);
+            const normalizedCategory = normalizeText(productCategory);
+
+            // Verificar si el término de búsqueda coincide en algún campo
+            const matches =
+                normalizedName.includes(normalizedSearchTerm) ||
+                normalizedSku.includes(normalizedSearchTerm) ||
+                normalizedDescription.includes(normalizedSearchTerm) ||
+                normalizedCategory.includes(normalizedSearchTerm);
+
+            if (matches) {
+                console.log(
+                    `✅ Coincidencia encontrada: ${productName} (${productSku})`
+                );
+            }
+
+            return matches;
+        });
+
+        console.log(
+            `🎯 Resultados de búsqueda local: ${results.length} productos encontrados`
+        );
+        setLocalSearchResults(results);
+
+        // Si no hay proveedores seleccionados, mostrar todos los resultados
+        if (!leftSupplier && !rightSupplier) {
+            const sortedResults = sortByPurchasePrice(results);
+            setLeftTableData(sortedResults);
+            setRightTableData(sortedResults);
+        } else {
+            // Si hay proveedores seleccionados, filtrar por ellos
+            filterLocalSearchResultsBySupplier(results);
+        }
+    };
+
+    // Función para filtrar resultados locales por proveedor
+    const filterLocalSearchResultsBySupplier = (searchResults) => {
+        const leftData = leftSupplier
+            ? searchResults.filter((item) => {
+                  const itemSupplierId = item.supplier_id || item.supplier;
+                  const itemSupplierName = item.supplier_name;
+                  const selectedSupplierName = suppliers.find(
+                      (s) => s.id === parseInt(leftSupplier)
+                  )?.name;
+
+                  return (
+                      itemSupplierId === parseInt(leftSupplier) ||
+                      itemSupplierName === selectedSupplierName
+                  );
+              })
+            : searchResults;
+
+        const rightData = rightSupplier
+            ? searchResults.filter((item) => {
+                  const itemSupplierId = item.supplier_id || item.supplier;
+                  const itemSupplierName = item.supplier_name;
+                  const selectedSupplierName = suppliers.find(
+                      (s) => s.id === parseInt(rightSupplier)
+                  )?.name;
+
+                  return (
+                      itemSupplierId === parseInt(rightSupplier) ||
+                      itemSupplierName === selectedSupplierName
+                  );
+              })
+            : searchResults;
+
+        // Ordenar y mostrar resultados
+        const sortedLeftData = sortByPurchasePrice(leftData);
+        const sortedRightData = sortByPurchasePrice(rightData);
+
+        setLeftTableData(sortedLeftData);
+        setRightTableData(sortedRightData);
+    };
+
+    // Filtrar resultados locales cuando cambien los proveedores seleccionados
+    useEffect(() => {
+        if (localSearchResults.length > 0 && (leftSupplier || rightSupplier)) {
+            filterLocalSearchResultsBySupplier(localSearchResults);
+        }
+    }, [leftSupplier, rightSupplier, localSearchResults]);
+
     const goToPage = (page) => {
         if (page < 1 || page > totalPages) return;
-        fetchData(null, page, search);
+        fetchData(null, page, search, selectedCategory);
     };
 
     // Lanzar useEffect para recargar datos cuando cambia el filtro de categoría
@@ -390,17 +720,49 @@ const AnalisisPreciosPage = () => {
             }
         }
         if (viewMode === "tabla" && authToken) {
-            // Forzar recarga de la tabla principal con el filtro de categoría
+            // Recargar datos con el nuevo filtro de categoría
             fetchData(null, 1, search, selectedCategory);
         }
-        // eslint-disable-next-line
-    }, [selectedCategory]);
+    }, [selectedCategory, authToken]);
+
+    // Cargar datos del proveedor izquierdo cuando cambia su selección
+    useEffect(() => {
+        if (viewMode === "otros" && authToken && !globalSearchTerm) {
+            console.log("🔄 Cambio en proveedor A detectado:", leftSupplier);
+
+            if (leftSupplier) {
+                console.log("📥 Cargando datos del proveedor A...");
+                loadSupplierData(leftSupplier, "left");
+            } else {
+                console.log("🧹 Limpiando datos del proveedor A");
+                setLeftTableData([]);
+                setLeftLoading(false);
+                setOriginalLeftData([]); // Limpiar datos originales
+            }
+        }
+    }, [leftSupplier, authToken, viewMode, globalSearchTerm]);
+
+    // Cargar datos del proveedor derecho cuando cambia su selección
+    useEffect(() => {
+        if (viewMode === "otros" && authToken && !globalSearchTerm) {
+            console.log("🔄 Cambio en proveedor B detectado:", rightSupplier);
+
+            if (rightSupplier) {
+                console.log("📥 Cargando datos del proveedor B...");
+                loadSupplierData(rightSupplier, "right");
+            } else {
+                console.log("🧹 Limpiando datos del proveedor B");
+                setRightTableData([]);
+                setRightLoading(false);
+                setOriginalRightData([]); // Limpiar datos originales
+            }
+        }
+    }, [rightSupplier, authToken, viewMode, globalSearchTerm]);
 
     // Cargar categorías cuando se entra a la vista 'tabla' o 'otros', si no están cargadas
     useEffect(() => {
         if (
-            (viewMode === "tabla" || viewMode === "otros") &&
-            authToken &&
+            viewMode === "tabla" &&
             categories.length === 0 &&
             !categoriesLoading
         ) {
@@ -410,10 +772,10 @@ const AnalisisPreciosPage = () => {
                 .catch(() => setCategories([]))
                 .finally(() => setCategoriesLoading(false));
         }
-    }, [viewMode, authToken]);
+    }, [viewMode, authToken, categories.length, categoriesLoading]);
 
     // Filtrado por precio en la tabla principal
-    const filteredData = data.filter((row) => {
+    const finalFilteredData = filteredData.filter((row) => {
         const price = parseFloat(
             row.purchase_price || row.price || row.cost || row.unit_price || ""
         );
@@ -902,8 +1264,8 @@ const AnalisisPreciosPage = () => {
                                                 </div>
                                             </td>
                                         </tr>
-                                    ) : filteredData.length > 0 ? (
-                                        filteredData.map((row, idx) => {
+                                    ) : finalFilteredData.length > 0 ? (
+                                        finalFilteredData.map((row, idx) => {
                                             const productName =
                                                 row.product_name ||
                                                 row.nombre ||
@@ -1104,34 +1466,44 @@ const AnalisisPreciosPage = () => {
                                 disabled={currentPage === 1}
                                 style={{
                                     padding: "8px 12px",
-                                    borderRadius: 4,
-                                    border: "1px solid #ccc",
+                                    borderRadius: 6,
+                                    border: "1.5px solid #e3eaf3",
                                     background:
-                                        currentPage === 1 ? "#eee" : "#f5f5f5",
+                                        currentPage === 1 ? "#f8f9fa" : "#fff",
+                                    color: "#2c3e50",
+                                    fontWeight: 600,
+                                    fontSize: "14px",
                                     cursor:
                                         currentPage === 1
                                             ? "not-allowed"
                                             : "pointer",
+                                    transition: "all 0.2s ease",
                                 }}
+                                title="Primera página"
                             >
-                                « Primera
+                                ⏮
                             </button>
                             <button
                                 onClick={() => goToPage(currentPage - 1)}
                                 disabled={currentPage === 1}
                                 style={{
                                     padding: "8px 12px",
-                                    borderRadius: 4,
-                                    border: "1px solid #ccc",
+                                    borderRadius: 6,
+                                    border: "1.5px solid #e3eaf3",
                                     background:
-                                        currentPage === 1 ? "#eee" : "#f5f5f5",
+                                        currentPage === 1 ? "#f8f9fa" : "#fff",
+                                    color: "#2c3e50",
+                                    fontWeight: 600,
+                                    fontSize: "14px",
                                     cursor:
                                         currentPage === 1
                                             ? "not-allowed"
                                             : "pointer",
+                                    transition: "all 0.2s ease",
                                 }}
+                                title="Página anterior"
                             >
-                                ‹ Anterior
+                                ←
                             </button>
                             {Array.from(
                                 { length: totalPages },
@@ -1150,24 +1522,20 @@ const AnalisisPreciosPage = () => {
                                             disabled={page === currentPage}
                                             style={{
                                                 padding: "8px 12px",
-                                                borderRadius: 4,
-                                                border: "1px solid #ccc",
+                                                borderRadius: 6,
+                                                border: "1.5px solid #e3eaf3",
                                                 background:
                                                     page === currentPage
-                                                        ? "#1976d2"
-                                                        : "#f5f5f5",
+                                                        ? "#2c3e50"
+                                                        : "#fff",
                                                 color:
                                                     page === currentPage
-                                                        ? "white"
-                                                        : "black",
-                                                fontWeight:
-                                                    page === currentPage
-                                                        ? "bold"
-                                                        : "normal",
-                                                cursor:
-                                                    page === currentPage
-                                                        ? "default"
-                                                        : "pointer",
+                                                        ? "#fff"
+                                                        : "#2c3e50",
+                                                fontWeight: 600,
+                                                fontSize: "14px",
+                                                cursor: "pointer",
+                                                transition: "all 0.2s ease",
                                                 marginLeft: 2,
                                                 marginRight: 2,
                                             }}
@@ -1198,38 +1566,24 @@ const AnalisisPreciosPage = () => {
                                 disabled={currentPage === totalPages}
                                 style={{
                                     padding: "8px 12px",
-                                    borderRadius: 4,
-                                    border: "1px solid #ccc",
+                                    borderRadius: 6,
+                                    border: "1.5px solid #e3eaf3",
                                     background:
                                         currentPage === totalPages
-                                            ? "#eee"
-                                            : "#f5f5f5",
+                                            ? "#f8f9fa"
+                                            : "#fff",
+                                    color: "#2c3e50",
+                                    fontWeight: 600,
+                                    fontSize: "14px",
                                     cursor:
                                         currentPage === totalPages
                                             ? "not-allowed"
                                             : "pointer",
+                                    transition: "all 0.2s ease",
                                 }}
+                                title="Página siguiente"
                             >
-                                Siguiente ›
-                            </button>
-                            <button
-                                onClick={() => goToPage(totalPages)}
-                                disabled={currentPage === totalPages}
-                                style={{
-                                    padding: "8px 12px",
-                                    borderRadius: 4,
-                                    border: "1px solid #ccc",
-                                    background:
-                                        currentPage === totalPages
-                                            ? "#eee"
-                                            : "#f5f5f5",
-                                    cursor:
-                                        currentPage === totalPages
-                                            ? "not-allowed"
-                                            : "pointer",
-                                }}
-                            >
-                                Última »
+                                →
                             </button>
                             <span
                                 style={{
@@ -1237,9 +1591,125 @@ const AnalisisPreciosPage = () => {
                                     fontSize: 14,
                                 }}
                             >
-                                Página {currentPage} de {totalPages} ({count}{" "}
-                                resultados)
+                                Página {currentPage} de {totalPages} (
+                                {finalFilteredData.length} resultados)
                             </span>
+                            <div
+                                style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "8px",
+                                    marginLeft: "12px",
+                                }}
+                            >
+                                <label
+                                    htmlFor="page-input"
+                                    style={{
+                                        fontSize: "14px",
+                                        color: "#495057",
+                                        fontWeight: "500",
+                                    }}
+                                >
+                                    Ir a:
+                                </label>
+                                <input
+                                    id="page-input"
+                                    type="number"
+                                    min="1"
+                                    max={totalPages}
+                                    defaultValue={currentPage}
+                                    style={{
+                                        width: "60px",
+                                        padding: "6px 8px",
+                                        border: "1px solid #ced4da",
+                                        borderRadius: "4px",
+                                        fontSize: "14px",
+                                        textAlign: "center",
+                                        outline: "none",
+                                        transition: "border-color 0.2s ease",
+                                    }}
+                                    onChange={(e) => {
+                                        const value = e.target.value;
+                                        const pageNumber = parseInt(value, 10);
+
+                                        // Si el valor es mayor al total de páginas, no permitir escribirlo
+                                        if (pageNumber > totalPages) {
+                                            e.target.value = totalPages;
+                                        }
+                                        // Si el valor es menor a 1, no permitir escribirlo
+                                        else if (
+                                            pageNumber < 1 &&
+                                            value !== ""
+                                        ) {
+                                            e.target.value = 1;
+                                        }
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                            const pageNumber = parseInt(
+                                                e.target.value,
+                                                10
+                                            );
+                                            if (
+                                                !isNaN(pageNumber) &&
+                                                pageNumber >= 1 &&
+                                                pageNumber <= totalPages
+                                            ) {
+                                                goToPage(pageNumber);
+                                            }
+                                        }
+                                    }}
+                                    onBlur={(e) => {
+                                        const pageNumber = parseInt(
+                                            e.target.value,
+                                            10
+                                        );
+                                        if (
+                                            isNaN(pageNumber) ||
+                                            pageNumber < 1 ||
+                                            pageNumber > totalPages
+                                        ) {
+                                            e.target.value = currentPage;
+                                        }
+                                    }}
+                                    aria-label="Número de página"
+                                />
+                                <button
+                                    onClick={() => {
+                                        const input =
+                                            document.getElementById(
+                                                "page-input"
+                                            );
+                                        const pageNumber = parseInt(
+                                            input.value,
+                                            10
+                                        );
+                                        if (
+                                            !isNaN(pageNumber) &&
+                                            pageNumber >= 1 &&
+                                            pageNumber <= totalPages
+                                        ) {
+                                            goToPage(pageNumber);
+                                        } else {
+                                            input.value = currentPage;
+                                        }
+                                    }}
+                                    style={{
+                                        padding: "6px 12px",
+                                        backgroundColor: "#2c3e50",
+                                        color: "#ffffff",
+                                        border: "none",
+                                        borderRadius: "4px",
+                                        fontSize: "14px",
+                                        cursor: "pointer",
+                                        transition:
+                                            "background-color 0.2s ease",
+                                    }}
+                                    aria-label="Ir a la página especificada"
+                                >
+                                    Ir
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </>
@@ -1251,13 +1721,13 @@ const AnalisisPreciosPage = () => {
                     <div
                         style={{
                             background: "#fff",
-                            padding: 24,
+                            padding: 12,
                             borderRadius: 12,
                             boxShadow: "0 2px 8px rgba(25, 118, 210, 0.08)",
-                            marginBottom: 24,
+                            marginBottom: 20,
                             display: "flex",
                             flexDirection: "column",
-                            gap: 16,
+                            gap: 12,
                             alignItems: "flex-start",
                         }}
                     >
@@ -1279,74 +1749,60 @@ const AnalisisPreciosPage = () => {
                                 width: "100%",
                             }}
                         >
-                            <input
-                                type="text"
-                                placeholder="Buscar productos por nombre, categoría, etc... (búsqueda automática)"
-                                value={globalSearchInput}
-                                onChange={(e) =>
-                                    setGlobalSearchInput(e.target.value)
-                                }
-                                style={{
-                                    flex: 1,
-                                    padding: "14px 18px",
-                                    borderRadius: 8,
-                                    border: "1.5px solid #1976d2",
-                                    fontSize: 16,
-                                    minWidth: 320,
-                                    background: "#f8fafc",
-                                    outline: "none",
-                                    transition: "border 0.2s",
-                                    boxShadow: globalSearchInput
-                                        ? "0 2px 8px #1976d233"
-                                        : "none",
-                                }}
-                            />
-                            {globalSearchInput && (
-                                <button
-                                    onClick={() => {
-                                        setGlobalSearchInput("");
-                                        setGlobalSearchTerm("");
-                                        if (leftSupplier)
-                                            loadSupplierData(
-                                                leftSupplier,
-                                                "left"
-                                            );
-                                        if (rightSupplier)
-                                            loadSupplierData(
-                                                rightSupplier,
-                                                "right"
-                                            );
-                                    }}
+                            {/* Campo de búsqueda */}
+                            <div style={{ width: "100%", maxWidth: 900 }}>
+                                <div
                                     style={{
-                                        padding: "12px 18px",
-                                        borderRadius: 8,
-                                        border: "1.5px solid #dc3545",
-                                        background: "#fff",
-                                        color: "#dc3545",
-                                        fontWeight: 700,
-                                        fontSize: 16,
-                                        cursor: "pointer",
-                                        transition:
-                                            "background 0.2s, color 0.2s",
+                                        position: "relative",
+                                        width: "100%",
                                     }}
                                 >
-                                    Limpiar
-                                </button>
-                            )}
+                                    <span
+                                        style={{
+                                            position: "absolute",
+                                            left: 16,
+                                            top: "50%",
+                                            transform: "translateY(-50%)",
+                                            color: "#1976d2",
+                                            fontSize: 22,
+                                            opacity: 0.7,
+                                            pointerEvents: "none",
+                                        }}
+                                    >
+                                        🔍
+                                    </span>
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar productos entre proveedores seleccionados..."
+                                        value={globalSearchInput}
+                                        onChange={(e) =>
+                                            setGlobalSearchInput(e.target.value)
+                                        }
+                                        disabled={suppliersLoading}
+                                        style={{
+                                            width: "100%",
+                                            padding: "14px 16px 14px 44px",
+                                            borderRadius: 8,
+                                            border: "1.5px solid #1976d2",
+                                            background: "#f8fafc",
+                                            fontSize: 16,
+                                            color: "#22292f",
+                                            outline: "none",
+                                            boxShadow: globalSearchInput
+                                                ? "0 2px 8px #1976d233"
+                                                : "none",
+                                            transition:
+                                                "border 0.2s, box-shadow 0.2s",
+                                            fontWeight: 500,
+                                            opacity: suppliersLoading ? 0.7 : 1,
+                                            cursor: suppliersLoading
+                                                ? "not-allowed"
+                                                : "text",
+                                        }}
+                                    />
+                                </div>
+                            </div>
                         </div>
-                        {globalSearchInput && (
-                            <p
-                                style={{
-                                    marginTop: 4,
-                                    fontSize: 13,
-                                    color: "#666",
-                                    fontStyle: "italic",
-                                }}
-                            >
-                                Buscando productos que coincidan con: "
-                                {globalSearchInput}"
-                            </p>
-                        )}
                     </div>
                     {/* Filtro de categorías mejorado */}
                     <div
@@ -1392,6 +1848,7 @@ const AnalisisPreciosPage = () => {
                                 onChange={(e) =>
                                     setLeftSupplier(e.target.value)
                                 }
+                                disabled={suppliersLoading}
                                 style={{
                                     padding: "12px 16px",
                                     borderRadius: 8,
@@ -1409,9 +1866,17 @@ const AnalisisPreciosPage = () => {
                                         ? "0 2px 8px #1976d233"
                                         : "none",
                                     transition: "all 0.2s",
+                                    opacity: suppliersLoading ? 0.7 : 1,
+                                    cursor: suppliersLoading
+                                        ? "not-allowed"
+                                        : "pointer",
                                 }}
                             >
-                                <option value="">Seleccionar proveedor</option>
+                                <option value="">
+                                    {suppliersLoading
+                                        ? "🔄 Cargando proveedores..."
+                                        : "Seleccionar proveedor"}
+                                </option>
                                 {suppliers.map((supplier) => (
                                     <option
                                         key={supplier.id}
@@ -1421,248 +1886,17 @@ const AnalisisPreciosPage = () => {
                                     </option>
                                 ))}
                             </select>
-                            <div
-                                style={{
-                                    background: "#fff",
-                                    borderRadius: 12,
-                                    boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-                                    border: "1px solid #e9ecef",
-                                    minHeight: 300,
-                                    marginTop: 8,
-                                    overflowX: "auto",
-                                }}
-                            >
-                                <h3
-                                    style={{
-                                        marginTop: 0,
-                                        marginBottom: 16,
-                                        padding: "18px 18px 0 18px",
-                                        color: "#2c3e50",
-                                        fontWeight: 700,
-                                        fontSize: 18,
-                                    }}
-                                >
-                                    Catálogo del Proveedor A
-                                </h3>
-                                {leftLoading ? (
-                                    <div
-                                        style={{
-                                            textAlign: "center",
-                                            padding: 40,
-                                        }}
-                                    >
-                                        <div
-                                            style={{
-                                                width: 32,
-                                                height: 32,
-                                                border: "3px solid #e3e6ea",
-                                                borderTop: "3px solid #007bff",
-                                                borderRadius: "50%",
-                                                animation:
-                                                    "spin 1s linear infinite",
-                                                margin: "0 auto 16px",
-                                            }}
-                                        ></div>
-                                        <p
-                                            style={{
-                                                color: "#6c757d",
-                                                margin: 0,
-                                            }}
-                                        >
-                                            Cargando datos...
-                                        </p>
-                                        <style>{`@keyframes spin {0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}`}</style>
-                                    </div>
-                                ) : leftTableData.length > 0 ? (
-                                    <table
-                                        style={{
-                                            width: "100%",
-                                            borderCollapse: "collapse",
-                                            minWidth: 400,
-                                            background: "#fff",
-                                        }}
-                                    >
-                                        <thead>
-                                            <tr
-                                                style={{
-                                                    background:
-                                                        "linear-gradient(135deg, #2c3e50 0%, #34495e 100%)",
-                                                    color: "white",
-                                                }}
-                                            >
-                                                <th
-                                                    style={{
-                                                        padding: "16px 12px",
-                                                        textAlign: "left",
-                                                        fontWeight: 600,
-                                                        fontSize: 14,
-                                                        letterSpacing: "0.5px",
-                                                        textTransform:
-                                                            "uppercase",
-                                                    }}
-                                                >
-                                                    Nombre
-                                                </th>
-                                                <th
-                                                    style={{
-                                                        padding: "16px 12px",
-                                                        textAlign: "left",
-                                                        fontWeight: 600,
-                                                        fontSize: 14,
-                                                        letterSpacing: "0.5px",
-                                                        textTransform:
-                                                            "uppercase",
-                                                    }}
-                                                >
-                                                    Precio de Compra
-                                                </th>
-                                                <th
-                                                    style={{
-                                                        padding: "16px 12px",
-                                                        textAlign: "left",
-                                                        fontWeight: 600,
-                                                        fontSize: 14,
-                                                        letterSpacing: "0.5px",
-                                                        textTransform:
-                                                            "uppercase",
-                                                    }}
-                                                >
-                                                    Categoría
-                                                </th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {leftTableData.map((row, idx) => (
-                                                <tr
-                                                    key={idx}
-                                                    style={{
-                                                        backgroundColor:
-                                                            idx % 2 === 0
-                                                                ? "#fff"
-                                                                : "#f8f9fa",
-                                                    }}
-                                                >
-                                                    <td
-                                                        style={{
-                                                            padding:
-                                                                "16px 12px",
-                                                            borderBottom:
-                                                                "1px solid #e9ecef",
-                                                            fontSize: 14,
-                                                            fontWeight: 500,
-                                                            color: "#495057",
-                                                        }}
-                                                    >
-                                                        {getFieldValue(
-                                                            row,
-                                                            "nombre",
-                                                            [
-                                                                "name",
-                                                                "product_name",
-                                                                "product_name_es",
-                                                            ]
-                                                        ) || "N/A"}
-                                                    </td>
-                                                    <td
-                                                        style={{
-                                                            padding:
-                                                                "16px 12px",
-                                                            borderBottom:
-                                                                "1px solid #e9ecef",
-                                                            fontSize: 15,
-                                                            fontWeight: 700,
-                                                            color: "#2c3e50",
-                                                        }}
-                                                    >
-                                                        {(() => {
-                                                            const price =
-                                                                getFieldValue(
-                                                                    row,
-                                                                    "purchase_price",
-                                                                    [
-                                                                        "price",
-                                                                        "cost",
-                                                                        "unit_price",
-                                                                    ]
-                                                                );
-                                                            return price
-                                                                ? `$${parseFloat(
-                                                                      price
-                                                                  ).toFixed(2)}`
-                                                                : "N/A";
-                                                        })()}
-                                                    </td>
-                                                    <td
-                                                        style={{
-                                                            padding:
-                                                                "16px 12px",
-                                                            borderBottom:
-                                                                "1px solid #e9ecef",
-                                                            fontSize: 14,
-                                                            fontWeight: 500,
-                                                            color: "#495057",
-                                                        }}
-                                                    >
-                                                        {getFieldValue(
-                                                            row,
-                                                            "categoria",
-                                                            [
-                                                                "category",
-                                                                "product_category",
-                                                                "category_name",
-                                                            ]
-                                                        ) || "N/A"}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                ) : (
-                                    <div
-                                        style={{
-                                            textAlign: "center",
-                                            padding: "60px 40px",
-                                            background: "#f8f9fa",
-                                            borderRadius: 12,
-                                            border: "2px dashed #dee2e6",
-                                            margin: 20,
-                                        }}
-                                    >
-                                        <div style={{ marginBottom: 16 }}>
-                                            <span
-                                                style={{
-                                                    fontSize: 48,
-                                                    opacity: 0.5,
-                                                }}
-                                            >
-                                                📋
-                                            </span>
-                                        </div>
-                                        <h3
-                                            style={{
-                                                color: "#6c757d",
-                                                fontSize: 18,
-                                                fontWeight: 600,
-                                                margin: "0 0 8px 0",
-                                            }}
-                                        >
-                                            No hay datos para mostrar
-                                        </h3>
-                                        <p
-                                            style={{
-                                                color: "#6c757d",
-                                                fontSize: 14,
-                                                margin: 0,
-                                                opacity: 0.8,
-                                            }}
-                                        >
-                                            {leftSupplier
-                                                ? "No hay datos para mostrar"
-                                                : "Selecciona un proveedor"}
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
+                            <SupplierComparisonTable
+                                data={leftTableData}
+                                loading={leftLoading}
+                                supplierName={
+                                    suppliers.find(
+                                        (s) => s.id === parseInt(leftSupplier)
+                                    )?.name || ""
+                                }
+                                side="left"
+                                getFieldValue={getFieldValue}
+                            />
                         </div>
                         <div style={{ flex: 1, minWidth: 320 }}>
                             <label
@@ -1682,6 +1916,7 @@ const AnalisisPreciosPage = () => {
                                 onChange={(e) =>
                                     setRightSupplier(e.target.value)
                                 }
+                                disabled={suppliersLoading}
                                 style={{
                                     padding: "12px 16px",
                                     borderRadius: 8,
@@ -1699,9 +1934,17 @@ const AnalisisPreciosPage = () => {
                                         ? "0 2px 8px #1976d233"
                                         : "none",
                                     transition: "all 0.2s",
+                                    opacity: suppliersLoading ? 0.7 : 1,
+                                    cursor: suppliersLoading
+                                        ? "not-allowed"
+                                        : "pointer",
                                 }}
                             >
-                                <option value="">Seleccionar proveedor</option>
+                                <option value="">
+                                    {suppliersLoading
+                                        ? "🔄 Cargando proveedores..."
+                                        : "Seleccionar proveedor"}
+                                </option>
                                 {suppliers.map((supplier) => (
                                     <option
                                         key={supplier.id}
@@ -1711,248 +1954,17 @@ const AnalisisPreciosPage = () => {
                                     </option>
                                 ))}
                             </select>
-                            <div
-                                style={{
-                                    background: "#fff",
-                                    borderRadius: 12,
-                                    boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-                                    border: "1px solid #e9ecef",
-                                    minHeight: 300,
-                                    marginTop: 8,
-                                    overflowX: "auto",
-                                }}
-                            >
-                                <h3
-                                    style={{
-                                        marginTop: 0,
-                                        marginBottom: 16,
-                                        padding: "18px 18px 0 18px",
-                                        color: "#2c3e50",
-                                        fontWeight: 700,
-                                        fontSize: 18,
-                                    }}
-                                >
-                                    Catálogo del Proveedor B
-                                </h3>
-                                {rightLoading ? (
-                                    <div
-                                        style={{
-                                            textAlign: "center",
-                                            padding: 40,
-                                        }}
-                                    >
-                                        <div
-                                            style={{
-                                                width: 32,
-                                                height: 32,
-                                                border: "3px solid #e3e6ea",
-                                                borderTop: "3px solid #007bff",
-                                                borderRadius: "50%",
-                                                animation:
-                                                    "spin 1s linear infinite",
-                                                margin: "0 auto 16px",
-                                            }}
-                                        ></div>
-                                        <p
-                                            style={{
-                                                color: "#6c757d",
-                                                margin: 0,
-                                            }}
-                                        >
-                                            Cargando datos...
-                                        </p>
-                                        <style>{`@keyframes spin {0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}`}</style>
-                                    </div>
-                                ) : rightTableData.length > 0 ? (
-                                    <table
-                                        style={{
-                                            width: "100%",
-                                            borderCollapse: "collapse",
-                                            minWidth: 400,
-                                            background: "#fff",
-                                        }}
-                                    >
-                                        <thead>
-                                            <tr
-                                                style={{
-                                                    background:
-                                                        "linear-gradient(135deg, #2c3e50 0%, #34495e 100%)",
-                                                    color: "white",
-                                                }}
-                                            >
-                                                <th
-                                                    style={{
-                                                        padding: "16px 12px",
-                                                        textAlign: "left",
-                                                        fontWeight: 600,
-                                                        fontSize: 14,
-                                                        letterSpacing: "0.5px",
-                                                        textTransform:
-                                                            "uppercase",
-                                                    }}
-                                                >
-                                                    Nombre
-                                                </th>
-                                                <th
-                                                    style={{
-                                                        padding: "16px 12px",
-                                                        textAlign: "left",
-                                                        fontWeight: 600,
-                                                        fontSize: 14,
-                                                        letterSpacing: "0.5px",
-                                                        textTransform:
-                                                            "uppercase",
-                                                    }}
-                                                >
-                                                    Precio de Compra
-                                                </th>
-                                                <th
-                                                    style={{
-                                                        padding: "16px 12px",
-                                                        textAlign: "left",
-                                                        fontWeight: 600,
-                                                        fontSize: 14,
-                                                        letterSpacing: "0.5px",
-                                                        textTransform:
-                                                            "uppercase",
-                                                    }}
-                                                >
-                                                    Categoría
-                                                </th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {rightTableData.map((row, idx) => (
-                                                <tr
-                                                    key={idx}
-                                                    style={{
-                                                        backgroundColor:
-                                                            idx % 2 === 0
-                                                                ? "#fff"
-                                                                : "#f8f9fa",
-                                                    }}
-                                                >
-                                                    <td
-                                                        style={{
-                                                            padding:
-                                                                "16px 12px",
-                                                            borderBottom:
-                                                                "1px solid #e9ecef",
-                                                            fontSize: 14,
-                                                            fontWeight: 500,
-                                                            color: "#495057",
-                                                        }}
-                                                    >
-                                                        {getFieldValue(
-                                                            row,
-                                                            "nombre",
-                                                            [
-                                                                "name",
-                                                                "product_name",
-                                                                "product_name_es",
-                                                            ]
-                                                        ) || "N/A"}
-                                                    </td>
-                                                    <td
-                                                        style={{
-                                                            padding:
-                                                                "16px 12px",
-                                                            borderBottom:
-                                                                "1px solid #e9ecef",
-                                                            fontSize: 15,
-                                                            fontWeight: 700,
-                                                            color: "#2c3e50",
-                                                        }}
-                                                    >
-                                                        {(() => {
-                                                            const price =
-                                                                getFieldValue(
-                                                                    row,
-                                                                    "purchase_price",
-                                                                    [
-                                                                        "price",
-                                                                        "cost",
-                                                                        "unit_price",
-                                                                    ]
-                                                                );
-                                                            return price
-                                                                ? `$${parseFloat(
-                                                                      price
-                                                                  ).toFixed(2)}`
-                                                                : "N/A";
-                                                        })()}
-                                                    </td>
-                                                    <td
-                                                        style={{
-                                                            padding:
-                                                                "16px 12px",
-                                                            borderBottom:
-                                                                "1px solid #e9ecef",
-                                                            fontSize: 14,
-                                                            fontWeight: 500,
-                                                            color: "#495057",
-                                                        }}
-                                                    >
-                                                        {getFieldValue(
-                                                            row,
-                                                            "categoria",
-                                                            [
-                                                                "category",
-                                                                "product_category",
-                                                                "category_name",
-                                                            ]
-                                                        ) || "N/A"}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                ) : (
-                                    <div
-                                        style={{
-                                            textAlign: "center",
-                                            padding: "60px 40px",
-                                            background: "#f8f9fa",
-                                            borderRadius: 12,
-                                            border: "2px dashed #dee2e6",
-                                            margin: 20,
-                                        }}
-                                    >
-                                        <div style={{ marginBottom: 16 }}>
-                                            <span
-                                                style={{
-                                                    fontSize: 48,
-                                                    opacity: 0.5,
-                                                }}
-                                            >
-                                                📋
-                                            </span>
-                                        </div>
-                                        <h3
-                                            style={{
-                                                color: "#6c757d",
-                                                fontSize: 18,
-                                                fontWeight: 600,
-                                                margin: "0 0 8px 0",
-                                            }}
-                                        >
-                                            No hay datos para mostrar
-                                        </h3>
-                                        <p
-                                            style={{
-                                                color: "#6c757d",
-                                                fontSize: 14,
-                                                margin: 0,
-                                                opacity: 0.8,
-                                            }}
-                                        >
-                                            {rightSupplier
-                                                ? "No hay datos para mostrar"
-                                                : "Selecciona un proveedor"}
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
+                            <SupplierComparisonTable
+                                data={rightTableData}
+                                loading={rightLoading}
+                                supplierName={
+                                    suppliers.find(
+                                        (s) => s.id === parseInt(rightSupplier)
+                                    )?.name || ""
+                                }
+                                side="right"
+                                getFieldValue={getFieldValue}
+                            />
                         </div>
                     </div>
                 </div>

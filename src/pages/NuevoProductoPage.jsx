@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import inventoryService from "../services/inventoryService";
+import { createProductComponent } from "../services/compositeProductsService";
 import { useNavigate } from "react-router-dom";
 import ProductHeader from "../components/ProductForm/ProductHeader";
 import ProductNotification from "../components/ProductForm/ProductNotification";
@@ -8,6 +9,7 @@ import BasicInfoForm from "../components/ProductForm/BasicInfoForm";
 import SkuConfigForm from "../components/ProductForm/SkuConfigForm";
 import AdditionalInfoForm from "../components/ProductForm/AdditionalInfoForm";
 import FormActions from "../components/ProductForm/FormActions";
+import ComponentSearch from "../components/ProductForm/ComponentSearch";
 
 const NuevoProductoPage = () => {
     const { authToken } = useAuth();
@@ -22,11 +24,16 @@ const NuevoProductoPage = () => {
         sku_tipo: "",
         category: "", // Categoría de inventario (ID numérico)
         unit: "",
+        product_type: "", // Tipo de producto: simple o composite
+        has_batch_management: false, // Manejo por lotes
         purchase_price: "",
         sale_price: "",
         description: "",
         margin: "",
     });
+
+    // Estado para componentes del producto compuesto
+    const [selectedComponents, setSelectedComponents] = useState([]);
 
     // Estado para las categorías
     const [categories, setCategories] = useState([]);
@@ -161,8 +168,11 @@ const NuevoProductoPage = () => {
 
     // Manejar cambios en los campos del formulario
     const handleInputChange = (e) => {
-        const { name, value } = e.target;
-        let newFormData = { ...formData, [name]: value };
+        const { name, value, type, checked } = e.target;
+
+        // Manejar checkboxes y inputs normales
+        const fieldValue = type === "checkbox" ? checked : value;
+        let newFormData = { ...formData, [name]: fieldValue };
 
         // Calcular margen automáticamente si cambian los precios
         if (name === "purchase_price" || name === "sale_price") {
@@ -203,6 +213,30 @@ const NuevoProductoPage = () => {
         if (errors[name]) {
             setErrors({ ...errors, [name]: "" });
         }
+    };
+
+    // Manejar selección de componentes
+    const handleSelectComponent = (component) => {
+        setSelectedComponents((prev) => {
+            // Verificar si el componente ya existe
+            const existingIndex = prev.findIndex((c) => c.id === component.id);
+            if (existingIndex >= 0) {
+                // Actualizar el componente existente
+                const updated = [...prev];
+                updated[existingIndex] = component;
+                return updated;
+            } else {
+                // Agregar nuevo componente
+                return [...prev, component];
+            }
+        });
+    };
+
+    // Manejar eliminación de componentes
+    const handleRemoveComponent = (componentId) => {
+        setSelectedComponents((prev) =>
+            prev.filter((c) => c.id !== componentId)
+        );
     };
 
     // Generar siguiente SKU
@@ -456,10 +490,28 @@ const NuevoProductoPage = () => {
             { field: "sku", label: "SKU" },
             { field: "category", label: "Categoría de inventario" },
             { field: "sku_categoria", label: "Categoría del producto" },
+            { field: "product_type", label: "Tipo de producto" },
             { field: "unit", label: "Unidad de medida" },
             { field: "purchase_price", label: "Precio de compra" },
             { field: "sale_price", label: "Precio de venta" },
         ];
+
+        // Validación adicional para productos compuestos
+        if (
+            formData.product_type === "composite" &&
+            selectedComponents.length === 0
+        ) {
+            setNotification({
+                show: true,
+                type: "error",
+                message:
+                    "Los productos compuestos deben tener al menos un componente",
+            });
+            setTimeout(() => {
+                setNotification({ show: false, type: "", message: "" });
+            }, 5000);
+            return;
+        }
 
         const missingFields = requiredFields.filter(
             ({ field }) =>
@@ -489,6 +541,8 @@ const NuevoProductoPage = () => {
                 sku: formData.sku.trim(),
                 category: parseInt(formData.category), // Usar la categoría de inventario como categoría del producto
                 unit: formData.unit,
+                product_type: formData.product_type,
+                has_batch_management: formData.has_batch_management, // Manejo por lotes
                 purchase_price: parseFloat(formData.purchase_price),
                 sale_price: parseFloat(formData.sale_price),
                 description: formData.description
@@ -512,18 +566,60 @@ const NuevoProductoPage = () => {
             console.log("Datos del producto a enviar:", productData);
 
             // Crear el producto
-            const result = await inventoryService.createProduct(
+            const productId = await inventoryService.createProduct(
                 productData,
                 authToken
             );
 
-            console.log("Producto creado exitosamente:", result);
+            console.log("Producto creado exitosamente:", productId);
+
+            // Si es un producto compuesto, agregar los componentes
+            if (
+                formData.product_type === "composite" &&
+                selectedComponents.length > 0
+            ) {
+                try {
+                    console.log(
+                        "Agregando componentes al producto compuesto..."
+                    );
+
+                    // Crear cada componente individualmente según la documentación de la API
+                    for (const component of selectedComponents) {
+                        const componentData = {
+                            composite_product: productId.id, // ID del producto padre
+                            component_product: component.id, // ID del producto componente
+                            quantity: component.quantity, // Cantidad del componente
+                        };
+
+                        console.log("Creando componente:", componentData);
+
+                        await createProductComponent(componentData, authToken);
+                        console.log(
+                            `Componente ${component.name} agregado exitosamente`
+                        );
+                    }
+
+                    console.log("Todos los componentes agregados exitosamente");
+                } catch (componentError) {
+                    console.error(
+                        "Error al agregar componentes:",
+                        componentError
+                    );
+                    // No fallar la creación del producto si falla la adición de componentes
+                    setNotification({
+                        show: true,
+                        type: "warning",
+                        message:
+                            "Producto creado pero hubo un problema al agregar los componentes. Puedes agregarlos manualmente más tarde.",
+                    });
+                }
+            }
 
             // Mostrar notificación de éxito
             setNotification({
                 show: true,
                 type: "success",
-                message: `Producto "${result.name}" creado exitosamente con SKU: ${result.sku}`,
+                message: `Producto "${productData.name}" creado exitosamente con SKU: ${productData.sku}`,
             });
 
             // Limpiar el formulario después del éxito
@@ -535,11 +631,16 @@ const NuevoProductoPage = () => {
                 sku_tipo: "",
                 category: "",
                 unit: "",
+                product_type: "",
+                has_batch_management: false,
                 purchase_price: "",
                 sale_price: "",
                 description: "",
                 margin: "",
             });
+
+            // Limpiar componentes seleccionados
+            setSelectedComponents([]);
 
             // Limpiar validación de SKU
             setSkuValidation(null);
@@ -821,9 +922,6 @@ const NuevoProductoPage = () => {
                     </div>
                 </div>
 
-                {/* Notificación */}
-                <ProductNotification notification={notification} />
-
                 {/* Formulario */}
                 <div
                     style={{
@@ -846,6 +944,78 @@ const NuevoProductoPage = () => {
                                 isLoadingCategories={isLoadingCategories}
                             />
                         </div>
+
+                        {/* Búsqueda de Componentes (solo si es producto compuesto) */}
+                        {formData.product_type === "composite" && (
+                            <div className="form-section">
+                                <div
+                                    style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        marginBottom: "24px",
+                                        padding: "16px 20px",
+                                        background:
+                                            "linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%)",
+                                        borderRadius: "12px",
+                                        color: "white",
+                                    }}
+                                >
+                                    <div
+                                        style={{
+                                            background:
+                                                "rgba(255, 255, 255, 0.2)",
+                                            width: "40px",
+                                            height: "40px",
+                                            borderRadius: "10px",
+                                            marginRight: "12px",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                            boxShadow:
+                                                "0 2px 8px rgba(0, 0, 0, 0.1)",
+                                        }}
+                                    >
+                                        <span
+                                            style={{
+                                                color: "white",
+                                                fontSize: "24px",
+                                            }}
+                                        >
+                                            🔧
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <h3
+                                            style={{
+                                                color: "white",
+                                                fontSize: "20px",
+                                                fontWeight: "600",
+                                                margin: 0,
+                                                letterSpacing: "-0.3px",
+                                            }}
+                                        >
+                                            Componentes del Producto
+                                        </h3>
+                                        <p
+                                            style={{
+                                                color: "rgba(255, 255, 255, 0.9)",
+                                                fontSize: "14px",
+                                                margin: "4px 0 0 0",
+                                            }}
+                                        >
+                                            Selecciona los productos que forman
+                                            parte de este kit
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <ComponentSearch
+                                    onSelectComponent={handleSelectComponent}
+                                    selectedComponents={selectedComponents}
+                                    onRemoveComponent={handleRemoveComponent}
+                                />
+                            </div>
+                        )}
 
                         {/* SKU y Configuración */}
                         <div className="form-section">
@@ -878,6 +1048,11 @@ const NuevoProductoPage = () => {
                                 handleInputChange={handleInputChange}
                                 calculateMargin={calculateMargin}
                             />
+                        </div>
+
+                        {/* Notificación */}
+                        <div style={{ marginBottom: "20px" }}>
+                            <ProductNotification notification={notification} />
                         </div>
 
                         {/* Botones */}
