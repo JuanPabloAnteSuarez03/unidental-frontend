@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getOverdueDebtsWithWhatsApp } from '../services/whatsappDebtsService';
-import DebtsFilters from '../components/WhatsAppDebts/DebtsFilters';
-import DebtsStats from '../components/WhatsAppDebts/DebtsStats';
-import DebtsTable from '../components/WhatsAppDebts/DebtsTable';
-import MessagePreviewModal from '../components/WhatsAppDebts/MessagePreviewModal';
-import '../components/WhatsAppDebts/WhatsAppDebtsStyles.css';
+import { getCreditAccountsWithWhatsApp } from '../services/creditsSalesWhatsappService';
+import CreditAccountsFilters from '../components/CreditsSalesWhatsApp/CreditAccountsFilters';
+import CreditAccountsStats from '../components/CreditsSalesWhatsApp/CreditAccountsStats';
+import CreditAccountsTable from '../components/CreditsSalesWhatsApp/CreditAccountsTable';
+import CreditMessagePreviewModal from '../components/CreditsSalesWhatsApp/CreditMessagePreviewModal';
+import '../components/CreditsSalesWhatsApp/CreditsSalesWhatsAppStyles.css';
 
-const WhatsAppDebtsPage = () => {
+const CreditsSalesWhatsAppPage = () => {
     const { authToken, currentUser } = useAuth();
-    const [debts, setDebts] = useState([]);
+    const [accounts, setAccounts] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
     const [lastUpdated, setLastUpdated] = useState(null);
@@ -18,8 +18,10 @@ const WhatsAppDebtsPage = () => {
     const [filters, setFilters] = useState({
         searchTerm: '',
         onlyWithPhone: false,
-        upcomingDays: 3,
+        upcomingDays: 7,
         includeUpcoming: false,
+        includeAll: false,
+        viewMode: 'overdue', // 'overdue', 'upcoming', 'all'
         urgencyFilter: 'all',
         statusFilter: 'all',
         minAmount: '',
@@ -29,13 +31,13 @@ const WhatsAppDebtsPage = () => {
     // Estados para modal
     const [previewModal, setPreviewModal] = useState({
         isOpen: false,
-        debt: null,
+        account: null,
     });
 
-    // Cargar deudas al montar el componente
+    // Cargar cuentas al montar el componente
     useEffect(() => {
         if (authToken) {
-            loadDebts();
+            loadAccounts();
         }
     }, [authToken]);
 
@@ -43,14 +45,14 @@ const WhatsAppDebtsPage = () => {
     useEffect(() => {
         if (authToken) {
             const timer = setTimeout(() => {
-                loadDebts();
+                loadAccounts();
             }, 500); // Debounce para evitar múltiples llamadas
 
             return () => clearTimeout(timer);
         }
-    }, [filters.upcomingDays, filters.includeUpcoming, authToken]);
+    }, [filters.upcomingDays, filters.includeUpcoming, filters.includeAll, filters.viewMode, authToken]);
 
-    const loadDebts = async () => {
+    const loadAccounts = async () => {
         if (!authToken) return;
 
         setIsLoading(true);
@@ -60,14 +62,28 @@ const WhatsAppDebtsPage = () => {
             const params = {
                 include_upcoming: filters.includeUpcoming,
                 upcoming_days: filters.upcomingDays,
+                include_all: filters.includeAll,
             };
 
-            const response = await getOverdueDebtsWithWhatsApp(params, authToken);
-            setDebts(response.overdue_accounts || []);
+            // Ajustar parámetros según el modo de vista
+            if (filters.viewMode === 'all') {
+                params.include_all = true;
+            } else if (filters.viewMode === 'upcoming') {
+                params.include_upcoming = true;
+                params.include_all = false;
+            } else if (filters.viewMode === 'overdue') {
+                params.include_upcoming = false;
+                params.include_all = false;
+            }
+
+            console.log('🔍 Loading accounts with params:', params);
+
+            const response = await getCreditAccountsWithWhatsApp(params, authToken);
+            setAccounts(response.overdue_accounts || []);
             setLastUpdated(new Date());
         } catch (err) {
-            console.error('Error loading debts:', err);
-            setError(err.message || 'Error al cargar las deudas');
+            console.error('Error loading credit accounts:', err);
+            setError(err.message || 'Error al cargar las cuentas de crédito');
         } finally {
             setIsLoading(false);
         }
@@ -78,25 +94,25 @@ const WhatsAppDebtsPage = () => {
     };
 
     const handleRefresh = () => {
-        loadDebts();
+        loadAccounts();
     };
 
-    const handlePreviewMessage = (debt) => {
+    const handlePreviewMessage = (account) => {
         setPreviewModal({
             isOpen: true,
-            debt: debt,
+            account: account,
         });
     };
 
     const handleClosePreviewModal = () => {
         setPreviewModal({
             isOpen: false,
-            debt: null,
+            account: null,
         });
     };
 
-    const handleSendWhatsApp = (debt) => {
-        console.log('Enviando mensaje de WhatsApp a:', debt.contact_name);
+    const handleSendWhatsApp = (account) => {
+        console.log('Enviando mensaje de WhatsApp a:', account.customer_name);
         // Aquí podrías agregar logging o analytics
     };
 
@@ -112,14 +128,16 @@ const WhatsAppDebtsPage = () => {
     };
 
     return (
-        <div className="whatsapp-debts-container">
+        <div className="credits-sales-whatsapp-container">
             {/* Header */}
-            <div className="whatsapp-debts-header">
-                <h1 className="whatsapp-debts-title">
-                    Recordatorios WhatsApp - Deudas Vencidas
+            <div className="credits-sales-whatsapp-header">
+                <h1 className="credits-sales-whatsapp-title">
+                    Recordatorios WhatsApp - Cuentas de Crédito
                 </h1>
-                <p className="whatsapp-debts-subtitle">
-                    Sistema de recordatorios semi-automatizado por WhatsApp para deudas de compras a crédito.
+                <p className="credits-sales-whatsapp-subtitle">
+                    Sistema de recordatorios semi-automatizado por WhatsApp para cuentas de crédito de ventas.
+                    <br />
+                    <strong>🆕 NUEVAS OPCIONES:</strong> Visualiza solo vencidos, próximos a vencer, o TODOS los créditos activos.
                     {lastUpdated && (
                         <span style={{ marginLeft: '16px', color: '#999' }}>
                             Última actualización: {formatLastUpdated(lastUpdated)}
@@ -137,7 +155,7 @@ const WhatsAppDebtsPage = () => {
             )}
 
             {/* Filtros */}
-            <DebtsFilters
+            <CreditAccountsFilters
                 filters={filters}
                 onFiltersChange={handleFiltersChange}
                 onRefresh={handleRefresh}
@@ -146,15 +164,15 @@ const WhatsAppDebtsPage = () => {
 
             {/* Estadísticas */}
             {filters.showStats && (
-                <DebtsStats
-                    debts={debts}
+                <CreditAccountsStats
+                    accounts={accounts}
                     isVisible={filters.showStats}
                 />
             )}
 
-            {/* Tabla de deudas */}
-            <DebtsTable
-                debts={debts}
+            {/* Tabla de cuentas */}
+            <CreditAccountsTable
+                accounts={accounts}
                 filters={filters}
                 onPreviewMessage={handlePreviewMessage}
                 onSendWhatsApp={handleSendWhatsApp}
@@ -162,9 +180,9 @@ const WhatsAppDebtsPage = () => {
             />
 
             {/* Modal de vista previa */}
-            <MessagePreviewModal
+            <CreditMessagePreviewModal
                 isOpen={previewModal.isOpen}
-                debt={previewModal.debt}
+                account={previewModal.account}
                 onClose={handleClosePreviewModal}
                 onSendWhatsApp={handleSendWhatsApp}
             />
@@ -172,4 +190,4 @@ const WhatsAppDebtsPage = () => {
     );
 };
 
-export default WhatsAppDebtsPage; 
+export default CreditsSalesWhatsAppPage; 
