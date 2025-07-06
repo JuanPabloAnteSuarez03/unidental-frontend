@@ -917,52 +917,52 @@ const SalesPage = () => {
                                 disabled={isSubmitting}
                             />
 
-                            {/* Factura */}
+                                {/* Factura */}
                             <div style={{ marginTop: "20px" }}>
-                                <label
-                                    style={{
-                                        display: "block",
-                                        fontSize: "14px",
-                                        fontWeight: "600",
-                                        color: "#2c3e50",
-                                        marginBottom: "8px",
-                                    }}
-                                >
-                                    Facturación
-                                </label>
-                                <label
-                                    style={{
-                                        display: "flex",
-                                        alignItems: "center",
-                                        cursor: "pointer",
-                                        padding: "10px",
-                                        border: "1px solid #dee2e6",
-                                        borderRadius: "4px",
-                                        backgroundColor: shouldInvoice
-                                            ? "#e8f4fd"
-                                            : "white",
-                                    }}
-                                >
-                                    <input
-                                        type="checkbox"
-                                        checked={shouldInvoice}
-                                        onChange={(e) =>
-                                            setShouldInvoice(
-                                                e.target.checked
-                                            )
-                                        }
-                                        style={{ marginRight: "8px" }}
-                                    />
-                                    <span
+                                    <label
                                         style={{
+                                            display: "block",
                                             fontSize: "14px",
+                                            fontWeight: "600",
                                             color: "#2c3e50",
+                                            marginBottom: "8px",
                                         }}
                                     >
-                                        📄 Requiere factura
-                                    </span>
-                                </label>
-                            </div>
+                                        Facturación
+                                    </label>
+                                    <label
+                                        style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            cursor: "pointer",
+                                            padding: "10px",
+                                            border: "1px solid #dee2e6",
+                                            borderRadius: "4px",
+                                            backgroundColor: shouldInvoice
+                                                ? "#e8f4fd"
+                                                : "white",
+                                        }}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={shouldInvoice}
+                                            onChange={(e) =>
+                                                setShouldInvoice(
+                                                    e.target.checked
+                                                )
+                                            }
+                                            style={{ marginRight: "8px" }}
+                                        />
+                                        <span
+                                            style={{
+                                                fontSize: "14px",
+                                                color: "#2c3e50",
+                                            }}
+                                        >
+                                            📄 Requiere factura
+                                        </span>
+                                    </label>
+                                </div>
                             
                             {/* Configuración de Crédito */}
                             {paymentMethod === 'credit' && (

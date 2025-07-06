@@ -1,11 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getCreditAccountsWithWhatsApp } from '../services/creditsSalesWhatsappService';
+import { getCreditAccountById } from '../services/creditsService';
 import CreditAccountsFilters from '../components/CreditsSalesWhatsApp/CreditAccountsFilters';
 import CreditAccountsStats from '../components/CreditsSalesWhatsApp/CreditAccountsStats';
 import CreditAccountsTable from '../components/CreditsSalesWhatsApp/CreditAccountsTable';
 import CreditMessagePreviewModal from '../components/CreditsSalesWhatsApp/CreditMessagePreviewModal';
 import '../components/CreditsSalesWhatsApp/CreditsSalesWhatsAppStyles.css';
+
+// Componente simple de carga a pantalla completa
+const FullPageLoader = () => (
+    <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        background: 'rgba(255,255,255,0.9)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 9999,
+    }}>
+        <div className="loading-spinner" />
+        <p style={{ marginTop: 12 }}>Cargando créditos...</p>
+    </div>
+);
 
 const CreditsSalesWhatsAppPage = () => {
     const { authToken, currentUser } = useAuth();
@@ -79,7 +100,38 @@ const CreditsSalesWhatsAppPage = () => {
             console.log('🔍 Loading accounts with params:', params);
 
             const response = await getCreditAccountsWithWhatsApp(params, authToken);
-            setAccounts(response.overdue_accounts || []);
+            let fetchedAccounts = response.overdue_accounts || [];
+
+            // 🚀 Enriquecer cuentas que no traen installment_amount
+            const accountsMissingInstallment = fetchedAccounts.filter(acc => !acc.installment_amount);
+
+            if (accountsMissingInstallment.length > 0) {
+                try {
+                    const detailedAccounts = await Promise.all(
+                        accountsMissingInstallment.map(async (acc) => {
+                            try {
+                                const detail = await getCreditAccountById(acc.id, authToken);
+                                return { id: acc.id, detail };
+                            } catch (err) {
+                                console.error('Error fetching detail for account', acc.id, err);
+                                return null;
+                            }
+                        })
+                    );
+
+                    fetchedAccounts = fetchedAccounts.map(acc => {
+                        const match = detailedAccounts.find(item => item && item.id === acc.id);
+                        if (match && match.detail) {
+                            return { ...acc, ...match.detail };
+                        }
+                        return acc;
+                    });
+                } catch (fetchErr) {
+                    console.error('Error enriching accounts with installment data:', fetchErr);
+                }
+            }
+
+            setAccounts(fetchedAccounts);
             setLastUpdated(new Date());
         } catch (err) {
             console.error('Error loading credit accounts:', err);
@@ -126,6 +178,10 @@ const CreditsSalesWhatsAppPage = () => {
             minute: '2-digit',
         });
     };
+
+    if (isLoading) {
+        return <FullPageLoader />;
+    }
 
     return (
         <div className="credits-sales-whatsapp-container">
