@@ -2,9 +2,9 @@ import React from "react";
 
 const SaleSummary = ({ 
     totals, 
-    saleType, 
     shouldInvoice, 
     selectedLocation,
+    paymentMethod,
     onSubmit, 
     isLoading, 
     disabled 
@@ -71,7 +71,7 @@ const SaleSummary = ({
                     </span>
                 </div>
 
-                {/* Sale Type */}
+                {/* Payment Method */}
                 <div
                     style={{
                         display: "flex",
@@ -82,10 +82,12 @@ const SaleSummary = ({
                     }}
                 >
                     <span style={{ fontSize: "14px", color: "#6c757d" }}>
-                        Tipo de pago:
+                        Método de pago:
                     </span>
                     <span style={{ fontSize: "14px", fontWeight: "600", color: "#2c3e50" }}>
-                        {saleType === "normal" ? "💵 Normal" : "💳 Crédito"}
+                        {paymentMethod === 'cash' && "💵 Efectivo"}
+                        {paymentMethod === 'card' && "💳 Tarjeta"}
+                        {paymentMethod === 'credit' && "📝 Crédito"}
                     </span>
                 </div>
 
@@ -200,10 +202,12 @@ const SaleSummary = ({
                 }}
             >
                 <div style={{ fontSize: "24px", marginBottom: "8px" }}>
-                    {saleType === "normal" ? "💵" : "💳"}
+                    {paymentMethod === "cash" ? "💵" : paymentMethod === "card" ? "💳" : "📝"}
                 </div>
                 <div style={{ fontSize: "14px", fontWeight: "600", color: "#2c3e50", marginBottom: "4px" }}>
-                    {saleType === "normal" ? "Pago Normal" : "Pago con Crédito"}
+                    {paymentMethod === "cash" ? "Pago en Efectivo" : 
+                     paymentMethod === "card" ? "Pago con Tarjeta" : 
+                     "Pago con Crédito"}
                 </div>
                 {shouldInvoice && (
                     <div style={{ fontSize: "12px", color: "#3498db" }}>
@@ -266,7 +270,9 @@ const SaleSummary = ({
                     ${totals.total}
                 </div>
                 <div style={{ fontSize: "12px", opacity: "0.8", marginTop: "4px" }}>
-                    {saleType === "normal" ? "Pago normal" : "Pago con crédito"}
+                    {paymentMethod === "cash" ? "Pago en efectivo" : 
+                     paymentMethod === "card" ? "Pago con tarjeta" : 
+                     "Pago con crédito"}
                 </div>
             </div>
 

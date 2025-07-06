@@ -18,6 +18,8 @@ import SuppliersPage from "../pages/SuppliersPage";
 import SupplierDetailPage from "../pages/SupplierDetailPage";
 import AnalisisPreciosPage from "../pages/AnalisisPreciosPage";
 import OrdenesDeCompraPage from "../pages/OrdenesDeCompraPage";
+import WhatsAppDebtsPage from "../pages/WhatsAppDebtsPage";
+import CreditsSalesWhatsAppPage from "../pages/CreditsSalesWhatsAppPage";
 
 const AppRouter = () => {
     return (
@@ -73,6 +75,16 @@ const AppRouter = () => {
                 <Route
                     path="/compras/ordenes"
                     element={<OrdenesDeCompraPage />}
+                />
+                {/* Ruta para deudas con WhatsApp */}
+                <Route
+                    path="/compras/deudas-whatsapp"
+                    element={<WhatsAppDebtsPage />}
+                />
+                {/* Ruta para créditos de ventas con WhatsApp */}
+                <Route
+                    path="/ventas/creditos-whatsapp"
+                    element={<CreditsSalesWhatsAppPage />}
                 />
             </Route>
         </Routes>

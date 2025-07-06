@@ -4,9 +4,17 @@ import ProductSelector from "../components/Sales/ProductSelector";
 import SaleItemsList from "../components/Sales/SaleItemsList";
 import SaleSummary from "../components/Sales/SaleSummary";
 import InvoiceModal from "../components/Sales/InvoiceModal";
+import PaymentMethodSelector from "../components/Sales/PaymentMethodSelector";
+import CreditConfigurationForm from "../components/Sales/CreditConfigurationForm";
 import { salesService } from "../services/salesService";
 import { inventoryService } from "../services/inventoryService";
 import { useAuth } from "../context/AuthContext";
+import { 
+    createSimpleCredit, 
+    createCreditWithInstallments, 
+    calculateInstallmentAmount,
+    validateInstallmentTotal 
+} from "../services/creditsService";
 
 const SalesPage = () => {
     const { authToken } = useAuth();
@@ -15,9 +23,20 @@ const SalesPage = () => {
     const [locations, setLocations] = useState([]);
     const [isLoadingLocations, setIsLoadingLocations] = useState(false);
     const [saleItems, setSaleItems] = useState([]);
-    const [saleType, setSaleType] = useState("normal"); // Tipos de venta según backend
     const [shouldInvoice, setShouldInvoice] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Estados para métodos de pago
+    const [paymentMethod, setPaymentMethod] = useState('cash'); // cash, card, credit
+    const [creditConfig, setCreditConfig] = useState({
+        hasInitialPayment: false,
+        initialPayment: '',
+        installmentsCount: 3,
+        paymentFrequency: 'monthly',
+        nextPaymentDate: '',
+        installmentAmount: '',
+        isValid: false
+    });
 
     // Estados para la factura
     const [showInvoice, setShowInvoice] = useState(false);
@@ -176,6 +195,16 @@ const SalesPage = () => {
 
         if (saleItems.length === 0) {
             alert("Por favor agregue al menos un producto a la venta.");
+            return;
+        }
+
+        if (paymentMethod === 'credit' && !selectedCustomer) {
+            alert("Para ventas a crédito es obligatorio seleccionar un cliente.");
+            return;
+        }
+
+        if (paymentMethod === 'credit' && !creditConfig.isValid) {
+            alert("Por favor complete correctamente la configuración del crédito.");
             return;
         }
 
@@ -356,6 +385,7 @@ const SalesPage = () => {
                 customer: selectedCustomer ? selectedCustomer.id : null,
                 location: selectedLocation.id,
                 sale_type: saleType,
+                payment_method: paymentMethod,
                 should_invoice: shouldInvoice,
                 items: mappedItems,
             };
@@ -369,6 +399,100 @@ const SalesPage = () => {
 
             const response = await salesService.createSale(saleData, authToken);
 
+            // Si el método de pago es crédito, crear la cuenta de crédito
+            if (paymentMethod === 'credit') {
+                try {
+                    const totalAmount = parseFloat(totals.total);
+                    
+                    console.log("🔍 DEBUG - Configuración de crédito:", creditConfig);
+                    console.log("🔍 DEBUG - Total amount:", totalAmount);
+                    
+                    // Usar cálculo simple y directo
+                    
+                    const initialPayment = (creditConfig.hasInitialPayment && creditConfig.initialPayment) 
+                        ? parseFloat(creditConfig.initialPayment) 
+                        : 0;
+
+                    // Las cuotas deben calcularse sobre el saldo restante después del pago inicial
+                    const remainingAmount = totalAmount - initialPayment;
+                    
+                    // Calcular cuotas sobre el saldo restante
+                    const installmentAmount = calculateInstallmentAmount(
+                        totalAmount, 
+                        initialPayment,
+                        parseInt(creditConfig.installmentsCount)
+                    );
+
+                    // Validar que la suma sea correcta
+                    const validation = validateInstallmentTotal(
+                        totalAmount, 
+                        initialPayment,
+                        installmentAmount, 
+                        parseInt(creditConfig.installmentsCount)
+                    );
+
+                    console.log("🔍 DEBUG - Configuración de crédito:", creditConfig);
+                    console.log("🔍 DEBUG - Total amount:", totalAmount);
+                    console.log("🔍 DEBUG - Initial payment:", initialPayment);
+                    console.log("🔍 DEBUG - Installment amount:", installmentAmount);
+                    console.log("🔍 DEBUG - Total cuotas:", installmentAmount * parseInt(creditConfig.installmentsCount));
+                    console.log("🔍 DEBUG - Suma (pago inicial + cuotas):", initialPayment + (installmentAmount * parseInt(creditConfig.installmentsCount)));
+                    console.log("🔍 DEBUG - Validation result:", validation);
+
+                    if (creditConfig.hasInitialPayment && creditConfig.initialPayment && parseFloat(creditConfig.initialPayment) > 0) {
+                        // Crear crédito con pago inicial y cuotas
+                        const creditData = {
+                            sale_id: response.id,
+                            original_amount: totalAmount.toString(),
+                            initial_payment: creditConfig.initialPayment.toString(),
+                            installments_count: parseInt(creditConfig.installmentsCount),
+                            installment_amount: installmentAmount.toString(),
+                            payment_frequency: creditConfig.paymentFrequency,
+                            next_payment_date: creditConfig.nextPaymentDate,
+                        };
+
+                        console.log("🔍 DEBUG - Enviando datos de crédito con pago inicial:", creditData);
+                        console.log("🔍 DEBUG - Verificación matemática:");
+                        console.log("  - Monto original:", creditData.original_amount);
+                        console.log("  - Pago inicial:", creditData.initial_payment);
+                        console.log("  - Cuotas:", creditData.installments_count);
+                        console.log("  - Monto por cuota:", creditData.installment_amount);
+                        console.log("  - Total cuotas:", parseFloat(creditData.installment_amount) * creditData.installments_count);
+                        console.log("  - Suma (pago inicial + cuotas):", parseFloat(creditData.initial_payment) + (parseFloat(creditData.installment_amount) * creditData.installments_count));
+                        console.log("  - ¿Suma ≈ Monto original?", validation.isValid);
+                        console.log("  - Diferencia:", validation.difference);
+                        const creditResponse = await createCreditWithInstallments(creditData, authToken);
+                        console.log("✅ Crédito con pago inicial creado:", creditResponse);
+                    } else {
+                        // Crear crédito simple con solo cuotas (sin pago inicial)
+                        const creditData = {
+                            sale_id: response.id,
+                            original_amount: totalAmount.toString(),
+                            installments_count: parseInt(creditConfig.installmentsCount),
+                            installment_amount: installmentAmount.toString(),
+                            payment_frequency: creditConfig.paymentFrequency,
+                            next_payment_date: creditConfig.nextPaymentDate,
+                        };
+
+                        console.log("🔍 DEBUG - Enviando datos de crédito simple:", creditData);
+                        console.log("🔍 DEBUG - Verificación matemática (sin pago inicial):");
+                        console.log("  - Monto original:", creditData.original_amount);
+                        console.log("  - Cuotas:", creditData.installments_count);
+                        console.log("  - Monto por cuota:", creditData.installment_amount);
+                        console.log("  - Total cuotas:", parseFloat(creditData.installment_amount) * creditData.installments_count);
+                        console.log("  - ¿Total cuotas ≈ Monto original?", validation.isValid);
+                        console.log("  - Diferencia:", validation.difference);
+                        const creditResponse = await createCreditWithInstallments(creditData, authToken);
+                        console.log("✅ Crédito simple creado:", creditResponse);
+                    }
+                } catch (creditError) {
+                    console.error("❌ Error al crear crédito:", creditError);
+                    console.error("❌ Detalles del error:", creditError.message);
+                    // Mostrar alerta pero no fallar la venta
+                    alert("⚠️ Venta registrada pero hubo un error al crear el crédito. Contacte al administrador.\n\nError: " + creditError.message);
+                }
+            }
+
             // Si la venta requiere factura, mostrar el modal de factura
             if (shouldInvoice) {
                 setInvoiceData({
@@ -377,11 +501,14 @@ const SalesPage = () => {
                     locationData: selectedLocation,
                     saleItems: saleItems,
                     totals: totals,
-                    saleType: saleType,
+                    paymentMethod: paymentMethod,
                 });
                 setShowInvoice(true);
             } else {
-                alert(`¡Venta registrada exitosamente! ID: ${response.id}`);
+                const successMessage = paymentMethod === 'credit' 
+                    ? `¡Venta registrada exitosamente! ID: ${response.id}\n💳 Crédito configurado correctamente.`
+                    : `¡Venta registrada exitosamente! ID: ${response.id}`;
+                alert(successMessage);
             }
 
             // Actualizar stock localmente
@@ -392,8 +519,17 @@ const SalesPage = () => {
             // Reset form
             setSelectedCustomer(null);
             setSaleItems([]);
-            setSaleType("normal");
             setShouldInvoice(false);
+            setPaymentMethod('cash');
+            setCreditConfig({
+                hasInitialPayment: false,
+                initialPayment: '',
+                installmentsCount: 3,
+                paymentFrequency: 'monthly',
+                nextPaymentDate: '',
+                installmentAmount: '',
+                isValid: false
+            });
             // No resetear la sede seleccionada para facilitar múltiples ventas consecutivas
         } catch (error) {
             console.error("Error al registrar venta:", error);
@@ -445,6 +581,9 @@ const SalesPage = () => {
     }, [invoiceData]);
 
     const totals = calculateTotals();
+    
+    // Determinar el tipo de venta basado en el método de pago
+    const saleType = paymentMethod === 'credit' ? 'credit' : 'normal';
 
     return (
         <>
@@ -770,99 +909,70 @@ const SalesPage = () => {
                             >
                                 5. Opciones de Venta
                             </h3>
-                            <div
-                                className="sales-payment-grid"
-                                style={{
-                                    display: "grid",
-                                    gridTemplateColumns: "1fr 1fr",
-                                    gap: "15px",
-                                }}
-                            >
-                                {/* Tipo de venta */}
-                                <div>
-                                    <label
-                                        style={{
-                                            display: "block",
-                                            fontSize: "14px",
-                                            fontWeight: "600",
-                                            color: "#2c3e50",
-                                            marginBottom: "8px",
-                                        }}
-                                    >
-                                        Tipo de Venta
-                                    </label>
-                                    <select
-                                        value={saleType}
-                                        onChange={(e) =>
-                                            setSaleType(e.target.value)
-                                        }
-                                        style={{
-                                            width: "100%",
-                                            boxSizing: "border-box",
-                                            padding: "10px",
-                                            border: "1px solid #dee2e6",
-                                            borderRadius: "4px",
-                                            fontSize: "14px",
-                                            backgroundColor: "white",
-                                            color: "#2c3e50",
-                                        }}
-                                    >
-                                        <option value="normal">
-                                            💵 Venta Normal
-                                        </option>
-                                        <option value="credit">
-                                            💳 Venta a Crédito
-                                        </option>
-                                    </select>
-                                </div>
+                            
+                            {/* Método de Pago */}
+                            <PaymentMethodSelector
+                                selectedMethod={paymentMethod}
+                                onMethodChange={setPaymentMethod}
+                                disabled={isSubmitting}
+                            />
 
-                                {/* Factura */}
-                                <div>
-                                    <label
+                            {/* Factura */}
+                            <div style={{ marginTop: "20px" }}>
+                                <label
+                                    style={{
+                                        display: "block",
+                                        fontSize: "14px",
+                                        fontWeight: "600",
+                                        color: "#2c3e50",
+                                        marginBottom: "8px",
+                                    }}
+                                >
+                                    Facturación
+                                </label>
+                                <label
+                                    style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        cursor: "pointer",
+                                        padding: "10px",
+                                        border: "1px solid #dee2e6",
+                                        borderRadius: "4px",
+                                        backgroundColor: shouldInvoice
+                                            ? "#e8f4fd"
+                                            : "white",
+                                    }}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={shouldInvoice}
+                                        onChange={(e) =>
+                                            setShouldInvoice(
+                                                e.target.checked
+                                            )
+                                        }
+                                        style={{ marginRight: "8px" }}
+                                    />
+                                    <span
                                         style={{
-                                            display: "block",
                                             fontSize: "14px",
-                                            fontWeight: "600",
                                             color: "#2c3e50",
-                                            marginBottom: "8px",
                                         }}
                                     >
-                                        Facturación
-                                    </label>
-                                    <label
-                                        style={{
-                                            display: "flex",
-                                            alignItems: "center",
-                                            cursor: "pointer",
-                                            padding: "10px",
-                                            border: "1px solid #dee2e6",
-                                            borderRadius: "4px",
-                                            backgroundColor: shouldInvoice
-                                                ? "#e8f4fd"
-                                                : "white",
-                                        }}
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            checked={shouldInvoice}
-                                            onChange={(e) =>
-                                                setShouldInvoice(
-                                                    e.target.checked
-                                                )
-                                            }
-                                            style={{ marginRight: "8px" }}
-                                        />
-                                        <span
-                                            style={{
-                                                fontSize: "14px",
-                                                color: "#2c3e50",
-                                            }}
-                                        >
-                                            📄 Requiere factura
-                                        </span>
-                                    </label>
-                                </div>
+                                        📄 Requiere factura
+                                    </span>
+                                </label>
                             </div>
+                            
+                            {/* Configuración de Crédito */}
+                            {paymentMethod === 'credit' && (
+                                <CreditConfigurationForm
+                                    totalAmount={parseFloat(totals.total)}
+                                    creditConfig={creditConfig}
+                                    onConfigChange={setCreditConfig}
+                                    disabled={isSubmitting}
+                                />
+                            )}
                         </div>
                     </div>
 
@@ -877,15 +987,16 @@ const SalesPage = () => {
                     >
                         <SaleSummary
                             totals={totals}
-                            saleType={saleType}
                             shouldInvoice={shouldInvoice}
                             selectedLocation={selectedLocation}
+                            paymentMethod={paymentMethod}
                             onSubmit={handleSubmitSale}
                             isLoading={isSubmitting}
                             disabled={
                                 !selectedCustomer ||
                                 !selectedLocation ||
-                                saleItems.length === 0
+                                saleItems.length === 0 ||
+                                (paymentMethod === 'credit' && !creditConfig.isValid)
                             }
                         />
                     </div>
@@ -902,7 +1013,7 @@ const SalesPage = () => {
                     locationData={invoiceData.locationData}
                     saleItems={invoiceData.saleItems}
                     totals={invoiceData.totals}
-                    saleType={invoiceData.saleType}
+                    paymentMethod={invoiceData.paymentMethod}
                 />
             )}
         </>
