@@ -5,6 +5,8 @@ import {
     filterCreditAccounts,
 } from '../../services/creditsSalesWhatsappService';
 import './CreditsSalesWhatsAppStyles.css';
+import CreditPaymentModal from './CreditPaymentModal';
+import { useAuth } from '../../context/AuthContext';
 
 const CreditAccountsTable = ({
     accounts,
@@ -17,6 +19,8 @@ const CreditAccountsTable = ({
         key: 'days_overdue',
         direction: 'desc',
     });
+    const [paymentModal, setPaymentModal] = useState({ isOpen: false, account: null });
+    const { authToken } = useAuth ? useAuth() : { authToken: null };
 
     // Aplicar filtros
     const filteredAccounts = filterCreditAccounts(accounts, filters);
@@ -103,6 +107,10 @@ const CreditAccountsTable = ({
             </span>
         );
     };
+
+    // Obtener cuota y frecuencia de la cuenta (mock: puedes ajustar según tu modelo de datos)
+    const getInstallmentAmount = (account) => parseFloat(account.installment_amount || 0);
+    const getPaymentFrequency = (account) => account.payment_frequency || 'mensual';
 
     if (isLoading) {
         return (
@@ -250,6 +258,14 @@ const CreditAccountsTable = ({
                                                 Sin teléfono
                                             </button>
                                         )}
+                                        <button
+                                            className="toggle-stats-button"
+                                            style={{ marginLeft: 4 }}
+                                            onClick={() => setPaymentModal({ isOpen: true, account })}
+                                            title="Registrar abono o pago"
+                                        >
+                                            💵 Abonar
+                                        </button>
                                     </div>
                                 </td>
                             </tr>
@@ -278,6 +294,16 @@ const CreditAccountsTable = ({
                     </div>
                 </div>
             </div>
+
+            <CreditPaymentModal
+                isOpen={paymentModal.isOpen}
+                account={paymentModal.account}
+                onClose={() => setPaymentModal({ isOpen: false, account: null })}
+                onPaymentSuccess={typeof window !== 'undefined' && window.location ? () => window.location.reload() : undefined}
+                installmentAmount={paymentModal.account ? getInstallmentAmount(paymentModal.account) : 0}
+                paymentFrequency={paymentModal.account ? getPaymentFrequency(paymentModal.account) : ''}
+                authToken={authToken}
+            />
         </div>
     );
 };

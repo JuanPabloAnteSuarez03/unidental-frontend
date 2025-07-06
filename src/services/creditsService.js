@@ -480,4 +480,42 @@ export const PAYMENT_METHODS = {
     cash: { value: 'cash', label: 'Efectivo', icon: '💵' },
     card: { value: 'card', label: 'Tarjeta', icon: '💳' },
     credit: { value: 'credit', label: 'Crédito', icon: '📝' }
+};
+
+/**
+ * Obtener detalles de una cuenta de crédito por ID
+ * @param {number} creditAccountId - ID de la cuenta
+ * @param {string} authToken - Token de autenticación
+ * @returns {Promise<Object>} - Detalle de la cuenta de crédito
+ */
+export const getCreditAccountById = async (creditAccountId, authToken) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    if (!creditAccountId) {
+        throw new Error("No creditAccountId provided");
+    }
+
+    try {
+        const response = await fetch(`${API_ACCOUNTS_URL}${creditAccountId}/`, {
+            headers: {
+                Authorization: `Token ${authToken}`,
+                "Content-Type": "application/json",
+            },
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(
+                errorData.detail ||
+                `Error ${response.status}: ${response.statusText}`
+            );
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error("Error fetching credit account detail:", error);
+        throw error;
+    }
 }; 
