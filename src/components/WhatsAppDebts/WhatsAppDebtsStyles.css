@@ -1,0 +1,489 @@
+/* Estilos para indicadores de urgencia */
+.urgency-high {
+    background-color: #ffebee;
+    border-left: 4px solid #f44336;
+}
+
+.urgency-medium {
+    background-color: #fff3e0;
+    border-left: 4px solid #ff9800;
+}
+
+.urgency-low {
+    background-color: #e8f5e8;
+    border-left: 4px solid #4caf50;
+}
+
+.urgency-upcoming {
+    background-color: #e3f2fd;
+    border-left: 4px solid #2196f3;
+}
+
+/* Estilos para el componente principal */
+.whatsapp-debts-container {
+    background-color: #f5f5f5;
+    padding: 20px;
+    min-height: calc(100vh - 200px);
+}
+
+.whatsapp-debts-header {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+}
+
+.whatsapp-debts-title {
+    font-size: 24px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 8px;
+}
+
+.whatsapp-debts-subtitle {
+    color: #666;
+    font-size: 14px;
+    margin-bottom: 16px;
+}
+
+/* Estilos para filtros */
+.whatsapp-debts-filters {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+}
+
+.filters-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: center;
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.filter-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: #666;
+    text-transform: uppercase;
+}
+
+.filter-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+}
+
+.filter-select {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: white;
+    font-size: 14px;
+    min-width: 150px;
+}
+
+.filter-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+}
+
+.filter-button {
+    padding: 8px 16px;
+    background: #2196f3;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s;
+}
+
+.filter-button:hover {
+    background: #1976d2;
+}
+
+.search-input {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    min-width: 200px;
+}
+
+/* Estilos para estadísticas */
+.debts-stats {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 16px;
+}
+
+.stat-card {
+    text-align: center;
+    padding: 16px;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+}
+
+.stat-value {
+    font-size: 24px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 4px;
+}
+
+.stat-label {
+    font-size: 12px;
+    color: #666;
+    text-transform: uppercase;
+    font-weight: 500;
+}
+
+.stat-amount {
+    color: #2196f3;
+}
+
+.stat-overdue {
+    color: #f44336;
+}
+
+.stat-upcoming {
+    color: #ff9800;
+}
+
+.stat-phone {
+    color: #4caf50;
+}
+
+/* Estilos para la tabla de deudas */
+.debts-table-container {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+}
+
+.debts-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.debts-table th {
+    background: #f5f5f5;
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+    color: #333;
+    font-size: 14px;
+    border-bottom: 2px solid #e0e0e0;
+}
+
+.debts-table td {
+    padding: 16px 12px;
+    border-bottom: 1px solid #e0e0e0;
+    font-size: 14px;
+}
+
+.debts-table tr:hover {
+    background-color: #f9f9f9;
+}
+
+.debt-row {
+    transition: background-color 0.2s;
+}
+
+.supplier-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.supplier-name {
+    font-weight: 600;
+    color: #333;
+}
+
+.contact-name {
+    font-size: 12px;
+    color: #666;
+}
+
+.phone-number {
+    font-size: 12px;
+    color: #666;
+    font-family: 'Courier New', monospace;
+}
+
+.debt-amount {
+    font-weight: 600;
+    color: #2196f3;
+    font-size: 16px;
+}
+
+.debt-status {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    text-transform: uppercase;
+}
+
+.status-vencido {
+    background: #ffebee;
+    color: #c62828;
+}
+
+.status-proximo {
+    background: #e3f2fd;
+    color: #1565c0;
+}
+
+.days-overdue {
+    font-weight: 600;
+    color: #f44336;
+}
+
+.days-upcoming {
+    font-weight: 600;
+    color: #ff9800;
+}
+
+/* Estilos para botones de WhatsApp */
+.whatsapp-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #25d366;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: background-color 0.2s;
+}
+
+.whatsapp-button:hover {
+    background: #20ba5a;
+    color: white;
+}
+
+.whatsapp-button:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+.whatsapp-icon {
+    width: 16px;
+    height: 16px;
+}
+
+.no-phone-button {
+    background: #e0e0e0;
+    color: #666;
+    cursor: not-allowed;
+}
+
+.actions-cell {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.preview-button {
+    padding: 6px 10px;
+    background: #f5f5f5;
+    color: #666;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+    transition: background-color 0.2s;
+}
+
+.preview-button:hover {
+    background: #e0e0e0;
+}
+
+/* Estilos para modal de vista previa */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 8px;
+    padding: 24px;
+    max-width: 500px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.modal-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #333;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #666;
+}
+
+.message-preview {
+    background: #f5f5f5;
+    padding: 16px;
+    border-radius: 8px;
+    border-left: 4px solid #25d366;
+    margin-bottom: 16px;
+    white-space: pre-wrap;
+    font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* Estilos para estados de carga */
+.loading-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 40px;
+}
+
+.loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #2196f3;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px;
+    color: #666;
+}
+
+.empty-state-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    color: #ddd;
+}
+
+.empty-state-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.empty-state-subtitle {
+    font-size: 14px;
+    color: #999;
+}
+
+/* Estilos para errores */
+.error-container {
+    background: #ffebee;
+    border: 1px solid #f44336;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 20px;
+}
+
+.error-title {
+    font-weight: 600;
+    color: #c62828;
+    margin-bottom: 8px;
+}
+
+.error-message {
+    color: #666;
+    font-size: 14px;
+}
+
+/* Responsivo */
+@media (max-width: 768px) {
+    .whatsapp-debts-container {
+        padding: 12px;
+    }
+    
+    .filters-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .debts-table {
+        font-size: 12px;
+    }
+    
+    .debts-table th,
+    .debts-table td {
+        padding: 8px;
+    }
+    
+    .modal-content {
+        width: 95%;
+        margin: 20px;
+    }
+}
+
+@media (max-width: 480px) {
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .actions-cell {
+        flex-direction: column;
+        gap: 4px;
+    }
+} 

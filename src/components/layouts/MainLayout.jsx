@@ -56,6 +56,10 @@ const MainLayout = ({ children }) => {
                     name: "Análisis de Precios",
                     path: "/compras/analisis-precios",
                 },
+                {
+                    name: "Deudas WhatsApp",
+                    path: "/compras/deudas-whatsapp",
+                },
             ],
         },
         ventas: {
@@ -70,6 +74,10 @@ const MainLayout = ({ children }) => {
                 {
                     name: "Cuentas por Cobrar (Créditos)",
                     path: "/ventas/creditos",
+                },
+                {
+                    name: "Créditos WhatsApp",
+                    path: "/ventas/creditos-whatsapp",
                 },
             ],
         },
