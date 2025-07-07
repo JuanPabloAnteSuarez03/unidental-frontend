@@ -4,6 +4,7 @@ import { salesService } from "../services/salesService";
 import { useAuth } from "../context/AuthContext";
 import { useProducts } from "../context/ProductsContext";
 import { FaHistory, FaUndo, FaFileInvoiceDollar } from "react-icons/fa";
+import BreakdownConfirmationModal from "../components/Sales/BreakdownConfirmationModal";
 
 const ReturnsPage = () => {
     const { authToken } = useAuth();
@@ -32,6 +33,13 @@ const ReturnsPage = () => {
     // Error states
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(null);
+
+    // Estado para confirmación de ruptura
+    const [breakdownState, setBreakdownState] = useState({
+        isOpen: false,
+        plan: [],
+        pendingReturnData: null,
+    });
 
     const reasonTranslations = {
         defective: "Producto defectuoso",
@@ -150,7 +158,8 @@ const ReturnsPage = () => {
         });
     }, []);
 
-    // Process return
+    const attemptCreateReturn = async (returnData) => returnsService.createReturn(returnData, authToken);
+
     const handleProcessReturn = useCallback(async () => {
         if (!selectedSale || !authToken) return;
         
@@ -188,7 +197,17 @@ const ReturnsPage = () => {
             console.log("Selected sale:", selectedSale);
             console.log("Return items:", itemsToReturn);
             
-            const result = await returnsService.createReturn(returnData, authToken);
+            let result;
+            try {
+                result = await attemptCreateReturn(returnData);
+            } catch (err) {
+                if (err.breakdownRequired) {
+                    setBreakdownState({ isOpen: true, plan: err.breakdownPlan || [], pendingReturnData: returnData });
+                    setIsProcessingReturn(false);
+                    return;
+                }
+                throw err;
+            }
             
             setSuccess(`Devolución #${result.id} creada. Actualizando venta original...`);
 
@@ -296,6 +315,29 @@ const ReturnsPage = () => {
     useEffect(() => {
         filterSales(searchTerm);
     }, [searchTerm, filterSales]);
+
+    const handleCancelBreakdown = () => {
+        setBreakdownState({ isOpen: false, plan: [], pendingReturnData: null });
+    };
+
+    const handleConfirmBreakdown = async () => {
+        if (!breakdownState.pendingReturnData) return;
+        const newData = { ...breakdownState.pendingReturnData, confirm_breakdown: true };
+        setBreakdownState(prev => ({ ...prev, isOpen: false }));
+        setIsProcessingReturn(true);
+        try {
+            const result = await attemptCreateReturn(newData);
+            alert(`Devolución creada (desarmando kits) #${result.id}`);
+            // Refresh list
+            await loadAllSales();
+            setSelectedSale(null);
+        } catch (err) {
+            console.error('Error confirm breakdown return:', err);
+            setError(err.message || 'Error al procesar devolución con ruptura');
+        } finally {
+            setIsProcessingReturn(false);
+        }
+    };
 
     return (
         <div
@@ -803,6 +845,13 @@ const ReturnsPage = () => {
                     )}
                 </div>
             )}
+            <BreakdownConfirmationModal
+                isOpen={breakdownState.isOpen}
+                breakdownPlan={breakdownState.plan}
+                message="Se requiere desarmar kits/cajas para procesar la devolución."
+                onCancel={handleCancelBreakdown}
+                onConfirm={handleConfirmBreakdown}
+            />
         </div>
     );
 };

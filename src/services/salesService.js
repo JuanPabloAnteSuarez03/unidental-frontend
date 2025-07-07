@@ -141,6 +141,16 @@ export const createSale = async (saleData, authToken, signal) => {
                 errorData = { detail: responseText };
             }
 
+            // Si es un 409 de ruptura de kits/cajas
+            if (response.status === 409 && errorData) {
+                const breakdownErr = new Error(errorData.message || 'Se requiere confirmación de ruptura');
+                breakdownErr.status = 409;
+                breakdownErr.breakdownRequired = true;
+                breakdownErr.breakdownPlan = errorData.breakdown_plan || [];
+                breakdownErr.raw = errorData;
+                throw breakdownErr;
+            }
+
             // Si hay errores de validación, mostrarlos de forma más clara
             if (errorData && typeof errorData === "object") {
                 console.error(
