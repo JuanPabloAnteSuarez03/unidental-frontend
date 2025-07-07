@@ -161,6 +161,7 @@ export const createReturn = async (returnData, authToken, signal) => {
                 quantity_returned: parseInt(item.quantity),
                 unit_price: parseFloat(item.unit_price),
             })),
+            ...(returnData.confirm_breakdown ? { confirm_breakdown: true } : {}),
         };
 
         console.log(
@@ -185,6 +186,16 @@ export const createReturn = async (returnData, authToken, signal) => {
                 "Full error data:",
                 JSON.stringify(errorData, null, 2)
             );
+
+            // Manejar 409 ruptura de kits/cajas
+            if (response.status === 409 && errorData) {
+                const breakdownErr = new Error(errorData.message || 'Se requiere confirmación de ruptura');
+                breakdownErr.status = 409;
+                breakdownErr.breakdownRequired = true;
+                breakdownErr.breakdownPlan = errorData.breakdown_plan || [];
+                breakdownErr.raw = errorData;
+                throw breakdownErr;
+            }
 
             // Provide more detailed error information for 400 errors
             if (response.status === 400) {
