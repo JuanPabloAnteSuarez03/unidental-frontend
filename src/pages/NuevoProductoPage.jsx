@@ -25,7 +25,7 @@ const NuevoProductoPage = () => {
         category: "", // Categoría de inventario (ID numérico)
         unit: "",
         product_type: "", // Tipo de producto: simple o composite
-        has_batch_management: false, // Manejo por lotes
+        requires_batch_control: false, // Manejo por lotes
         purchase_price: "",
         sale_price: "",
         description: "",
@@ -170,9 +170,21 @@ const NuevoProductoPage = () => {
     const handleInputChange = (e) => {
         const { name, value, type, checked } = e.target;
 
+        // 🔍 DEBUG: Agregar logs para verificar el evento recibido
+        console.log("🔍 DEBUG - Evento recibido en handleInputChange:", {
+            name,
+            value,
+            type,
+            checked,
+        });
+
         // Manejar checkboxes y inputs normales
         const fieldValue = type === "checkbox" ? checked : value;
         let newFormData = { ...formData, [name]: fieldValue };
+
+        // 🔍 DEBUG: Agregar logs para verificar el valor asignado
+        console.log("🔍 DEBUG - Valor asignado para", name, ":", fieldValue);
+        console.log("🔍 DEBUG - Tipo del valor:", typeof fieldValue);
 
         // Calcular margen automáticamente si cambian los precios
         if (name === "purchase_price" || name === "sale_price") {
@@ -208,6 +220,12 @@ const NuevoProductoPage = () => {
         }
 
         setFormData(newFormData);
+
+        // 🔍 DEBUG: Agregar logs para verificar el estado actualizado
+        console.log(
+            "🔍 DEBUG - Estado actualizado del formulario:",
+            newFormData
+        );
 
         // Limpiar error del campo modificado
         if (errors[name]) {
@@ -542,13 +560,33 @@ const NuevoProductoPage = () => {
                 category: parseInt(formData.category), // Usar la categoría de inventario como categoría del producto
                 unit: formData.unit,
                 product_type: formData.product_type,
-                has_batch_management: formData.has_batch_management, // Manejo por lotes
+                requires_batch_control: formData.requires_batch_control, // Manejo por lotes
                 purchase_price: parseFloat(formData.purchase_price),
                 sale_price: parseFloat(formData.sale_price),
                 description: formData.description
                     ? formData.description.trim()
                     : "",
             };
+
+            // 🔍 DEBUG: Agregar logs para verificar el campo requires_batch_control
+            console.log("🔍 DEBUG - Estado actual del formulario:", formData);
+            console.log(
+                "🔍 DEBUG - Campo requires_batch_control en formData:",
+                formData.requires_batch_control
+            );
+            console.log(
+                "🔍 DEBUG - Tipo de requires_batch_control:",
+                typeof formData.requires_batch_control
+            );
+            console.log("🔍 DEBUG - Datos del producto a enviar:", productData);
+            console.log(
+                "🔍 DEBUG - Campo requires_batch_control en productData:",
+                productData.requires_batch_control
+            );
+            console.log(
+                "🔍 DEBUG - Tipo de requires_batch_control en productData:",
+                typeof productData.requires_batch_control
+            );
 
             // Validar que category sea un número válido
             if (isNaN(productData.category) || productData.category <= 0) {
@@ -632,7 +670,7 @@ const NuevoProductoPage = () => {
                 category: "",
                 unit: "",
                 product_type: "",
-                has_batch_management: false,
+                requires_batch_control: false,
                 purchase_price: "",
                 sale_price: "",
                 description: "",

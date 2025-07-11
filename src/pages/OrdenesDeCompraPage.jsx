@@ -1,20 +1,25 @@
 import React, { useState, useEffect } from "react";
-import { getSuppliers, getPurchaseOptions } from "../services/suppliersService";
+import { useNavigate } from "react-router-dom";
+import {
+    getAllSuppliers,
+    getPurchaseOptions,
+} from "../services/suppliersService";
 import { useAuth } from "../context/AuthContext";
 import { getLocations } from "../services/inventoryService";
 
-// Función para normalizar tildes y caracteres especiales
-const normalizeText = (text) => {
-    if (!text) return "";
-    return text
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "") // Remover diacríticos (tildes)
-        .toLowerCase()
-        .trim();
-};
+// Componentes segmentados
+import OrdenesDeCompraHeader from "../components/OrdenesDeCompra/OrdenesDeCompraHeader";
+import OrdenesDeCompraStyles from "../components/OrdenesDeCompra/OrdenesDeCompraStyles";
+import NotificationBanner from "../components/OrdenesDeCompra/NotificationBanner";
+import RegistrarOrden from "../components/OrdenesDeCompra/RegistrarOrden";
+import PurchaseOrderModal from "../components/OrdenesDeCompra/PurchaseOrderModal";
 
 const OrdenesDeCompraPage = () => {
     const { authToken } = useAuth();
+    const navigate = useNavigate();
+
+    // Estados principales
+    const [activeSection, setActiveSection] = useState("registro");
     const [selectedSupplier, setSelectedSupplier] = useState(null);
     const [products, setProducts] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -26,8 +31,25 @@ const OrdenesDeCompraPage = () => {
     const [selectedLocation, setSelectedLocation] = useState("");
     const [searchTerm, setSearchTerm] = useState("");
     const [searchResults, setSearchResults] = useState([]);
-    const [isSearching, setIsSearching] = useState(false);
-    const [searchMode, setSearchMode] = useState("supplier"); // 'supplier' o 'product'
+    const [searchMode, setSearchMode] = useState("supplier"); // 'supplier' o 'direct_api'
+
+    // Estado para notificación de proveedor seleccionado
+    const [supplierNotification, setSupplierNotification] = useState(null);
+
+    // Estados para órdenes registradas
+    const [orders, setOrders] = useState([]);
+    const [isLoadingOrders, setIsLoadingOrders] = useState(false);
+    const [ordersPage, setOrdersPage] = useState(1);
+    const [showReceiptModal, setShowReceiptModal] = useState(false);
+    const [receiptModalData, setReceiptModalData] = useState(null);
+    const [isLoadingReceipt, setIsLoadingReceipt] = useState(false);
+    const [showStatusDropdown, setShowStatusDropdown] = useState(null);
+    const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+    const [isProcessingRedirect, setIsProcessingRedirect] = useState(false);
+    const [ordersTotalPages, setOrdersTotalPages] = useState(0);
+    const [ordersCount, setOrdersCount] = useState(0);
+    const [goToPage, setGoToPage] = useState("");
+    const [isCreatingOrder, setIsCreatingOrder] = useState(false);
 
     // Estados para búsqueda local sin tildes
     const [allProducts, setAllProducts] = useState([]); // Lista completa de productos
@@ -37,15 +59,15 @@ const OrdenesDeCompraPage = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState("");
     const [submitSuccess, setSubmitSuccess] = useState("");
-    const [activeSection, setActiveSection] = useState("registro"); // 'registro' o 'otra'
+
+    // Estados para el modal de orden de compra
+    const [shouldGenerateOrder, setShouldGenerateOrder] = useState(false);
+    const [showOrderModal, setShowOrderModal] = useState(false);
+    const [orderModalData, setOrderModalData] = useState(null);
+
     // Estado para la tabla de órdenes
-    const [orders, setOrders] = useState([]);
     const [ordersLoading, setOrdersLoading] = useState(false);
     const [ordersError, setOrdersError] = useState("");
-    const [ordersPage, setOrdersPage] = useState(1);
-    const [ordersTotalPages, setOrdersTotalPages] = useState(1);
-    const [ordersCount, setOrdersCount] = useState(0);
-    const [goToPage, setGoToPage] = useState("");
     const ORDERS_PAGE_SIZE = 25;
     // Estado para el panel de detalle de orden
     const [selectedOrder, setSelectedOrder] = useState(null);
@@ -53,36 +75,129 @@ const OrdenesDeCompraPage = () => {
     const [orderDetailLoading, setOrderDetailLoading] = useState(false);
     const [orderDetailError, setOrderDetailError] = useState("");
 
-    // Cargar proveedores
+    // Cargar TODOS los proveedores al inicio
     useEffect(() => {
+        if (!authToken) return;
         setIsLoadingSuppliers(true);
-        getSuppliers({ page_size: 100 }, authToken)
-            .then((data) => setSuppliers(data.results || []))
-            .catch(() => setSuppliers([]))
-            .finally(() => setIsLoadingSuppliers(false));
+        console.log("🔄 Iniciando carga de TODOS los proveedores...");
+
+        getAllSuppliers(authToken)
+            .then((allSuppliers) => {
+                console.log(
+                    `✅ Total de proveedores cargados: ${allSuppliers.length}`
+                );
+                setSuppliers(allSuppliers);
+            })
+            .catch((error) => {
+                console.error("❌ Error al cargar proveedores:", error);
+                setSuppliers([]);
+            })
+            .finally(() => {
+                setIsLoadingSuppliers(false);
+                console.log("🏁 Carga de proveedores completada");
+            });
     }, [authToken]);
 
-    // Cargar productos del proveedor
+    // Cargar productos del proveedor seleccionado
     useEffect(() => {
         if (!selectedSupplier) {
             setProducts([]);
             setOrderItems([]);
             return;
         }
+
         setIsLoading(true);
-        getPurchaseOptions({ supplier: selectedSupplier.id }, authToken)
-            .then((data) =>
-                setProducts(
-                    (data.results || []).map((opt) => ({
-                        ...opt,
-                        purchase_option: opt.id,
-                    }))
-                )
-            )
-            .catch(() => setProducts([]))
-            .finally(() => setIsLoading(false));
-        setOrderItems([]); // Limpiar orden al cambiar proveedor
-    }, [selectedSupplier, authToken]);
+        console.log(
+            `🔄 Cargando opciones de compra del proveedor: ${selectedSupplier.name} (ID: ${selectedSupplier.id})`
+        );
+        console.log(
+            `🔍 Usando endpoint: /api/suppliers/purchase-options/?supplier=${selectedSupplier.id}`
+        );
+
+        // Función para cargar todas las opciones de compra del proveedor
+        const loadAllPurchaseOptions = async () => {
+            const allProducts = [];
+            let nextUrl = `https://unidental-backend.onrender.com/api/suppliers/purchase-options/?supplier=${selectedSupplier.id}&page_size=100`;
+            let pageCount = 0;
+            const maxPages = 50; // Límite de seguridad
+
+            while (nextUrl && pageCount < maxPages) {
+                pageCount++;
+                console.log(
+                    `📄 Cargando página ${pageCount} de opciones de compra...`
+                );
+
+                const response = await fetch(nextUrl, {
+                    headers: {
+                        Authorization: `Token ${authToken}`,
+                        "Content-Type": "application/json",
+                    },
+                });
+
+                if (!response.ok) {
+                    throw new Error(
+                        `Error ${response.status}: ${response.statusText}`
+                    );
+                }
+
+                const data = await response.json();
+                const products = data.results || [];
+
+                // Agregar productos de esta página
+                allProducts.push(...products);
+                console.log(
+                    `✅ Página ${pageCount}: ${products.length} productos cargados`
+                );
+
+                // Verificar si hay más páginas
+                nextUrl = data.next ? data.next : null;
+
+                // Si no hay más páginas, terminar
+                if (!nextUrl) {
+                    console.log(
+                        `🏁 No hay más páginas. Total de productos cargados: ${allProducts.length}`
+                    );
+                    break;
+                }
+            }
+
+            // Advertencia si llegamos al límite
+            if (pageCount >= maxPages) {
+                console.warn(
+                    `⚠️ Se alcanzó el límite de ${maxPages} páginas. Es posible que no se hayan cargado todos los productos.`
+                );
+            }
+
+            return allProducts;
+        };
+
+        // Ejecutar la carga de todos los productos
+        loadAllPurchaseOptions()
+            .then((allProducts) => {
+                const productsWithOption = allProducts.map((opt) => ({
+                    ...opt,
+                    purchase_option: opt.id,
+                }));
+
+                console.log(
+                    `✅ Opciones de compra cargadas: ${productsWithOption.length} productos del proveedor ${selectedSupplier.name}`
+                );
+                setProducts(productsWithOption);
+            })
+            .catch((error) => {
+                console.error("❌ Error al cargar opciones de compra:", error);
+                setProducts([]);
+            })
+            .finally(() => {
+                setIsLoading(false);
+                console.log("🏁 Carga de opciones de compra completada");
+            });
+
+        // Solo limpiar orden si no estamos en modo búsqueda directa
+        if (searchMode !== "direct_api") {
+            setOrderItems([]); // Limpiar orden al cambiar proveedor
+        }
+    }, [selectedSupplier, authToken, searchMode]);
 
     // Cargar sedes (locations)
     useEffect(() => {
@@ -100,63 +215,46 @@ const OrdenesDeCompraPage = () => {
             .finally(() => setIsLoadingLocations(false));
     }, [authToken]);
 
-    // Cargar órdenes de compra cuando se entra a la sección 'otra' o cambia la página
+    // Cargar órdenes de compra cuando se entra a la sección 'otra'
     useEffect(() => {
-        if (activeSection !== "otra") return;
-        setOrdersLoading(true);
-        setOrdersError("");
-        fetch(
-            `https://unidental-backend.onrender.com/api/purchases/orders/?page=${ordersPage}&page_size=${ORDERS_PAGE_SIZE}`,
-            {
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Token ${authToken}`,
-                },
-            }
-        )
-            .then(async (res) => {
-                if (!res.ok) {
-                    const err = await res.json().catch(() => ({}));
-                    throw new Error(err.detail || `Error ${res.status}`);
-                }
-                return res.json();
-            })
-            .then((data) => {
-                setOrders(data.results || []);
-                setOrdersCount(data.count || 0);
-                setOrdersTotalPages(
-                    data.count
-                        ? Math.max(1, Math.ceil(data.count / ORDERS_PAGE_SIZE))
-                        : 1
-                );
-            })
-            .catch((err) =>
-                setOrdersError(err.message || "Error al cargar órdenes")
-            )
-            .finally(() => setOrdersLoading(false));
+        if (activeSection === "otra" && authToken) {
+            fetchOrders(ordersPage);
+        }
     }, [activeSection, ordersPage, authToken]);
 
-    // Agregar producto a la orden
+    // Funciones para manejar productos en la orden
     const handleAddProduct = (product) => {
-        setOrderItems((prev) => {
-            if (prev.some((item) => item.product.id === product.id))
-                return prev;
-            return [...prev, { product, quantity: 1 }];
+        setOrderItems((prevOrderItems) => {
+            const existingItem = prevOrderItems.find(
+                (item) => item.purchase_option === product.purchase_option
+            );
+            if (existingItem) {
+                return prevOrderItems.map((item) =>
+                    item.purchase_option === product.purchase_option
+                        ? { ...item, quantity: item.quantity + 1 }
+                        : item
+                );
+            }
+            return [...prevOrderItems, { ...product, quantity: 1 }];
         });
     };
 
-    // Quitar producto de la orden
     const handleRemoveProduct = (productId) => {
         setOrderItems((prev) =>
-            prev.filter((item) => item.product.id !== productId)
+            prev.filter((item) => item.purchase_option !== productId)
         );
     };
 
-    // Cambiar cantidad
+    const clearOrder = () => {
+        const eliminatedCount = orderItems.length;
+        setOrderItems([]);
+        return eliminatedCount;
+    };
+
     const handleChangeQuantity = (productId, value) => {
         setOrderItems((prev) =>
             prev.map((item) =>
-                item.product.id === productId
+                item.purchase_option === productId
                     ? { ...item, quantity: Math.max(1, parseInt(value) || 1) }
                     : item
             )
@@ -166,7 +264,7 @@ const OrdenesDeCompraPage = () => {
     // Calcular total
     const total = orderItems.reduce(
         (sum, item) =>
-            sum + parseFloat(item.product.purchase_price || 0) * item.quantity,
+            sum + parseFloat(item.purchase_price || 0) * item.quantity,
         0
     );
 
@@ -178,34 +276,61 @@ const OrdenesDeCompraPage = () => {
             return;
         }
         // Validar que todos los productos tengan purchase_option
-        const missingOption = orderItems.find(
-            (item) => !item.product.purchase_option
-        );
+        const missingOption = orderItems.find((item) => !item.purchase_option);
         if (missingOption) {
             setSubmitError(
                 `El producto '${
-                    missingOption.product.product_name ||
-                    missingOption.product.name
+                    missingOption.product_name || missingOption.name
                 }' no tiene purchase_option.`
             );
             return;
         }
-        setIsSubmitting(true);
+        setIsCreatingOrder(true);
         try {
             // Generar fecha y hora actual en formato ISO
             const currentDate = new Date().toISOString().split("T")[0];
 
             const payload = {
                 supplier: selectedSupplier.id,
-                destination: selectedLocation,
+                destination: parseInt(selectedLocation),
                 order_date: currentDate,
-                notes,
                 items: orderItems.map((item) => ({
-                    purchase_option: item.product.purchase_option,
+                    purchase_option: item.purchase_option,
                     quantity_requested: item.quantity,
-                    unit_price: item.product.purchase_price || 0,
+                    unit_price: parseFloat(item.purchase_price || 0),
                 })),
+                notes: notes,
             };
+
+            console.log("📦 Creando orden de compra:", payload);
+            console.log("📋 Detalles del payload:", {
+                supplier: payload.supplier,
+                supplierType: typeof payload.supplier,
+                destination: payload.destination,
+                destinationType: typeof payload.destination,
+                items: payload.items,
+                itemsCount: payload.items.length,
+                notes: payload.notes,
+            });
+            console.log(
+                "🔍 JSON completo que se enviará:",
+                JSON.stringify(payload, null, 2)
+            );
+
+            // Verificar que el endpoint existe
+            console.log("🔍 Verificando endpoint...");
+            const testResponse = await fetch(
+                "https://unidental-backend.onrender.com/api/purchases/orders/",
+                {
+                    method: "GET",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Token ${authToken}`,
+                    },
+                }
+            );
+            console.log("🔍 Test endpoint status:", testResponse.status);
+
             const response = await fetch(
                 "https://unidental-backend.onrender.com/api/purchases/orders/",
                 {
@@ -217,20 +342,83 @@ const OrdenesDeCompraPage = () => {
                     body: JSON.stringify(payload),
                 }
             );
+
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
+                const responseText = await response.text();
+                console.error("❌ Error response details:", {
+                    status: response.status,
+                    statusText: response.statusText,
+                    responseText: responseText,
+                });
+
+                let errorData;
+                try {
+                    errorData = JSON.parse(responseText);
+                } catch (parseError) {
+                    errorData = { detail: responseText };
+                }
+
                 throw new Error(
                     errorData.detail ||
+                        errorData.message ||
+                        errorData.error ||
+                        JSON.stringify(errorData) ||
                         `Error ${response.status}: ${response.statusText}`
                 );
             }
-            setSubmitSuccess("Orden de compra registrada exitosamente.");
+
+            const result = await response.json();
+            console.log("✅ Orden creada exitosamente:", result);
+
+            // Si se debe generar el documento de orden, mostrar el modal
+            if (shouldGenerateOrder) {
+                setOrderModalData({
+                    orderData: result,
+                    supplierData: selectedSupplier,
+                    locationData: locations.find(
+                        (loc) => loc.id === selectedLocation
+                    ),
+                    orderItems: orderItems,
+                    totals: {
+                        total: total,
+                        subtotal: total,
+                        tax: 0,
+                        itemCount: orderItems.length,
+                        totalQuantity: orderItems.reduce(
+                            (sum, item) => sum + item.quantity,
+                            0
+                        ),
+                    },
+                    notes: notes,
+                });
+                setShowOrderModal(true);
+            } else {
+                setSubmitSuccess(
+                    `✅ Orden de compra creada exitosamente!\n\n📋 Número de orden: ${
+                        result.order_number || result.id
+                    }\n🏢 Proveedor: ${selectedSupplier.name}\n📦 Productos: ${
+                        orderItems.length
+                    }\n💰 Total: $${total.toLocaleString()}`
+                );
+            }
+
+            // Limpiar formulario
             setOrderItems([]);
+            setSelectedLocation("");
             setNotes("");
+            setSelectedSupplier(null);
+            setProducts([]);
+            setSearchMode("supplier");
+            setSearchTerm("");
+            setSearchResults([]);
+            setShouldGenerateOrder(false);
         } catch (error) {
-            setSubmitError(error.message || "Error al registrar la orden.");
+            console.error("❌ Error al crear orden:", error);
+            setSubmitError(
+                `Error al crear la orden de compra: ${error.message}`
+            );
         } finally {
-            setIsSubmitting(false);
+            setIsCreatingOrder(false);
         }
     };
 
@@ -255,6 +443,43 @@ const OrdenesDeCompraPage = () => {
         return Number(price);
     };
 
+    // Función para cargar órdenes
+    const fetchOrders = async (page = 1) => {
+        setIsLoadingOrders(true);
+        setOrdersError("");
+        try {
+            const response = await fetch(
+                `https://unidental-backend.onrender.com/api/purchases/orders/?page=${page}&page_size=${ORDERS_PAGE_SIZE}`,
+                {
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Token ${authToken}`,
+                    },
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error(
+                    `Error ${response.status}: ${response.statusText}`
+                );
+            }
+
+            const data = await response.json();
+            setOrders(data.results || []);
+            setOrdersCount(data.count || 0);
+            setOrdersTotalPages(
+                data.count
+                    ? Math.max(1, Math.ceil(data.count / ORDERS_PAGE_SIZE))
+                    : 1
+            );
+        } catch (error) {
+            console.error("Error fetching orders:", error);
+            setOrdersError(error.message || "Error al cargar órdenes");
+        } finally {
+            setIsLoadingOrders(false);
+        }
+    };
+
     // Función para ir a una página específica
     const handleGoToPage = () => {
         const page = parseInt(goToPage);
@@ -271,110 +496,359 @@ const OrdenesDeCompraPage = () => {
         }
     };
 
-    // Cargar todos los productos para búsqueda local
-    const loadAllProducts = async () => {
-        setIsLoadingAllProducts(true);
+    // Función para cerrar el modal de orden de compra
+    const handleCloseOrderModal = () => {
+        setShowOrderModal(false);
+        setOrderModalData(null);
+
+        // Mostrar mensaje de éxito después de cerrar la orden
+        if (orderModalData) {
+            setSubmitSuccess(
+                `✅ Orden de compra creada exitosamente!\n\n📋 Número de orden: ${
+                    orderModalData.orderData.order_number ||
+                    orderModalData.orderData.id
+                }\n🏢 Proveedor: ${
+                    orderModalData.supplierData.name
+                }\n📦 Productos: ${
+                    orderModalData.orderItems.length
+                }\n💰 Total: $${orderModalData.totals.total.toLocaleString()}`
+            );
+        }
+    };
+
+    // Función para mostrar el recibo de la orden de compra
+    const handleShowReceipt = async (order) => {
+        setIsLoadingReceipt(true);
+        setReceiptModalData(null);
+
         try {
+            // Obtener los detalles de la orden
             const response = await fetch(
-                "https://unidental-backend.onrender.com/api/suppliers/purchase-options/?page_size=1000",
+                `https://unidental-backend.onrender.com/api/purchases/orders/${order.id}/`,
                 {
+                    method: "GET",
                     headers: {
-                        "Content-Type": "application/json",
                         Authorization: `Token ${authToken}`,
+                        "Content-Type": "application/json",
                     },
                 }
             );
+
             if (!response.ok) {
-                throw new Error("Error al cargar productos");
-            }
-            const data = await response.json();
-            setAllProducts(data.results || []);
-        } catch (error) {
-            console.error("Error loading all products:", error);
-            setAllProducts([]);
-        } finally {
-            setIsLoadingAllProducts(false);
-        }
-    };
-
-    // Buscar productos localmente sin tildes
-    const handleProductSearch = () => {
-        if (!searchTerm.trim()) {
-            setSearchResults([]);
-            return;
-        }
-
-        setIsSearching(true);
-
-        // Simular delay para mostrar loading
-        setTimeout(() => {
-            const normalizedSearchTerm = normalizeText(searchTerm);
-
-            const filteredProducts = allProducts.filter((product) => {
-                // Buscar en diferentes campos del producto
-                const productName = product.product_name || product.name || "";
-                const sku = product.sku || product.product_sku || "";
-                const description =
-                    product.description || product.product_description || "";
-
-                // Normalizar los campos del producto
-                const normalizedProductName = normalizeText(productName);
-                const normalizedSku = normalizeText(sku);
-                const normalizedDescription = normalizeText(description);
-
-                // Verificar si el término de búsqueda coincide en algún campo
-                return (
-                    normalizedProductName.includes(normalizedSearchTerm) ||
-                    normalizedSku.includes(normalizedSearchTerm) ||
-                    normalizedDescription.includes(normalizedSearchTerm)
+                throw new Error(
+                    `Error ${response.status}: ${response.statusText}`
                 );
-            });
+            }
 
-            setSearchResults(filteredProducts);
-            setIsSearching(false);
-        }, 300);
+            const orderDetails = await response.json();
+
+            // Preparar los datos para el modal
+            const modalData = {
+                orderData: orderDetails,
+                supplierData: orderDetails.supplier_details || {
+                    name: orderDetails.supplier_name || "Sin proveedor",
+                    phone: "",
+                    email: "",
+                    address: "",
+                },
+                locationData: orderDetails.destination_details || {
+                    name: "Sin destino",
+                    address: "",
+                },
+                orderItems: orderDetails.items || [],
+                totals: {
+                    subtotal: parseFloat(orderDetails.total_amount || 0),
+                    total: parseFloat(orderDetails.total_amount || 0),
+                },
+                notes: orderDetails.notes || "",
+            };
+
+            setReceiptModalData(modalData);
+            setShowReceiptModal(true);
+        } catch (error) {
+            console.error("Error al cargar los detalles de la orden:", error);
+            setSubmitError(`❌ Error al cargar los detalles: ${error.message}`);
+        } finally {
+            setIsLoadingReceipt(false);
+        }
     };
 
-    // Efecto para cargar todos los productos cuando se cambia al modo de búsqueda
-    useEffect(() => {
-        if (
-            searchMode === "product" &&
-            allProducts.length === 0 &&
-            !isLoadingAllProducts
-        ) {
-            loadAllProducts();
-        }
-    }, [searchMode, authToken]);
+    // Función para cerrar el modal de recibo
+    const handleCloseReceiptModal = () => {
+        setShowReceiptModal(false);
+        setReceiptModalData(null);
+    };
 
-    // Efecto para buscar productos cuando cambia el término de búsqueda
-    useEffect(() => {
-        const timeoutId = setTimeout(() => {
-            if (
-                searchMode === "product" &&
-                searchTerm.trim() &&
-                allProducts.length > 0
-            ) {
-                handleProductSearch();
+    // Lista de acciones disponibles para órdenes pendientes
+    const pendingOrderActions = [
+        { value: "received", label: "Recibida", endpoint: "mark_received" },
+        { value: "canceled", label: "Cancelada", endpoint: "cancel" },
+    ];
+
+    // Función para cambiar el estado de una orden pendiente
+    const handleStatusChange = async (orderId, action) => {
+        setIsUpdatingStatus(true);
+        try {
+            const actionConfig = pendingOrderActions.find(
+                (a) => a.value === action
+            );
+            if (!actionConfig) {
+                throw new Error("Acción no válida");
             }
-        }, 300);
-        return () => clearTimeout(timeoutId);
-    }, [searchTerm, searchMode, allProducts]);
+
+            const response = await fetch(
+                `https://unidental-backend.onrender.com/api/purchases/orders/${orderId}/${actionConfig.endpoint}/`,
+                {
+                    method: "POST",
+                    headers: {
+                        Authorization: `Token ${authToken}`,
+                        "Content-Type": "application/json",
+                    },
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error(
+                    `Error ${response.status}: ${response.statusText}`
+                );
+            }
+
+            const updatedOrder = await response.json();
+
+            // Actualizar la orden en el estado local
+            setOrders((prevOrders) =>
+                prevOrders.map((order) =>
+                    order.id === orderId
+                        ? {
+                              ...order,
+                              status: updatedOrder.status || action,
+                              status_display:
+                                  updatedOrder.status_display ||
+                                  actionConfig.label,
+                          }
+                        : order
+                )
+            );
+
+            setSubmitSuccess(
+                `✅ Orden #${orderId} marcada como ${actionConfig.label.toLowerCase()} exitosamente`
+            );
+            setShowStatusDropdown(null);
+
+            // Si la acción es "received", redirigir a movimientos de stock con datos pre-llenados
+            if (action === "received") {
+                await redirectToStockMovements(orderId);
+            }
+        } catch (error) {
+            console.error("Error al actualizar el estado:", error);
+            setSubmitError(
+                `❌ Error al actualizar el estado: ${error.message}`
+            );
+        } finally {
+            setIsUpdatingStatus(false);
+        }
+    };
+
+    // Función para redirigir a movimientos de stock con datos pre-llenados
+    const redirectToStockMovements = async (orderId) => {
+        setIsProcessingRedirect(true);
+        try {
+            // Obtener los detalles completos de la orden
+            const response = await fetch(
+                `https://unidental-backend.onrender.com/api/purchases/orders/${orderId}/`,
+                {
+                    method: "GET",
+                    headers: {
+                        Authorization: `Token ${authToken}`,
+                        "Content-Type": "application/json",
+                    },
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error(
+                    `Error ${response.status}: ${response.statusText}`
+                );
+            }
+
+            const orderDetails = await response.json();
+
+            // Log para debuggear la estructura de datos
+            console.log("🔍 Detalles de la orden recibidos:", orderDetails);
+            console.log("🔍 Items de la orden:", orderDetails.items);
+            console.log("🔍 Destination:", orderDetails.destination);
+
+            // Preparar los datos para pre-llenar en movimientos de stock
+            const stockMovementData = {
+                fromPurchaseOrder: true,
+                orderId: orderId,
+                orderNumber: orderDetails.order_number || orderDetails.id,
+                location:
+                    orderDetails.destination || orderDetails.destination_name,
+                movementType: "in", // Siempre entrada para órdenes recibidas
+                notes: `Entrada por orden de compra #${
+                    orderDetails.order_number || orderDetails.id
+                }${orderDetails.notes ? ` - ${orderDetails.notes}` : ""}`,
+                products: await Promise.all(
+                    orderDetails.items
+                        ? orderDetails.items.map(async (item, index) => {
+                              console.log(`🔍 Procesando item ${index}:`, item);
+                              console.log(
+                                  `🔍 purchase_option_details:`,
+                                  item.purchase_option_details
+                              );
+
+                              // Obtener el ID del producto directamente desde purchase_option_details
+                              const productId =
+                                  item.purchase_option_details?.product ||
+                                  item.product_id ||
+                                  item.product?.id;
+
+                              const productName =
+                                  item.product_name ||
+                                  item.purchase_option_details?.product_name ||
+                                  item.product?.name ||
+                                  "Producto sin nombre";
+
+                              const productSku =
+                                  item.product_sku ||
+                                  item.purchase_option_details?.product_sku ||
+                                  item.product?.sku;
+
+                              const quantity =
+                                  item.quantity_requested ||
+                                  item.quantity ||
+                                  "";
+
+                              // IMPORTANTE: Obtener requires_batch_control desde el API del producto
+                              let requiresBatchControl = false;
+                              let productDetails = null;
+
+                              if (productId) {
+                                  try {
+                                      console.log(
+                                          `🔍 Obteniendo detalles del producto ${productId}...`
+                                      );
+                                      const productResponse = await fetch(
+                                          `https://unidental-backend.onrender.com/api/catalogs/products/${productId}/`,
+                                          {
+                                              headers: {
+                                                  Authorization: `Token ${authToken}`,
+                                                  "Content-Type":
+                                                      "application/json",
+                                              },
+                                          }
+                                      );
+
+                                      if (productResponse.ok) {
+                                          productDetails =
+                                              await productResponse.json();
+                                          requiresBatchControl =
+                                              productDetails.requires_batch_control ||
+                                              false;
+                                          console.log(
+                                              `🔍 Producto ${productId} requires_batch_control:`,
+                                              requiresBatchControl
+                                          );
+                                      } else {
+                                          console.warn(
+                                              `⚠️ No se pudieron obtener detalles del producto ${productId}`
+                                          );
+                                      }
+                                  } catch (error) {
+                                      console.error(
+                                          `❌ Error obteniendo detalles del producto ${productId}:`,
+                                          error
+                                      );
+                                  }
+                              }
+
+                              console.log(`🔍 Producto ${index} mapeado:`, {
+                                  productId,
+                                  productName,
+                                  productSku,
+                                  requiresBatchControl,
+                                  quantity,
+                              });
+
+                              return {
+                                  id: Date.now() + Math.random() + index, // ID único temporal
+                                  product: {
+                                      id: productId,
+                                      name: productName,
+                                      sku: productSku,
+                                      requires_batch_control:
+                                          requiresBatchControl,
+                                  },
+                                  quantity: requiresBatchControl
+                                      ? ""
+                                      : quantity, // Si requiere lotes, no pre-llenar cantidad principal
+                                  requiresBatchControl: requiresBatchControl,
+                                  batchesData: requiresBatchControl
+                                      ? [
+                                            {
+                                                batch_number: "",
+                                                expiry_date: "",
+                                                manufacturing_date: "",
+                                                supplier_reference: "",
+                                                quantity: quantity, // Pre-llenar la cantidad en el primer lote
+                                            },
+                                        ]
+                                      : [],
+                                  isValid: requiresBatchControl ? false : true, // Si requiere lotes, marcar como no válido hasta que se llenen los datos de lote
+                              };
+                          })
+                        : []
+                ),
+            };
+
+            console.log(
+                "🔍 Datos finales para movimientos:",
+                stockMovementData
+            );
+
+            // Navegar a la página de movimientos con los datos
+            navigate("/inventario/movimientos", {
+                state: stockMovementData,
+            });
+        } catch (error) {
+            console.error("Error al obtener detalles de la orden:", error);
+            setSubmitError(
+                `❌ Error al cargar datos para movimientos: ${error.message}`
+            );
+            setIsProcessingRedirect(false);
+        } finally {
+            // El loading se mantiene hasta que se complete la navegación
+            setTimeout(() => setIsProcessingRedirect(false), 1000);
+        }
+    };
+
+    // Función para cerrar el dropdown de estados
+    const closeStatusDropdown = () => {
+        setShowStatusDropdown(null);
+    };
+
+    // Event listener para cerrar dropdown cuando se hace clic fuera
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (
+                showStatusDropdown &&
+                !event.target.closest(".status-dropdown-container")
+            ) {
+                setShowStatusDropdown(null);
+            }
+        };
+
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, [showStatusDropdown]);
 
     return (
         <>
-            <style>
-                {`
-                    @keyframes fadeIn {
-                        from { opacity: 0; transform: scale(0.8); }
-                        to { opacity: 1; transform: scale(1); }
-                    }
-                    
-                    @keyframes slideIn {
-                        from { transform: translateX(-10px); opacity: 0; }
-                        to { transform: translateX(0); opacity: 1; }
-                    }
-                `}
-            </style>
+            <OrdenesDeCompraStyles />
+
             {/* Header Banner */}
             <div
                 style={{
@@ -508,2560 +982,731 @@ const OrdenesDeCompraPage = () => {
                     Órdenes de Compra Registradas
                 </button>
             </div>
+
+            {/* Notificaciones */}
+            {submitError && (
+                <NotificationBanner
+                    type="error"
+                    message={submitError}
+                    onClose={() => setSubmitError("")}
+                />
+            )}
+            {submitSuccess && (
+                <NotificationBanner
+                    type="success"
+                    message={submitSuccess}
+                    onClose={() => setSubmitSuccess("")}
+                />
+            )}
+
             {/* Contenido de la sección activa */}
             {activeSection === "registro" && (
-                <div
-                    style={{
-                        maxWidth: 1400,
-                        margin: "0 auto",
-                        padding: 24,
-                        minHeight: "100vh",
-                    }}
-                >
-                    <h1
-                        style={{
-                            fontSize: 28,
-                            fontWeight: 800,
-                            marginBottom: 40,
-                            textAlign: "center",
-                            color: "#2c3e50",
-                            letterSpacing: "-1px",
-                        }}
-                    >
-                        Registrar Orden de Compra
-                    </h1>
-                    <div
-                        style={{
-                            display: "grid",
-                            gridTemplateColumns: "1fr 400px",
-                            gap: 40,
-                            alignItems: "flex-start",
-                            minHeight: "calc(100vh - 200px)",
-                        }}
-                    >
-                        {/* Columna izquierda: selector y tabla */}
-                        <div
-                            style={{
-                                display: "flex",
-                                flexDirection: "column",
-                                gap: 24,
-                            }}
-                        >
-                            {/* Selector de proveedor */}
-                            <div
-                                style={{
-                                    background: "#fff",
-                                    borderRadius: "8px",
-                                    padding: "20px",
-                                    boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                                    border: "1px solid #dee2e6",
-                                }}
-                            >
-                                <div
-                                    style={{
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: "8px",
-                                        marginBottom: "16px",
-                                        padding: "12px 16px",
-                                        background:
-                                            "linear-gradient(135deg, #3498db 0%, #2c3e50 100%)",
-                                        borderRadius: "8px",
-                                        color: "white",
-                                    }}
-                                >
-                                    <span style={{ fontSize: "18px" }}>🏢</span>
-                                    <h3
-                                        style={{
-                                            fontSize: "16px",
-                                            fontWeight: "700",
-                                            margin: 0,
-                                            color: "white",
-                                        }}
-                                    >
-                                        Seleccionar Proveedor
-                                    </h3>
-                                </div>
-
-                                <div style={{ position: "relative" }}>
-                                    <select
-                                        id="proveedor-select"
-                                        value={
-                                            selectedSupplier
-                                                ? selectedSupplier.id
-                                                : ""
-                                        }
-                                        onChange={(e) => {
-                                            const id = e.target.value;
-                                            const supplier = suppliers.find(
-                                                (s) => String(s.id) === id
-                                            );
-                                            setSelectedSupplier(
-                                                supplier || null
-                                            );
-                                            setSearchMode("supplier");
-                                            setSearchTerm("");
-                                            setSearchResults([]);
-                                        }}
-                                        style={{
-                                            width: "100%",
-                                            padding: "12px 16px",
-                                            borderRadius: "6px",
-                                            border: "2px solid #e3eaf3",
-                                            fontSize: "14px",
-                                            fontWeight: "500",
-                                            color: "#2c3e50",
-                                            background: "#f8f9fa",
-                                            outline: "none",
-                                            transition: "all 0.2s ease",
-                                            appearance: "none",
-                                            cursor: "pointer",
-                                        }}
-                                        onFocus={(e) => {
-                                            e.target.style.borderColor =
-                                                "#3498db";
-                                            e.target.style.backgroundColor =
-                                                "white";
-                                            e.target.style.boxShadow =
-                                                "0 0 0 3px rgba(52, 152, 219, 0.1)";
-                                        }}
-                                        onBlur={(e) => {
-                                            e.target.style.borderColor =
-                                                "#e3eaf3";
-                                            e.target.style.backgroundColor =
-                                                "#f8f9fa";
-                                            e.target.style.boxShadow = "none";
-                                        }}
-                                        disabled={isLoadingSuppliers}
-                                    >
-                                        <option value="">
-                                            Selecciona un proveedor...
-                                        </option>
-                                        {suppliers.map((s) => (
-                                            <option key={s.id} value={s.id}>
-                                                {s.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <span
-                                        style={{
-                                            position: "absolute",
-                                            right: "16px",
-                                            top: "50%",
-                                            transform: "translateY(-50%)",
-                                            pointerEvents: "none",
-                                            color: "#6c757d",
-                                            fontSize: "14px",
-                                            fontWeight: "600",
-                                        }}
-                                    >
-                                        ▼
-                                    </span>
-                                </div>
-
-                                {isLoadingSuppliers && (
-                                    <div
-                                        style={{
-                                            display: "flex",
-                                            alignItems: "center",
-                                            gap: "8px",
-                                            color: "#6c757d",
-                                            fontSize: "14px",
-                                            marginTop: "12px",
-                                            padding: "8px 12px",
-                                            backgroundColor: "#f8f9fa",
-                                            borderRadius: "6px",
-                                            border: "1px solid #e9ecef",
-                                        }}
-                                    >
-                                        <div
-                                            style={{
-                                                width: "16px",
-                                                height: "16px",
-                                                border: "2px solid #e9ecef",
-                                                borderTop: "2px solid #3498db",
-                                                borderRadius: "50%",
-                                                animation:
-                                                    "spin 1s linear infinite",
-                                            }}
-                                        ></div>
-                                        Cargando proveedores...
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Búsqueda directa de productos */}
-                            <div
-                                style={{
-                                    background: "#fff",
-                                    borderRadius: "8px",
-                                    padding: "20px",
-                                    boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                                    border: "1px solid #dee2e6",
-                                }}
-                            >
-                                <div
-                                    style={{
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: "8px",
-                                        marginBottom: "16px",
-                                        padding: "12px 16px",
-                                        background:
-                                            "linear-gradient(135deg, #27ae60 0%, #2c3e50 100%)",
-                                        borderRadius: "8px",
-                                        color: "white",
-                                    }}
-                                >
-                                    <span style={{ fontSize: "18px" }}>🔍</span>
-                                    <h3
-                                        style={{
-                                            fontSize: "16px",
-                                            fontWeight: "700",
-                                            margin: 0,
-                                            color: "white",
-                                        }}
-                                    >
-                                        Buscar Producto
-                                    </h3>
-                                </div>
-
-                                <div style={{ position: "relative" }}>
-                                    <input
-                                        type="text"
-                                        placeholder="Buscar por nombre o SKU..."
-                                        value={searchTerm}
-                                        onChange={(e) => {
-                                            setSearchTerm(e.target.value);
-                                            setSearchMode("product");
-                                            setSelectedSupplier(null);
-                                        }}
-                                        style={{
-                                            width: "100%",
-                                            padding: "12px 16px",
-                                            borderRadius: "6px",
-                                            border: "2px solid #e3eaf3",
-                                            fontSize: "14px",
-                                            fontWeight: "500",
-                                            color: "#2c3e50",
-                                            background: "#f8f9fa",
-                                            outline: "none",
-                                            transition: "all 0.2s ease",
-                                            boxSizing: "border-box",
-                                        }}
-                                        onFocus={(e) => {
-                                            e.target.style.borderColor =
-                                                "#27ae60";
-                                            e.target.style.backgroundColor =
-                                                "white";
-                                            e.target.style.boxShadow =
-                                                "0 0 0 3px rgba(39, 174, 96, 0.1)";
-                                        }}
-                                        onBlur={(e) => {
-                                            e.target.style.borderColor =
-                                                "#e3eaf3";
-                                            e.target.style.backgroundColor =
-                                                "#f8f9fa";
-                                            e.target.style.boxShadow = "none";
-                                        }}
-                                    />
-                                    {isSearching && (
-                                        <div
-                                            style={{
-                                                position: "absolute",
-                                                right: "16px",
-                                                top: "50%",
-                                                transform: "translateY(-50%)",
-                                                width: "16px",
-                                                height: "16px",
-                                                border: "2px solid #e9ecef",
-                                                borderTop: "2px solid #27ae60",
-                                                borderRadius: "50%",
-                                                animation:
-                                                    "spin 1s linear infinite",
-                                            }}
-                                        ></div>
-                                    )}
-                                </div>
-
-                                {searchMode === "product" && (
-                                    <div
-                                        style={{
-                                            marginTop: "12px",
-                                            padding: "8px 12px",
-                                            backgroundColor:
-                                                isLoadingAllProducts
-                                                    ? "#fff3cd"
-                                                    : "#e8f5e9",
-                                            borderRadius: "6px",
-                                            border: isLoadingAllProducts
-                                                ? "1px solid #ffeaa7"
-                                                : "1px solid #c8e6c9",
-                                            color: isLoadingAllProducts
-                                                ? "#856404"
-                                                : "#2e7d32",
-                                            fontSize: "14px",
-                                        }}
-                                    >
-                                        {isLoadingAllProducts
-                                            ? "Cargando productos para búsqueda..."
-                                            : "Listo para buscar productos (búsqueda sin tildes)"}
-                                    </div>
-                                )}
-                            </div>
-                            {/* Tabla de productos */}
-                            <div
-                                style={{
-                                    background: "#fff",
-                                    borderRadius: 12,
-                                    boxShadow:
-                                        "0 4px 16px rgba(52,152,219,0.07)",
-                                    padding: 28,
-                                    border: "1.5px solid #e3eaf3",
-                                    flex: 1,
-                                }}
-                            >
-                                <h2
-                                    style={{
-                                        fontSize: 22,
-                                        fontWeight: 700,
-                                        marginBottom: 24,
-                                        textAlign: "left",
-                                        color: "#2c3e50",
-                                        letterSpacing: "-0.5px",
-                                    }}
-                                >
-                                    {searchMode === "product"
-                                        ? "Opciones de Compra Encontradas"
-                                        : "Productos del Proveedor"}
-                                </h2>
-                                {searchMode === "product" ? (
-                                    // Modo búsqueda directa
-                                    !searchTerm ? (
-                                        <div
-                                            style={{
-                                                color: "#888",
-                                                fontSize: 16,
-                                                textAlign: "center",
-                                                padding: "60px 20px",
-                                            }}
-                                        >
-                                            Ingresa un término de búsqueda para
-                                            encontrar opciones de compra
-                                            <br />
-                                            <small
-                                                style={{
-                                                    fontSize: "14px",
-                                                    color: "#666",
-                                                }}
-                                            >
-                                                (Búsqueda sin tildes - puedes
-                                                escribir "articulador" para
-                                                encontrar "Artículador")
-                                            </small>
-                                        </div>
-                                    ) : isSearching ? (
-                                        <div
-                                            style={{
-                                                color: "#888",
-                                                fontSize: 16,
-                                                textAlign: "center",
-                                                padding: "60px 20px",
-                                            }}
-                                        >
-                                            Buscando opciones de compra...
-                                        </div>
-                                    ) : searchResults.length === 0 ? (
-                                        <div
-                                            style={{
-                                                color: "#888",
-                                                fontSize: 16,
-                                                textAlign: "center",
-                                                padding: "60px 20px",
-                                            }}
-                                        >
-                                            No se encontraron opciones de compra
-                                            para "{searchTerm}"
-                                            <br />
-                                            <small
-                                                style={{
-                                                    fontSize: "14px",
-                                                    color: "#666",
-                                                }}
-                                            >
-                                                (Búsqueda sin tildes - puedes
-                                                escribir "articulador" para
-                                                encontrar "Artículador")
-                                            </small>
-                                        </div>
-                                    ) : (
-                                        <div
-                                            style={{
-                                                borderRadius: 12,
-                                                overflow: "hidden",
-                                                border: "1px solid #e9ecef",
-                                                boxShadow:
-                                                    "0 2px 8px rgba(0,0,0,0.06)",
-                                            }}
-                                        >
-                                            <table
-                                                style={{
-                                                    width: "100%",
-                                                    borderCollapse: "collapse",
-                                                    backgroundColor: "#fff",
-                                                }}
-                                            >
-                                                <thead>
-                                                    <tr
-                                                        style={{
-                                                            background:
-                                                                "linear-gradient(135deg, #27ae60 0%, #2c3e50 100%)",
-                                                            color: "white",
-                                                        }}
-                                                    >
-                                                        <th
-                                                            style={{
-                                                                padding: "16px",
-                                                                textAlign:
-                                                                    "left",
-                                                                fontWeight:
-                                                                    "600",
-                                                            }}
-                                                        >
-                                                            Producto
-                                                        </th>
-
-                                                        <th
-                                                            style={{
-                                                                padding: "16px",
-                                                                textAlign:
-                                                                    "left",
-                                                                fontWeight:
-                                                                    "600",
-                                                            }}
-                                                        >
-                                                            Proveedor
-                                                        </th>
-                                                        <th
-                                                            style={{
-                                                                padding: "16px",
-                                                                textAlign:
-                                                                    "left",
-                                                                fontWeight:
-                                                                    "600",
-                                                            }}
-                                                        >
-                                                            Precio
-                                                        </th>
-                                                        <th
-                                                            style={{
-                                                                padding: "16px",
-                                                                textAlign:
-                                                                    "center",
-                                                                fontWeight:
-                                                                    "600",
-                                                            }}
-                                                        >
-                                                            Acción
-                                                        </th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {searchResults.map(
-                                                        (option) => (
-                                                            <tr
-                                                                key={option.id}
-                                                                style={{
-                                                                    borderBottom:
-                                                                        "1px solid #e9ecef",
-                                                                }}
-                                                            >
-                                                                <td
-                                                                    style={{
-                                                                        padding:
-                                                                            "16px",
-                                                                        color: "#2c3e50",
-                                                                        fontWeight:
-                                                                            "500",
-                                                                    }}
-                                                                >
-                                                                    {option.product_name ||
-                                                                        option
-                                                                            .product
-                                                                            ?.name ||
-                                                                        "-"}
-                                                                </td>
-
-                                                                <td
-                                                                    style={{
-                                                                        padding:
-                                                                            "16px",
-                                                                        color: "#6c757d",
-                                                                    }}
-                                                                >
-                                                                    {option.supplier_name ||
-                                                                        option
-                                                                            .supplier
-                                                                            ?.name ||
-                                                                        "-"}
-                                                                </td>
-                                                                <td
-                                                                    style={{
-                                                                        padding:
-                                                                            "16px",
-                                                                        color: "#2c3e50",
-                                                                        fontWeight:
-                                                                            "600",
-                                                                    }}
-                                                                >
-                                                                    $
-                                                                    {getPurchasePrice(
-                                                                        option
-                                                                    ).toLocaleString()}
-                                                                </td>
-                                                                <td
-                                                                    style={{
-                                                                        padding:
-                                                                            "16px",
-                                                                        textAlign:
-                                                                            "center",
-                                                                    }}
-                                                                >
-                                                                    <button
-                                                                        onClick={() =>
-                                                                            handleAddProduct(
-                                                                                {
-                                                                                    ...option,
-                                                                                    purchase_option:
-                                                                                        option.id,
-                                                                                    product_name:
-                                                                                        option.product_name ||
-                                                                                        option
-                                                                                            .product
-                                                                                            ?.name,
-                                                                                    purchase_price:
-                                                                                        getPurchasePrice(
-                                                                                            option
-                                                                                        ),
-                                                                                }
-                                                                            )
-                                                                        }
-                                                                        style={{
-                                                                            background:
-                                                                                "#27ae60",
-                                                                            color: "white",
-                                                                            border: "none",
-                                                                            borderRadius:
-                                                                                "6px",
-                                                                            padding:
-                                                                                "8px 16px",
-                                                                            fontSize:
-                                                                                "14px",
-                                                                            fontWeight:
-                                                                                "600",
-                                                                            cursor: "pointer",
-                                                                            transition:
-                                                                                "all 0.2s ease",
-                                                                        }}
-                                                                        onMouseOver={(
-                                                                            e
-                                                                        ) =>
-                                                                            (e.target.style.background =
-                                                                                "#229954")
-                                                                        }
-                                                                        onMouseOut={(
-                                                                            e
-                                                                        ) =>
-                                                                            (e.target.style.background =
-                                                                                "#27ae60")
-                                                                        }
-                                                                    >
-                                                                        Agregar
-                                                                    </button>
-                                                                </td>
-                                                            </tr>
-                                                        )
-                                                    )}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    )
-                                ) : // Modo proveedor (funcionalidad existente)
-                                !selectedSupplier ? (
-                                    <div
-                                        style={{
-                                            color: "#888",
-                                            fontSize: 16,
-                                            textAlign: "center",
-                                            padding: "60px 20px",
-                                        }}
-                                    >
-                                        Selecciona un proveedor para ver sus
-                                        productos
-                                    </div>
-                                ) : isLoading ? (
-                                    <div
-                                        style={{
-                                            color: "#888",
-                                            fontSize: 16,
-                                            textAlign: "center",
-                                            padding: "60px 20px",
-                                        }}
-                                    >
-                                        Cargando productos...
-                                    </div>
-                                ) : products.length === 0 ? (
-                                    <div
-                                        style={{
-                                            color: "#888",
-                                            fontSize: 16,
-                                            textAlign: "center",
-                                            padding: "60px 20px",
-                                        }}
-                                    >
-                                        No hay productos para este proveedor.
-                                    </div>
-                                ) : (
-                                    <div
-                                        style={{
-                                            borderRadius: 12,
-                                            overflow: "hidden",
-                                            border: "1px solid #e9ecef",
-                                            boxShadow:
-                                                "0 2px 8px rgba(0,0,0,0.06)",
-                                        }}
-                                    >
-                                        <table
-                                            style={{
-                                                width: "100%",
-                                                borderCollapse: "collapse",
-                                                backgroundColor: "#fff",
-                                            }}
-                                        >
-                                            <thead>
-                                                <tr
-                                                    style={{
-                                                        background:
-                                                            "linear-gradient(135deg, #2c3e50 0%, #34495e 100%)",
-                                                        color: "white",
-                                                    }}
-                                                >
-                                                    <th
-                                                        style={{
-                                                            padding:
-                                                                "16px 12px",
-                                                            textAlign: "left",
-                                                            fontWeight: "600",
-                                                            fontSize: "14px",
-                                                            letterSpacing:
-                                                                "0.5px",
-                                                            textTransform:
-                                                                "uppercase",
-                                                        }}
-                                                    >
-                                                        📦 Nombre
-                                                    </th>
-                                                    <th
-                                                        style={{
-                                                            padding:
-                                                                "16px 12px",
-                                                            textAlign: "left",
-                                                            fontWeight: "600",
-                                                            fontSize: "14px",
-                                                            letterSpacing:
-                                                                "0.5px",
-                                                            textTransform:
-                                                                "uppercase",
-                                                        }}
-                                                    >
-                                                        💰 Precio
-                                                    </th>
-                                                    <th
-                                                        style={{
-                                                            padding:
-                                                                "16px 12px",
-                                                            textAlign: "left",
-                                                            fontWeight: "600",
-                                                            fontSize: "14px",
-                                                            letterSpacing:
-                                                                "0.5px",
-                                                            textTransform:
-                                                                "uppercase",
-                                                        }}
-                                                    >
-                                                        🏷️ Categoría
-                                                    </th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {products.map((item, index) => {
-                                                    const added =
-                                                        orderItems.some(
-                                                            (oi) =>
-                                                                oi.product
-                                                                    .id ===
-                                                                item.id
-                                                        );
-                                                    return (
-                                                        <tr
-                                                            key={item.id}
-                                                            onClick={() =>
-                                                                !added &&
-                                                                handleAddProduct(
-                                                                    item
-                                                                )
-                                                            }
-                                                            style={{
-                                                                backgroundColor:
-                                                                    added
-                                                                        ? "linear-gradient(135deg, #e8f4fd 0%, #d1ecf1 100%)"
-                                                                        : index %
-                                                                              2 ===
-                                                                          0
-                                                                        ? "#fff"
-                                                                        : "#f8f9fa",
-                                                                cursor: added
-                                                                    ? "not-allowed"
-                                                                    : "pointer",
-                                                                opacity: added
-                                                                    ? 1
-                                                                    : 1,
-                                                                transition:
-                                                                    "all 0.3s ease",
-                                                                position:
-                                                                    "relative",
-                                                                borderLeft:
-                                                                    added
-                                                                        ? "4px solid #3498db"
-                                                                        : "none",
-                                                                boxShadow: added
-                                                                    ? "0 4px 12px rgba(52, 152, 219, 0.15)"
-                                                                    : "none",
-                                                            }}
-                                                            onMouseEnter={(
-                                                                e
-                                                            ) => {
-                                                                if (!added) {
-                                                                    e.currentTarget.style.background =
-                                                                        "#f0f7ff";
-                                                                    e.currentTarget.style.transform =
-                                                                        "translateX(2px)";
-                                                                }
-                                                            }}
-                                                            onMouseLeave={(
-                                                                e
-                                                            ) => {
-                                                                if (!added) {
-                                                                    e.currentTarget.style.background =
-                                                                        index %
-                                                                            2 ===
-                                                                        0
-                                                                            ? "#fff"
-                                                                            : "#f8f9fa";
-                                                                    e.currentTarget.style.transform =
-                                                                        "translateX(0)";
-                                                                }
-                                                            }}
-                                                        >
-                                                            <td
-                                                                style={{
-                                                                    padding:
-                                                                        "16px 12px",
-                                                                    borderBottom:
-                                                                        "1px solid #e9ecef",
-                                                                    fontSize:
-                                                                        "14px",
-                                                                    fontWeight:
-                                                                        "600",
-                                                                    color: "#2c3e50",
-                                                                    position:
-                                                                        "relative",
-                                                                }}
-                                                            >
-                                                                <div
-                                                                    style={{
-                                                                        display:
-                                                                            "flex",
-                                                                        alignItems:
-                                                                            "center",
-                                                                        gap: "8px",
-                                                                    }}
-                                                                >
-                                                                    {added && (
-                                                                        <span
-                                                                            style={{
-                                                                                fontSize:
-                                                                                    "16px",
-                                                                                color: "#27ae60",
-                                                                                fontWeight:
-                                                                                    "700",
-                                                                                animation:
-                                                                                    "fadeIn 0.3s ease",
-                                                                            }}
-                                                                        >
-                                                                            ✅
-                                                                        </span>
-                                                                    )}
-                                                                    <span
-                                                                        style={{
-                                                                            flex: 1,
-                                                                        }}
-                                                                    >
-                                                                        {item.product_name ||
-                                                                            item.name}
-                                                                    </span>
-                                                                </div>
-                                                            </td>
-                                                            <td
-                                                                style={{
-                                                                    padding:
-                                                                        "16px 12px",
-                                                                    borderBottom:
-                                                                        "1px solid #e9ecef",
-                                                                    fontSize:
-                                                                        "16px",
-                                                                    fontWeight:
-                                                                        "700",
-                                                                    color: added
-                                                                        ? "#2ecc71"
-                                                                        : "#27ae60",
-                                                                    textShadow:
-                                                                        added
-                                                                            ? "0 1px 2px rgba(46, 204, 113, 0.2)"
-                                                                            : "none",
-                                                                }}
-                                                            >
-                                                                {item.purchase_price
-                                                                    ? `$${item.purchase_price}`
-                                                                    : "-"}
-                                                            </td>
-                                                            <td
-                                                                style={{
-                                                                    padding:
-                                                                        "16px 12px",
-                                                                    borderBottom:
-                                                                        "1px solid #e9ecef",
-                                                                    fontSize:
-                                                                        "14px",
-                                                                    fontWeight:
-                                                                        "500",
-                                                                    color: "#6c757d",
-                                                                }}
-                                                            >
-                                                                {item.category_name ||
-                                                                    "-"}
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                        {/* Columna derecha: resumen de la orden */}
-                        <div style={{ position: "sticky", top: 24 }}>
-                            <div
-                                style={{
-                                    backgroundColor: "white",
-                                    borderRadius: "8px",
-                                    padding: "20px",
-                                    boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                                    border: "1px solid #dee2e6",
-                                    position: "sticky",
-                                    top: "20px",
-                                    minHeight: "calc(100vh - 200px)",
-                                    display: "flex",
-                                    flexDirection: "column",
-                                }}
-                            >
-                                <h3
-                                    style={{
-                                        color: "#2c3e50",
-                                        fontSize: "18px",
-                                        fontWeight: "600",
-                                        margin: "0 0 20px 0",
-                                        textAlign: "center",
-                                    }}
-                                >
-                                    Resumen de la Orden de Compra
-                                </h3>
-                                {/* Campo para seleccionar sede de destino */}
-                                <div style={{ marginBottom: "20px" }}>
-                                    <label
-                                        htmlFor="sede-destino-select"
-                                        style={{
-                                            fontSize: "14px",
-                                            fontWeight: "600",
-                                            color: "#2c3e50",
-                                            marginBottom: "8px",
-                                            display: "block",
-                                        }}
-                                    >
-                                        📍 Sede de destino de la orden
-                                    </label>
-                                    <select
-                                        id="sede-destino-select"
-                                        value={selectedLocation}
-                                        onChange={(e) =>
-                                            setSelectedLocation(e.target.value)
-                                        }
-                                        disabled={isLoadingLocations}
-                                        style={{
-                                            width: "100%",
-                                            padding: "12px 14px",
-                                            borderRadius: "8px",
-                                            border: "2px solid #e9ecef",
-                                            fontSize: "14px",
-                                            backgroundColor: isLoadingLocations
-                                                ? "#f8f9fa"
-                                                : "#fff",
-                                            transition:
-                                                "border-color 0.2s ease",
-                                            opacity: isLoadingLocations
-                                                ? 0.7
-                                                : 1,
-                                            boxSizing: "border-box",
-                                            marginBottom: "8px",
-                                        }}
-                                        required
-                                    >
-                                        <option value="">
-                                            {isLoadingLocations
-                                                ? "Cargando sedes..."
-                                                : "Seleccionar sede de destino"}
-                                        </option>
-                                        {locations.map((loc) => (
-                                            <option key={loc.id} value={loc.id}>
-                                                {loc.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                {/* NUEVO: campo para notas */}
-                                <div style={{ marginBottom: "16px" }}>
-                                    <label
-                                        htmlFor="order-notes"
-                                        style={{
-                                            fontSize: "14px",
-                                            fontWeight: "600",
-                                            color: "#2c3e50",
-                                            marginBottom: "8px",
-                                            display: "block",
-                                        }}
-                                    >
-                                        📝 Notas de la orden
-                                    </label>
-                                    <textarea
-                                        id="order-notes"
-                                        value={notes}
-                                        onChange={(e) =>
-                                            setNotes(e.target.value)
-                                        }
-                                        rows={2}
-                                        style={{
-                                            width: "100%",
-                                            maxWidth: "100%",
-                                            padding: "10px 14px",
-                                            borderRadius: "8px",
-                                            border: "2px solid #e9ecef",
-                                            fontSize: "14px",
-                                            backgroundColor: "#fff",
-                                            resize: "vertical",
-                                            boxSizing: "border-box",
-                                            wordWrap: "break-word",
-                                            overflowWrap: "break-word",
-                                        }}
-                                        placeholder="Notas adicionales para la orden (opcional)"
-                                    />
-                                </div>
-                                {/* Feedback de error o éxito */}
-                                {submitError && (
-                                    <div
-                                        style={{
-                                            color: "#c0392b",
-                                            marginBottom: 12,
-                                            fontWeight: 600,
-                                        }}
-                                    >
-                                        {submitError}
-                                    </div>
-                                )}
-                                {submitSuccess && (
-                                    <div
-                                        style={{
-                                            color: "#27ae60",
-                                            marginBottom: 12,
-                                            fontWeight: 600,
-                                        }}
-                                    >
-                                        {submitSuccess}
-                                    </div>
-                                )}
-                                {/* Order Details */}
-                                <div style={{ marginBottom: "20px" }}>
-                                    {/* Items Count */}
-                                    <div
-                                        style={{
-                                            display: "flex",
-                                            justifyContent: "space-between",
-                                            alignItems: "center",
-                                            padding: "8px 0",
-                                            borderBottom: "1px solid #f8f9fa",
-                                        }}
-                                    >
-                                        <span
-                                            style={{
-                                                fontSize: "14px",
-                                                color: "#6c757d",
-                                            }}
-                                        >
-                                            Productos:
-                                        </span>
-                                        <span
-                                            style={{
-                                                fontSize: "14px",
-                                                fontWeight: "600",
-                                                color: "#2c3e50",
-                                            }}
-                                        >
-                                            {orderItems.length}{" "}
-                                            {orderItems.length === 1
-                                                ? "producto"
-                                                : "productos"}
-                                        </span>
-                                    </div>
-
-                                    {/* Total Quantity */}
-                                    <div
-                                        style={{
-                                            display: "flex",
-                                            justifyContent: "space-between",
-                                            alignItems: "center",
-                                            padding: "8px 0",
-                                            borderBottom: "1px solid #f8f9fa",
-                                        }}
-                                    >
-                                        <span
-                                            style={{
-                                                fontSize: "14px",
-                                                color: "#6c757d",
-                                            }}
-                                        >
-                                            Cantidad total:
-                                        </span>
-                                        <span
-                                            style={{
-                                                fontSize: "14px",
-                                                fontWeight: "600",
-                                                color: "#2c3e50",
-                                            }}
-                                        >
-                                            {orderItems.reduce(
-                                                (sum, item) =>
-                                                    sum + item.quantity,
-                                                0
-                                            )}{" "}
-                                            {orderItems.reduce(
-                                                (sum, item) =>
-                                                    sum + item.quantity,
-                                                0
-                                            ) === 1
-                                                ? "unidad"
-                                                : "unidades"}
-                                        </span>
-                                    </div>
-
-                                    {/* Supplier */}
-                                    <div
-                                        style={{
-                                            display: "flex",
-                                            justifyContent: "space-between",
-                                            alignItems: "center",
-                                            padding: "8px 0",
-                                        }}
-                                    >
-                                        <span
-                                            style={{
-                                                fontSize: "14px",
-                                                color: "#6c757d",
-                                            }}
-                                        >
-                                            Proveedor:
-                                        </span>
-                                        <span
-                                            style={{
-                                                fontSize: "14px",
-                                                fontWeight: "600",
-                                                color: "#2c3e50",
-                                            }}
-                                        >
-                                            {selectedSupplier
-                                                ? `🏢 ${selectedSupplier.name}`
-                                                : "❌ No seleccionado"}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                {/* Products List */}
-                                {orderItems.length > 0 && (
-                                    <div style={{ marginBottom: "20px" }}>
-                                        <div
-                                            style={{
-                                                display: "flex",
-                                                alignItems: "center",
-                                                gap: "8px",
-                                                marginBottom: "16px",
-                                                padding: "12px 16px",
-                                                backgroundColor:
-                                                    "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                                                background:
-                                                    "linear-gradient(135deg, #3498db 0%, #2c3e50 100%)",
-                                                borderRadius: "8px",
-                                                color: "white",
-                                            }}
-                                        >
-                                            <span style={{ fontSize: "18px" }}>
-                                                📦
-                                            </span>
-                                            <h4
-                                                style={{
-                                                    fontSize: "16px",
-                                                    fontWeight: "700",
-                                                    margin: 0,
-                                                    color: "white",
-                                                }}
-                                            >
-                                                Productos en la orden (
-                                                {orderItems.length})
-                                            </h4>
-                                        </div>
-                                        <div
-                                            style={{
-                                                maxHeight: "350px",
-                                                overflowY: "auto",
-                                                padding: "4px",
-                                            }}
-                                        >
-                                            {orderItems.map(
-                                                (
-                                                    { product, quantity },
-                                                    index
-                                                ) => (
-                                                    <div
-                                                        key={product.id}
-                                                        style={{
-                                                            padding: "16px",
-                                                            border: "1px solid #e3eaf3",
-                                                            borderRadius:
-                                                                "12px",
-                                                            marginBottom:
-                                                                "12px",
-                                                            backgroundColor:
-                                                                "white",
-                                                            boxShadow:
-                                                                "0 2px 8px rgba(0,0,0,0.06)",
-                                                            transition:
-                                                                "all 0.2s ease",
-                                                            position:
-                                                                "relative",
-                                                            overflow: "hidden",
-                                                        }}
-                                                    >
-                                                        {/* Product Header */}
-                                                        <div
-                                                            style={{
-                                                                display: "flex",
-                                                                justifyContent:
-                                                                    "space-between",
-                                                                alignItems:
-                                                                    "flex-start",
-                                                                marginBottom:
-                                                                    "12px",
-                                                            }}
-                                                        >
-                                                            <div
-                                                                style={{
-                                                                    flex: 1,
-                                                                }}
-                                                            >
-                                                                <div
-                                                                    style={{
-                                                                        fontSize:
-                                                                            "15px",
-                                                                        fontWeight:
-                                                                            "700",
-                                                                        color: "#2c3e50",
-                                                                        marginBottom:
-                                                                            "4px",
-                                                                        lineHeight:
-                                                                            "1.3",
-                                                                    }}
-                                                                >
-                                                                    {product.product_name ||
-                                                                        product.name}
-                                                                </div>
-                                                                {product.category_name && (
-                                                                    <div
-                                                                        style={{
-                                                                            fontSize:
-                                                                                "12px",
-                                                                            color: "#6c757d",
-                                                                            backgroundColor:
-                                                                                "#f8f9fa",
-                                                                            padding:
-                                                                                "4px 8px",
-                                                                            borderRadius:
-                                                                                "12px",
-                                                                            display:
-                                                                                "inline-block",
-                                                                            border: "1px solid #e9ecef",
-                                                                        }}
-                                                                    >
-                                                                        🏷️{" "}
-                                                                        {
-                                                                            product.category_name
-                                                                        }
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                            <button
-                                                                onClick={() =>
-                                                                    handleRemoveProduct(
-                                                                        product.id
-                                                                    )
-                                                                }
-                                                                style={{
-                                                                    background:
-                                                                        "linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)",
-                                                                    border: "none",
-                                                                    color: "white",
-                                                                    cursor: "pointer",
-                                                                    fontSize:
-                                                                        "14px",
-                                                                    fontWeight:
-                                                                        "700",
-                                                                    padding:
-                                                                        "6px 10px",
-                                                                    borderRadius:
-                                                                        "20px",
-                                                                    minWidth:
-                                                                        "32px",
-                                                                    height: "32px",
-                                                                    display:
-                                                                        "flex",
-                                                                    alignItems:
-                                                                        "center",
-                                                                    justifyContent:
-                                                                        "center",
-                                                                    transition:
-                                                                        "all 0.2s ease",
-                                                                    boxShadow:
-                                                                        "0 2px 4px rgba(231, 76, 60, 0.3)",
-                                                                }}
-                                                                onMouseEnter={(
-                                                                    e
-                                                                ) => {
-                                                                    e.target.style.transform =
-                                                                        "scale(1.1)";
-                                                                    e.target.style.boxShadow =
-                                                                        "0 4px 8px rgba(231, 76, 60, 0.4)";
-                                                                }}
-                                                                onMouseLeave={(
-                                                                    e
-                                                                ) => {
-                                                                    e.target.style.transform =
-                                                                        "scale(1)";
-                                                                    e.target.style.boxShadow =
-                                                                        "0 2px 4px rgba(231, 76, 60, 0.3)";
-                                                                }}
-                                                                title="Quitar producto"
-                                                            >
-                                                                ✕
-                                                            </button>
-                                                        </div>
-
-                                                        {/* Product Details */}
-                                                        <div
-                                                            style={{
-                                                                display: "grid",
-                                                                gridTemplateColumns:
-                                                                    "1fr auto",
-                                                                gap: "16px",
-                                                                alignItems:
-                                                                    "center",
-                                                            }}
-                                                        >
-                                                            {/* Quantity Section */}
-                                                            <div
-                                                                style={{
-                                                                    display:
-                                                                        "flex",
-                                                                    alignItems:
-                                                                        "center",
-                                                                    gap: "12px",
-                                                                }}
-                                                            >
-                                                                <div
-                                                                    style={{
-                                                                        display:
-                                                                            "flex",
-                                                                        flexDirection:
-                                                                            "column",
-                                                                        gap: "4px",
-                                                                    }}
-                                                                >
-                                                                    <label
-                                                                        style={{
-                                                                            fontSize:
-                                                                                "12px",
-                                                                            fontWeight:
-                                                                                "600",
-                                                                            color: "#495057",
-                                                                            textTransform:
-                                                                                "uppercase",
-                                                                            letterSpacing:
-                                                                                "0.5px",
-                                                                        }}
-                                                                    >
-                                                                        Cantidad
-                                                                    </label>
-                                                                    <div
-                                                                        style={{
-                                                                            display:
-                                                                                "flex",
-                                                                            alignItems:
-                                                                                "center",
-                                                                            gap: "8px",
-                                                                        }}
-                                                                    >
-                                                                        <button
-                                                                            onClick={() =>
-                                                                                handleChangeQuantity(
-                                                                                    product.id,
-                                                                                    Math.max(
-                                                                                        1,
-                                                                                        quantity -
-                                                                                            1
-                                                                                    )
-                                                                                )
-                                                                            }
-                                                                            style={{
-                                                                                background:
-                                                                                    "linear-gradient(135deg, #6c757d 0%, #495057 100%)",
-                                                                                border: "none",
-                                                                                color: "white",
-                                                                                cursor: "pointer",
-                                                                                fontSize:
-                                                                                    "16px",
-                                                                                fontWeight:
-                                                                                    "700",
-                                                                                width: "28px",
-                                                                                height: "28px",
-                                                                                borderRadius:
-                                                                                    "6px",
-                                                                                display:
-                                                                                    "flex",
-                                                                                alignItems:
-                                                                                    "center",
-                                                                                justifyContent:
-                                                                                    "center",
-                                                                                transition:
-                                                                                    "all 0.2s ease",
-                                                                            }}
-                                                                            onMouseEnter={(
-                                                                                e
-                                                                            ) => {
-                                                                                e.target.style.transform =
-                                                                                    "scale(1.1)";
-                                                                            }}
-                                                                            onMouseLeave={(
-                                                                                e
-                                                                            ) => {
-                                                                                e.target.style.transform =
-                                                                                    "scale(1)";
-                                                                            }}
-                                                                        >
-                                                                            -
-                                                                        </button>
-                                                                        <input
-                                                                            type="number"
-                                                                            min={
-                                                                                1
-                                                                            }
-                                                                            value={
-                                                                                quantity
-                                                                            }
-                                                                            onChange={(
-                                                                                e
-                                                                            ) =>
-                                                                                handleChangeQuantity(
-                                                                                    product.id,
-                                                                                    e
-                                                                                        .target
-                                                                                        .value
-                                                                                )
-                                                                            }
-                                                                            style={{
-                                                                                width: "60px",
-                                                                                padding:
-                                                                                    "8px 12px",
-                                                                                borderRadius:
-                                                                                    "8px",
-                                                                                border: "2px solid #e3eaf3",
-                                                                                fontSize:
-                                                                                    "14px",
-                                                                                fontWeight:
-                                                                                    "600",
-                                                                                textAlign:
-                                                                                    "center",
-                                                                                backgroundColor:
-                                                                                    "#f8f9fa",
-                                                                                color: "#2c3e50",
-                                                                                transition:
-                                                                                    "all 0.2s ease",
-                                                                            }}
-                                                                            onFocus={(
-                                                                                e
-                                                                            ) => {
-                                                                                e.target.style.borderColor =
-                                                                                    "#3498db";
-                                                                                e.target.style.backgroundColor =
-                                                                                    "white";
-                                                                                e.target.style.boxShadow =
-                                                                                    "0 0 0 3px rgba(52, 152, 219, 0.1)";
-                                                                            }}
-                                                                            onBlur={(
-                                                                                e
-                                                                            ) => {
-                                                                                e.target.style.borderColor =
-                                                                                    "#e3eaf3";
-                                                                                e.target.style.backgroundColor =
-                                                                                    "#f8f9fa";
-                                                                                e.target.style.boxShadow =
-                                                                                    "none";
-                                                                            }}
-                                                                        />
-                                                                        <button
-                                                                            onClick={() =>
-                                                                                handleChangeQuantity(
-                                                                                    product.id,
-                                                                                    quantity +
-                                                                                        1
-                                                                                )
-                                                                            }
-                                                                            style={{
-                                                                                background:
-                                                                                    "linear-gradient(135deg, #27ae60 0%, #2ecc71 100%)",
-                                                                                border: "none",
-                                                                                color: "white",
-                                                                                cursor: "pointer",
-                                                                                fontSize:
-                                                                                    "16px",
-                                                                                fontWeight:
-                                                                                    "700",
-                                                                                width: "28px",
-                                                                                height: "28px",
-                                                                                borderRadius:
-                                                                                    "6px",
-                                                                                display:
-                                                                                    "flex",
-                                                                                alignItems:
-                                                                                    "center",
-                                                                                justifyContent:
-                                                                                    "center",
-                                                                                transition:
-                                                                                    "all 0.2s ease",
-                                                                            }}
-                                                                            onMouseEnter={(
-                                                                                e
-                                                                            ) => {
-                                                                                e.target.style.transform =
-                                                                                    "scale(1.1)";
-                                                                            }}
-                                                                            onMouseLeave={(
-                                                                                e
-                                                                            ) => {
-                                                                                e.target.style.transform =
-                                                                                    "scale(1)";
-                                                                            }}
-                                                                        >
-                                                                            +
-                                                                        </button>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-
-                                                            {/* Price Section */}
-                                                            <div
-                                                                style={{
-                                                                    display:
-                                                                        "flex",
-                                                                    flexDirection:
-                                                                        "column",
-                                                                    alignItems:
-                                                                        "flex-end",
-                                                                    gap: "4px",
-                                                                }}
-                                                            >
-                                                                <div
-                                                                    style={{
-                                                                        fontSize:
-                                                                            "12px",
-                                                                        color: "#6c757d",
-                                                                        fontWeight:
-                                                                            "500",
-                                                                    }}
-                                                                >
-                                                                    Precio
-                                                                    unitario
-                                                                </div>
-                                                                <div
-                                                                    style={{
-                                                                        fontSize:
-                                                                            "14px",
-                                                                        fontWeight:
-                                                                            "600",
-                                                                        color: "#495057",
-                                                                    }}
-                                                                >
-                                                                    $
-                                                                    {product.purchase_price
-                                                                        ? parseFloat(
-                                                                              product.purchase_price
-                                                                          ).toFixed(
-                                                                              2
-                                                                          )
-                                                                        : "0.00"}
-                                                                </div>
-                                                                <div
-                                                                    style={{
-                                                                        fontSize:
-                                                                            "18px",
-                                                                        fontWeight:
-                                                                            "700",
-                                                                        color: "#27ae60",
-                                                                        padding:
-                                                                            "8px 12px",
-                                                                        backgroundColor:
-                                                                            "#d5edda",
-                                                                        borderRadius:
-                                                                            "8px",
-                                                                        border: "2px solid #c3e6cb",
-                                                                    }}
-                                                                >
-                                                                    $
-                                                                    {product.purchase_price
-                                                                        ? (
-                                                                              parseFloat(
-                                                                                  product.purchase_price
-                                                                              ) *
-                                                                              quantity
-                                                                          ).toFixed(
-                                                                              2
-                                                                          )
-                                                                        : "0.00"}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                )
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Price Breakdown */}
-                                <div
-                                    style={{
-                                        borderTop: "2px solid #2c3e50",
-                                        paddingTop: "15px",
-                                        marginBottom: "20px",
-                                    }}
-                                >
-                                    {/* Subtotal */}
-                                    <div
-                                        style={{
-                                            display: "flex",
-                                            justifyContent: "space-between",
-                                            alignItems: "center",
-                                            padding: "8px 0",
-                                        }}
-                                    >
-                                        <span
-                                            style={{
-                                                fontSize: "14px",
-                                                color: "#6c757d",
-                                            }}
-                                        >
-                                            Subtotal:
-                                        </span>
-                                        <span
-                                            style={{
-                                                fontSize: "14px",
-                                                fontWeight: "600",
-                                                color: "#2c3e50",
-                                            }}
-                                        >
-                                            ${total.toFixed(2)}
-                                        </span>
-                                    </div>
-
-                                    {/* Total */}
-                                    <div
-                                        style={{
-                                            display: "flex",
-                                            justifyContent: "space-between",
-                                            alignItems: "center",
-                                            padding: "12px 0",
-                                            borderTop: "1px solid #dee2e6",
-                                            marginTop: "8px",
-                                        }}
-                                    >
-                                        <span
-                                            style={{
-                                                fontSize: "16px",
-                                                fontWeight: "600",
-                                                color: "#2c3e50",
-                                            }}
-                                        >
-                                            Total:
-                                        </span>
-                                        <span
-                                            style={{
-                                                fontSize: "20px",
-                                                fontWeight: "700",
-                                                color: "#3498db",
-                                            }}
-                                        >
-                                            ${total.toFixed(2)}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                {/* Purchase Order Badge */}
-                                <div
-                                    style={{
-                                        padding: "15px",
-                                        backgroundColor: "#f8f9fa",
-                                        borderRadius: "6px",
-                                        marginBottom: "20px",
-                                        textAlign: "center",
-                                    }}
-                                >
-                                    <div
-                                        style={{
-                                            fontSize: "24px",
-                                            marginBottom: "8px",
-                                        }}
-                                    >
-                                        📋
-                                    </div>
-                                    <div
-                                        style={{
-                                            fontSize: "14px",
-                                            fontWeight: "600",
-                                            color: "#2c3e50",
-                                            marginBottom: "4px",
-                                        }}
-                                    >
-                                        Orden de Compra
-                                    </div>
-                                    <div
-                                        style={{
-                                            fontSize: "12px",
-                                            color: "#3498db",
-                                        }}
-                                    >
-                                        📄 Se generará orden después del
-                                        registro
-                                    </div>
-                                </div>
-
-                                {/* Quick Stats */}
-                                <div
-                                    style={{
-                                        display: "grid",
-                                        gridTemplateColumns: "1fr 1fr",
-                                        gap: "12px",
-                                        marginBottom: "20px",
-                                    }}
-                                >
-                                    <div
-                                        style={{
-                                            backgroundColor: "#e8f4fd",
-                                            borderRadius: "6px",
-                                            padding: "12px",
-                                            textAlign: "center",
-                                            border: "1px solid #3498db",
-                                        }}
-                                    >
-                                        <div
-                                            style={{
-                                                fontSize: "18px",
-                                                fontWeight: "700",
-                                                color: "#3498db",
-                                            }}
-                                        >
-                                            {orderItems.length}
-                                        </div>
-                                        <div
-                                            style={{
-                                                fontSize: "12px",
-                                                color: "#2c3e50",
-                                            }}
-                                        >
-                                            Productos
-                                        </div>
-                                    </div>
-                                    <div
-                                        style={{
-                                            backgroundColor: "#d5edda",
-                                            borderRadius: "6px",
-                                            padding: "12px",
-                                            textAlign: "center",
-                                            border: "1px solid #27ae60",
-                                        }}
-                                    >
-                                        <div
-                                            style={{
-                                                fontSize: "18px",
-                                                fontWeight: "700",
-                                                color: "#27ae60",
-                                            }}
-                                        >
-                                            {orderItems.reduce(
-                                                (sum, item) =>
-                                                    sum + item.quantity,
-                                                0
-                                            )}
-                                        </div>
-                                        <div
-                                            style={{
-                                                fontSize: "12px",
-                                                color: "#2c3e50",
-                                            }}
-                                        >
-                                            Unidades
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Total Display - Large */}
-                                <div
-                                    style={{
-                                        background:
-                                            "linear-gradient(135deg, #3498db 0%, #2c3e50 100%)",
-                                        borderRadius: "8px",
-                                        padding: "20px",
-                                        color: "white",
-                                        textAlign: "center",
-                                        marginBottom: "20px",
-                                    }}
-                                >
-                                    <div
-                                        style={{
-                                            fontSize: "14px",
-                                            opacity: "0.9",
-                                            marginBottom: "4px",
-                                        }}
-                                    >
-                                        Total de la Orden
-                                    </div>
-                                    <div
-                                        style={{
-                                            fontSize: "28px",
-                                            fontWeight: "700",
-                                        }}
-                                    >
-                                        ${total.toFixed(2)}
-                                    </div>
-                                    <div
-                                        style={{
-                                            fontSize: "12px",
-                                            opacity: "0.8",
-                                            marginTop: "4px",
-                                        }}
-                                    >
-                                        Orden de compra
-                                    </div>
-                                </div>
-
-                                {/* Submit Button */}
-                                <button
-                                    onClick={handleCreateOrder}
-                                    disabled={
-                                        !selectedSupplier ||
-                                        orderItems.length === 0 ||
-                                        !selectedLocation ||
-                                        isSubmitting
-                                    }
-                                    style={{
-                                        width: "100%",
-                                        display: "flex",
-                                        justifyContent: "center",
-                                        alignItems: "center",
-                                        padding: "15px",
-                                        fontSize: "16px",
-                                        fontWeight: "600",
-                                        borderRadius: "6px",
-                                        border: "none",
-                                        cursor:
-                                            !selectedSupplier ||
-                                            orderItems.length === 0 ||
-                                            !selectedLocation ||
-                                            isSubmitting
-                                                ? "not-allowed"
-                                                : "pointer",
-                                        transition: "all 0.2s ease",
-                                        backgroundColor:
-                                            !selectedSupplier ||
-                                            orderItems.length === 0 ||
-                                            !selectedLocation ||
-                                            isSubmitting
-                                                ? "#95a5a6"
-                                                : "#27ae60",
-                                        color: "white",
-                                        opacity:
-                                            !selectedSupplier ||
-                                            orderItems.length === 0 ||
-                                            !selectedLocation ||
-                                            isSubmitting
-                                                ? 0.7
-                                                : 1,
-                                    }}
-                                >
-                                    {isSubmitting
-                                        ? "Enviando..."
-                                        : "✅ Crear Orden de Compra"}
-                                </button>
-
-                                {/* Help Text */}
-                                <div
-                                    style={{
-                                        fontSize: "12px",
-                                        color: "#6c757d",
-                                        textAlign: "center",
-                                        marginTop: "12px",
-                                    }}
-                                >
-                                    {!selectedSupplier
-                                        ? "Seleccione un proveedor y agregue productos para continuar"
-                                        : orderItems.length === 0
-                                        ? "Agregue productos para continuar"
-                                        : "Verifique todos los datos antes de crear la orden"}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <RegistrarOrden
+                    suppliers={suppliers}
+                    selectedSupplier={selectedSupplier}
+                    setSelectedSupplier={setSelectedSupplier}
+                    isLoadingSuppliers={isLoadingSuppliers}
+                    searchMode={searchMode}
+                    setSearchMode={setSearchMode}
+                    setSearchTerm={setSearchTerm}
+                    setSearchResults={setSearchResults}
+                    handleAddProduct={handleAddProduct}
+                    orderItems={orderItems}
+                    handleRemoveProduct={handleRemoveProduct}
+                    handleChangeQuantity={handleChangeQuantity}
+                    getPurchasePrice={getPurchasePrice}
+                    clearOrder={clearOrder}
+                    selectedLocation={selectedLocation}
+                    setSelectedLocation={setSelectedLocation}
+                    locations={locations}
+                    isLoadingLocations={isLoadingLocations}
+                    handleCreateOrder={handleCreateOrder}
+                    isCreatingOrder={isCreatingOrder}
+                    products={products}
+                    isLoading={isLoading}
+                    notes={notes}
+                    setNotes={setNotes}
+                    shouldGenerateOrder={shouldGenerateOrder}
+                    setShouldGenerateOrder={setShouldGenerateOrder}
+                />
             )}
+
             {activeSection === "otra" && (
                 <div
                     style={{
                         maxWidth: 1200,
                         margin: "0 auto",
-                        padding: 48,
-                        color: "#222",
+                        padding: "24px",
                     }}
                 >
                     <h2
                         style={{
-                            fontWeight: 800,
-                            fontSize: 28,
-                            marginBottom: 24,
+                            fontSize: "24px",
+                            fontWeight: "700",
+                            color: "#2c3e50",
+                            marginBottom: "24px",
                             textAlign: "center",
                         }}
                     >
                         Órdenes de Compra Registradas
                     </h2>
-                    {ordersLoading ? (
+
+                    {ordersError && (
                         <div
                             style={{
-                                textAlign: "center",
-                                color: "#888",
-                                fontSize: 18,
-                                padding: 40,
+                                padding: "16px",
+                                backgroundColor: "#fee2e2",
+                                borderRadius: "8px",
+                                color: "#dc2626",
+                                marginBottom: "24px",
+                                border: "1px solid #fecaca",
                             }}
                         >
-                            Cargando órdenes...
+                            ❌ {ordersError}
                         </div>
-                    ) : ordersError ? (
+                    )}
+
+                    {isLoadingOrders ? (
                         <div
                             style={{
-                                textAlign: "center",
-                                color: "#c0392b",
-                                fontWeight: 600,
-                                fontSize: 18,
-                                padding: 40,
+                                display: "flex",
+                                justifyContent: "center",
+                                padding: "40px",
                             }}
                         >
-                            {ordersError}
+                            <div className="custom-loader"></div>
                         </div>
                     ) : (
                         <>
-                            <table
+                            {/* Tabla de órdenes */}
+                            <div
                                 style={{
-                                    width: "100%",
-                                    borderCollapse: "collapse",
-                                    background: "#fff",
-                                    borderRadius: "16px",
+                                    background: "white",
+                                    borderRadius: "12px",
                                     overflow: "hidden",
-                                    boxShadow: "0 8px 32px rgba(44,62,80,0.12)",
-                                    marginBottom: 32,
-                                    border: "1px solid #e9ecef",
+                                    boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
+                                    border: "1px solid #e3eaf3",
                                 }}
                             >
-                                <thead>
-                                    <tr
-                                        style={{
-                                            background:
-                                                "linear-gradient(135deg, #2c3e50 0%, #34495e 100%)",
-                                            color: "white",
-                                        }}
-                                    >
-                                        <th
+                                <table
+                                    style={{
+                                        width: "100%",
+                                        borderCollapse: "collapse",
+                                    }}
+                                >
+                                    <thead>
+                                        <tr
                                             style={{
-                                                padding: "20px 16px",
-                                                textAlign: "left",
-                                                fontWeight: "700",
-                                                fontSize: "14px",
-                                                letterSpacing: "0.5px",
-                                                textTransform: "uppercase",
-                                                borderBottom:
-                                                    "2px solid #1a252f",
-                                                width: "8%",
+                                                background:
+                                                    "linear-gradient(135deg, #2c3e50 0%, #34495e 100%)",
+                                                color: "white",
                                             }}
                                         >
-                                            ID
-                                        </th>
-                                        <th
-                                            style={{
-                                                padding: "20px 16px",
-                                                textAlign: "left",
-                                                fontWeight: "700",
-                                                fontSize: "14px",
-                                                letterSpacing: "0.5px",
-                                                textTransform: "uppercase",
-                                                borderBottom:
-                                                    "2px solid #1a252f",
-                                                width: "25%",
-                                            }}
-                                        >
-                                            Proveedor
-                                        </th>
-                                        <th
-                                            style={{
-                                                padding: "20px 16px",
-                                                textAlign: "left",
-                                                fontWeight: "700",
-                                                fontSize: "14px",
-                                                letterSpacing: "0.5px",
-                                                textTransform: "uppercase",
-                                                borderBottom:
-                                                    "2px solid #1a252f",
-                                                width: "20%",
-                                            }}
-                                        >
-                                            Sede Destino
-                                        </th>
-                                        <th
-                                            style={{
-                                                padding: "20px 16px",
-                                                textAlign: "left",
-                                                fontWeight: "700",
-                                                fontSize: "14px",
-                                                letterSpacing: "0.5px",
-                                                textTransform: "uppercase",
-                                                borderBottom:
-                                                    "2px solid #1a252f",
-                                                width: "15%",
-                                            }}
-                                        >
-                                            Fecha
-                                        </th>
-                                        <th
-                                            style={{
-                                                padding: "20px 16px",
-                                                textAlign: "center",
-                                                fontWeight: "700",
-                                                fontSize: "14px",
-                                                letterSpacing: "0.5px",
-                                                textTransform: "uppercase",
-                                                borderBottom:
-                                                    "2px solid #1a252f",
-                                                width: "12%",
-                                            }}
-                                        >
-                                            Estado
-                                        </th>
-                                        <th
-                                            style={{
-                                                padding: "20px 16px",
-                                                textAlign: "right",
-                                                fontWeight: "700",
-                                                fontSize: "14px",
-                                                letterSpacing: "0.5px",
-                                                textTransform: "uppercase",
-                                                borderBottom:
-                                                    "2px solid #1a252f",
-                                                width: "20%",
-                                            }}
-                                        >
-                                            Total
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {orders.length === 0 ? (
-                                        <tr>
-                                            <td
-                                                colSpan={6}
+                                            <th
                                                 style={{
-                                                    textAlign: "center",
-                                                    color: "#888",
-                                                    padding: 40,
+                                                    padding: "16px",
+                                                    textAlign: "left",
+                                                    fontWeight: "600",
                                                 }}
                                             >
-                                                No hay órdenes registradas.
-                                            </td>
+                                                Proveedor
+                                            </th>
+                                            <th
+                                                style={{
+                                                    padding: "16px",
+                                                    textAlign: "left",
+                                                    fontWeight: "600",
+                                                }}
+                                            >
+                                                Destino
+                                            </th>
+                                            <th
+                                                style={{
+                                                    padding: "16px",
+                                                    textAlign: "left",
+                                                    fontWeight: "600",
+                                                }}
+                                            >
+                                                Fecha
+                                            </th>
+                                            <th
+                                                style={{
+                                                    padding: "16px",
+                                                    textAlign: "left",
+                                                    fontWeight: "600",
+                                                }}
+                                            >
+                                                Estado
+                                            </th>
+                                            <th
+                                                style={{
+                                                    padding: "16px",
+                                                    textAlign: "left",
+                                                    fontWeight: "600",
+                                                }}
+                                            >
+                                                Creado por
+                                            </th>
+                                            <th
+                                                style={{
+                                                    padding: "16px",
+                                                    textAlign: "left",
+                                                    fontWeight: "600",
+                                                }}
+                                            >
+                                                Total
+                                            </th>
+                                            <th
+                                                style={{
+                                                    padding: "16px",
+                                                    textAlign: "center",
+                                                    fontWeight: "600",
+                                                }}
+                                            >
+                                                Acciones
+                                            </th>
                                         </tr>
-                                    ) : (
-                                        orders.map((order) => {
-                                            // Buscar nombre del proveedor
-                                            let supplierName =
-                                                order.supplier_name;
-                                            if (
-                                                !supplierName &&
-                                                order.supplier
-                                            ) {
-                                                const found = suppliers.find(
-                                                    (s) =>
-                                                        s.id ===
-                                                            order.supplier ||
-                                                        s.id ===
-                                                            Number(
-                                                                order.supplier
-                                                            )
-                                                );
-                                                supplierName = found
-                                                    ? found.name
-                                                    : order.supplier;
-                                            }
-                                            // Buscar nombre de la sede destino
-                                            let destinationName =
-                                                order.destination_name;
-                                            if (
-                                                !destinationName &&
-                                                order.destination
-                                            ) {
-                                                const found = locations.find(
-                                                    (l) =>
-                                                        l.id ===
-                                                            order.destination ||
-                                                        l.id ===
-                                                            Number(
-                                                                order.destination
-                                                            )
-                                                );
-                                                destinationName = found
-                                                    ? found.name
-                                                    : order.destination;
-                                            }
-                                            return (
-                                                <tr
-                                                    key={order.id}
+                                    </thead>
+                                    <tbody>
+                                        {orders.map((order, index) => (
+                                            <tr
+                                                key={order.id}
+                                                style={{
+                                                    borderBottom:
+                                                        "1px solid #f1f5f9",
+                                                    backgroundColor:
+                                                        index % 2 === 0
+                                                            ? "#fff"
+                                                            : "#f8f9fa",
+                                                }}
+                                            >
+                                                <td
                                                     style={{
-                                                        borderBottom:
-                                                            "1px solid #f0f0f0",
-                                                        background: "#fff",
-                                                        cursor: "pointer",
-                                                        transition:
-                                                            "all 0.2s ease",
-                                                    }}
-                                                    onMouseEnter={(e) => {
-                                                        const row =
-                                                            e.currentTarget;
-                                                        row.style.backgroundColor =
-                                                            "#f8f9fa";
-                                                        row.style.transform =
-                                                            "translateY(-1px)";
-                                                        row.style.boxShadow =
-                                                            "0 4px 12px rgba(44,62,80,0.08)";
-                                                    }}
-                                                    onMouseLeave={(e) => {
-                                                        const row =
-                                                            e.currentTarget;
-                                                        row.style.backgroundColor =
-                                                            "#fff";
-                                                        row.style.transform =
-                                                            "translateY(0)";
-                                                        row.style.boxShadow =
-                                                            "none";
-                                                    }}
-                                                    onClick={async () => {
-                                                        setOrderDetailLoading(
-                                                            true
-                                                        );
-                                                        setOrderDetailError("");
-                                                        setShowOrderDetail(
-                                                            true
-                                                        );
-                                                        try {
-                                                            const res =
-                                                                await fetch(
-                                                                    `https://unidental-backend.onrender.com/api/purchases/orders/${order.id}/`,
-                                                                    {
-                                                                        headers:
-                                                                            {
-                                                                                "Content-Type":
-                                                                                    "application/json",
-                                                                                Authorization: `Token ${authToken}`,
-                                                                            },
-                                                                    }
-                                                                );
-                                                            if (!res.ok) {
-                                                                const err =
-                                                                    await res
-                                                                        .json()
-                                                                        .catch(
-                                                                            () => ({})
-                                                                        );
-                                                                throw new Error(
-                                                                    err.detail ||
-                                                                        `Error ${res.status}`
-                                                                );
-                                                            }
-                                                            const data =
-                                                                await res.json();
-                                                            // Agregar supplierName y destinationName para consistencia visual
-                                                            setSelectedOrder({
-                                                                ...data,
-                                                                supplierName:
-                                                                    data
-                                                                        .supplier_details
-                                                                        ?.name ||
-                                                                    supplierName,
-                                                                destinationName:
-                                                                    data
-                                                                        .destination_details
-                                                                        ?.name ||
-                                                                    destinationName,
-                                                            });
-                                                        } catch (err) {
-                                                            setOrderDetailError(
-                                                                err.message ||
-                                                                    "Error al cargar detalle de la orden"
-                                                            );
-                                                            setSelectedOrder(
-                                                                null
-                                                            );
-                                                        } finally {
-                                                            setOrderDetailLoading(
-                                                                false
-                                                            );
-                                                        }
+                                                        padding: "16px",
+                                                        color: "#495057",
                                                     }}
                                                 >
-                                                    <td
+                                                    <div
                                                         style={{
-                                                            padding:
-                                                                "20px 16px",
-                                                            fontWeight: "700",
-                                                            fontSize: "15px",
-                                                            color: "#2c3e50",
-                                                            textAlign: "left",
-                                                            borderBottom:
-                                                                "1px solid #f0f0f0",
+                                                            marginBottom: "4px",
                                                         }}
                                                     >
-                                                        #{order.id}
-                                                    </td>
-                                                    <td
-                                                        style={{
-                                                            padding:
-                                                                "20px 16px",
-                                                            fontSize: "14px",
-                                                            color: "#495057",
-                                                            textAlign: "left",
-                                                            borderBottom:
-                                                                "1px solid #f0f0f0",
-                                                            fontWeight: "500",
-                                                        }}
-                                                    >
-                                                        {supplierName || "-"}
-                                                    </td>
-                                                    <td
-                                                        style={{
-                                                            padding:
-                                                                "20px 16px",
-                                                            fontSize: "14px",
-                                                            color: "#495057",
-                                                            textAlign: "left",
-                                                            borderBottom:
-                                                                "1px solid #f0f0f0",
-                                                            fontWeight: "500",
-                                                        }}
-                                                    >
-                                                        {destinationName || "-"}
-                                                    </td>
-                                                    <td
-                                                        style={{
-                                                            padding:
-                                                                "20px 16px",
-                                                            fontSize: "14px",
-                                                            color: "#495057",
-                                                            textAlign: "left",
-                                                            borderBottom:
-                                                                "1px solid #f0f0f0",
-                                                            fontWeight: "500",
-                                                        }}
-                                                    >
-                                                        {order.order_date
-                                                            ? new Date(
-                                                                  order.order_date
-                                                              ).toLocaleDateString(
-                                                                  "es-ES",
-                                                                  {
-                                                                      year: "numeric",
-                                                                      month: "short",
-                                                                      day: "numeric",
-                                                                  }
-                                                              )
-                                                            : "-"}
-                                                    </td>
-                                                    <td
-                                                        style={{
-                                                            padding:
-                                                                "20px 16px",
-                                                            textAlign: "center",
-                                                            borderBottom:
-                                                                "1px solid #f0f0f0",
-                                                        }}
-                                                    >
-                                                        <span
+                                                        <strong
                                                             style={{
-                                                                display:
-                                                                    "inline-block",
-                                                                padding:
-                                                                    "6px 12px",
-                                                                borderRadius:
-                                                                    "20px",
+                                                                color: "#2c3e50",
+                                                            }}
+                                                        >
+                                                            {order
+                                                                .supplier_details
+                                                                ?.name ||
+                                                                order.supplier_name ||
+                                                                order.supplier ||
+                                                                "Sin proveedor"}
+                                                        </strong>
+                                                    </div>
+                                                    {order.supplier_details
+                                                        ?.contact_name && (
+                                                        <div
+                                                            style={{
                                                                 fontSize:
                                                                     "12px",
-                                                                fontWeight:
-                                                                    "700",
-                                                                textTransform:
-                                                                    "uppercase",
-                                                                letterSpacing:
-                                                                    "0.5px",
-                                                                backgroundColor:
-                                                                    order.status ===
-                                                                    "pending"
-                                                                        ? "#fff3cd"
-                                                                        : order.status ===
-                                                                          "approved"
-                                                                        ? "#d1ecf1"
-                                                                        : order.status ===
-                                                                          "completed"
-                                                                        ? "#d4edda"
-                                                                        : order.status ===
-                                                                          "cancelled"
-                                                                        ? "#f8d7da"
-                                                                        : "#e2e3e5",
-                                                                color:
-                                                                    order.status ===
-                                                                    "pending"
-                                                                        ? "#856404"
-                                                                        : order.status ===
-                                                                          "approved"
-                                                                        ? "#0c5460"
-                                                                        : order.status ===
-                                                                          "completed"
-                                                                        ? "#155724"
-                                                                        : order.status ===
-                                                                          "cancelled"
-                                                                        ? "#721c24"
-                                                                        : "#383d41",
-                                                                border: "1px solid",
-                                                                borderColor:
-                                                                    order.status ===
-                                                                    "pending"
-                                                                        ? "#ffeaa7"
-                                                                        : order.status ===
-                                                                          "approved"
-                                                                        ? "#bee5eb"
-                                                                        : order.status ===
-                                                                          "completed"
-                                                                        ? "#c3e6cb"
-                                                                        : order.status ===
-                                                                          "cancelled"
-                                                                        ? "#f5c6cb"
-                                                                        : "#d6d8db",
+                                                                color: "#6c757d",
+                                                                fontStyle:
+                                                                    "italic",
                                                             }}
+                                                        >
+                                                            Contacto:{" "}
+                                                            {
+                                                                order
+                                                                    .supplier_details
+                                                                    .contact_name
+                                                            }
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td
+                                                    style={{
+                                                        padding: "16px",
+                                                        color: "#495057",
+                                                    }}
+                                                >
+                                                    <div
+                                                        style={{
+                                                            marginBottom: "4px",
+                                                        }}
+                                                    >
+                                                        <strong
+                                                            style={{
+                                                                color: "#2c3e50",
+                                                            }}
+                                                        >
+                                                            {order
+                                                                .destination_details
+                                                                ?.name ||
+                                                                "Sin destino"}
+                                                        </strong>
+                                                    </div>
+                                                    {order.destination_details
+                                                        ?.address && (
+                                                        <div
+                                                            style={{
+                                                                fontSize:
+                                                                    "12px",
+                                                                color: "#6c757d",
+                                                                fontStyle:
+                                                                    "italic",
+                                                            }}
+                                                        >
+                                                            {
+                                                                order
+                                                                    .destination_details
+                                                                    .address
+                                                            }
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td
+                                                    style={{
+                                                        padding: "16px",
+                                                        color: "#495057",
+                                                    }}
+                                                >
+                                                    {order.order_date
+                                                        ? new Date(
+                                                              order.order_date
+                                                          ).toLocaleDateString(
+                                                              "es-ES"
+                                                          )
+                                                        : "-"}
+                                                </td>
+                                                <td
+                                                    style={{
+                                                        padding: "16px",
+                                                        position: "relative",
+                                                    }}
+                                                    className="status-dropdown-container"
+                                                >
+                                                    {order.status ===
+                                                    "pending" ? (
+                                                        <div
+                                                            style={{
+                                                                position:
+                                                                    "relative",
+                                                            }}
+                                                        >
+                                                            <button
+                                                                onClick={() =>
+                                                                    setShowStatusDropdown(
+                                                                        showStatusDropdown ===
+                                                                            order.id
+                                                                            ? null
+                                                                            : order.id
+                                                                    )
+                                                                }
+                                                                disabled={
+                                                                    isUpdatingStatus
+                                                                }
+                                                                style={{
+                                                                    padding:
+                                                                        "6px 12px",
+                                                                    backgroundColor:
+                                                                        "#f39c12",
+                                                                    color: "white",
+                                                                    border: "none",
+                                                                    borderRadius:
+                                                                        "4px",
+                                                                    cursor: isUpdatingStatus
+                                                                        ? "not-allowed"
+                                                                        : "pointer",
+                                                                    fontSize:
+                                                                        "12px",
+                                                                    fontWeight:
+                                                                        "500",
+                                                                    display:
+                                                                        "flex",
+                                                                    alignItems:
+                                                                        "center",
+                                                                    gap: "4px",
+                                                                    opacity:
+                                                                        isUpdatingStatus
+                                                                            ? 0.7
+                                                                            : 1,
+                                                                }}
+                                                            >
+                                                                {isUpdatingStatus ? (
+                                                                    <svg
+                                                                        width="12"
+                                                                        height="12"
+                                                                        fill="none"
+                                                                        stroke="currentColor"
+                                                                        viewBox="0 0 24 24"
+                                                                        style={{
+                                                                            animation:
+                                                                                "spin 1s linear infinite",
+                                                                        }}
+                                                                    >
+                                                                        <path
+                                                                            strokeLinecap="round"
+                                                                            strokeLinejoin="round"
+                                                                            strokeWidth={
+                                                                                2
+                                                                            }
+                                                                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                                                                        />
+                                                                    </svg>
+                                                                ) : (
+                                                                    <svg
+                                                                        width="12"
+                                                                        height="12"
+                                                                        fill="none"
+                                                                        stroke="currentColor"
+                                                                        viewBox="0 0 24 24"
+                                                                    >
+                                                                        <path
+                                                                            strokeLinecap="round"
+                                                                            strokeLinejoin="round"
+                                                                            strokeWidth={
+                                                                                2
+                                                                            }
+                                                                            d="M19 9l-7 7-7-7"
+                                                                        />
+                                                                    </svg>
+                                                                )}
+                                                                {order.status_display ||
+                                                                    translateStatus(
+                                                                        order.status
+                                                                    )}
+                                                            </button>
+
+                                                            {showStatusDropdown ===
+                                                                order.id && (
+                                                                <div
+                                                                    style={{
+                                                                        position:
+                                                                            "absolute",
+                                                                        top: "100%",
+                                                                        left: "0",
+                                                                        backgroundColor:
+                                                                            "white",
+                                                                        border: "1px solid #ddd",
+                                                                        borderRadius:
+                                                                            "4px",
+                                                                        boxShadow:
+                                                                            "0 2px 8px rgba(0,0,0,0.15)",
+                                                                        zIndex: 1000,
+                                                                        minWidth:
+                                                                            "150px",
+                                                                        marginTop:
+                                                                            "4px",
+                                                                    }}
+                                                                >
+                                                                    {pendingOrderActions.map(
+                                                                        (
+                                                                            action
+                                                                        ) => (
+                                                                            <button
+                                                                                key={
+                                                                                    action.value
+                                                                                }
+                                                                                onClick={() =>
+                                                                                    handleStatusChange(
+                                                                                        order.id,
+                                                                                        action.value
+                                                                                    )
+                                                                                }
+                                                                                disabled={
+                                                                                    isUpdatingStatus
+                                                                                }
+                                                                                style={{
+                                                                                    width: "100%",
+                                                                                    padding:
+                                                                                        "8px 12px",
+                                                                                    backgroundColor:
+                                                                                        "white",
+                                                                                    border: "none",
+                                                                                    textAlign:
+                                                                                        "left",
+                                                                                    cursor: isUpdatingStatus
+                                                                                        ? "not-allowed"
+                                                                                        : "pointer",
+                                                                                    fontSize:
+                                                                                        "12px",
+                                                                                    color: "#333",
+                                                                                    borderBottom:
+                                                                                        "1px solid #f0f0f0",
+                                                                                }}
+                                                                                onMouseEnter={(
+                                                                                    e
+                                                                                ) => {
+                                                                                    e.target.style.backgroundColor =
+                                                                                        "#f8f9fa";
+                                                                                }}
+                                                                                onMouseLeave={(
+                                                                                    e
+                                                                                ) => {
+                                                                                    e.target.style.backgroundColor =
+                                                                                        "white";
+                                                                                }}
+                                                                            >
+                                                                                {
+                                                                                    action.label
+                                                                                }
+                                                                            </button>
+                                                                        )
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <span
+                                                            className={`status-badge status-${order.status}`}
                                                         >
                                                             {order.status_display ||
                                                                 translateStatus(
                                                                     order.status
-                                                                ) ||
-                                                                "-"}
+                                                                )}
                                                         </span>
-                                                    </td>
-                                                    <td
+                                                    )}
+                                                </td>
+                                                <td
+                                                    style={{
+                                                        padding: "16px",
+                                                        color: "#495057",
+                                                    }}
+                                                >
+                                                    <div
                                                         style={{
-                                                            padding:
-                                                                "20px 16px",
-                                                            color: "#27ae60",
-                                                            fontWeight: "700",
-                                                            fontSize: "15px",
-                                                            textAlign: "right",
-                                                            borderBottom:
-                                                                "1px solid #f0f0f0",
+                                                            marginBottom: "4px",
                                                         }}
                                                     >
-                                                        {order.total_amount
-                                                            ? `$${parseFloat(
-                                                                  order.total_amount
-                                                              ).toLocaleString(
-                                                                  "es-CO",
-                                                                  {
-                                                                      minimumFractionDigits: 0,
-                                                                  }
-                                                              )}`
-                                                            : "-"}
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })
-                                    )}
-                                </tbody>
-                            </table>
-                            {/* Paginación Mejorada */}
+                                                        <strong
+                                                            style={{
+                                                                color: "#2c3e50",
+                                                            }}
+                                                        >
+                                                            {order.created_by_username ||
+                                                                "Usuario"}
+                                                        </strong>
+                                                    </div>
+                                                    {order.created_at && (
+                                                        <div
+                                                            style={{
+                                                                fontSize:
+                                                                    "12px",
+                                                                color: "#6c757d",
+                                                                fontStyle:
+                                                                    "italic",
+                                                            }}
+                                                        >
+                                                            {new Date(
+                                                                order.created_at
+                                                            ).toLocaleDateString(
+                                                                "es-ES"
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td
+                                                    style={{
+                                                        padding: "16px",
+                                                        color: "#27ae60",
+                                                        fontWeight: "600",
+                                                    }}
+                                                >
+                                                    <div
+                                                        style={{
+                                                            marginBottom: "4px",
+                                                        }}
+                                                    >
+                                                        <strong
+                                                            style={{
+                                                                fontSize:
+                                                                    "16px",
+                                                            }}
+                                                        >
+                                                            $
+                                                            {order.total_amount
+                                                                ? parseFloat(
+                                                                      order.total_amount
+                                                                  ).toLocaleString()
+                                                                : order.total
+                                                                ? parseFloat(
+                                                                      order.total
+                                                                  ).toLocaleString()
+                                                                : "0"}
+                                                        </strong>
+                                                    </div>
+                                                    {order.total_items && (
+                                                        <div
+                                                            style={{
+                                                                fontSize:
+                                                                    "12px",
+                                                                color: "#6c757d",
+                                                                fontStyle:
+                                                                    "italic",
+                                                            }}
+                                                        >
+                                                            {order.total_items}{" "}
+                                                            {order.total_items ===
+                                                            1
+                                                                ? "producto"
+                                                                : "productos"}
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td
+                                                    style={{
+                                                        padding: "16px",
+                                                        textAlign: "center",
+                                                    }}
+                                                >
+                                                    <button
+                                                        onClick={() =>
+                                                            handleShowReceipt(
+                                                                order
+                                                            )
+                                                        }
+                                                        style={{
+                                                            padding: "8px 16px",
+                                                            backgroundColor:
+                                                                isLoadingReceipt
+                                                                    ? "#95a5a6"
+                                                                    : "#3498db",
+                                                            color: "white",
+                                                            border: "none",
+                                                            borderRadius: "6px",
+                                                            cursor: isLoadingReceipt
+                                                                ? "not-allowed"
+                                                                : "pointer",
+                                                            fontSize: "14px",
+                                                            fontWeight: "500",
+                                                            display: "flex",
+                                                            alignItems:
+                                                                "center",
+                                                            gap: "6px",
+                                                            opacity:
+                                                                isLoadingReceipt
+                                                                    ? 0.7
+                                                                    : 1,
+                                                        }}
+                                                    >
+                                                        {isLoadingReceipt ? (
+                                                            <svg
+                                                                width="16"
+                                                                height="16"
+                                                                fill="none"
+                                                                stroke="currentColor"
+                                                                viewBox="0 0 24 24"
+                                                                style={{
+                                                                    animation:
+                                                                        "spin 1s linear infinite",
+                                                                }}
+                                                            >
+                                                                <path
+                                                                    strokeLinecap="round"
+                                                                    strokeLinejoin="round"
+                                                                    strokeWidth={
+                                                                        2
+                                                                    }
+                                                                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                                                                />
+                                                            </svg>
+                                                        ) : (
+                                                            <svg
+                                                                width="16"
+                                                                height="16"
+                                                                fill="none"
+                                                                stroke="currentColor"
+                                                                viewBox="0 0 24 24"
+                                                            >
+                                                                <path
+                                                                    strokeLinecap="round"
+                                                                    strokeLinejoin="round"
+                                                                    strokeWidth={
+                                                                        2
+                                                                    }
+                                                                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                                                                />
+                                                                <path
+                                                                    strokeLinecap="round"
+                                                                    strokeLinejoin="round"
+                                                                    strokeWidth={
+                                                                        2
+                                                                    }
+                                                                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                                                                />
+                                                            </svg>
+                                                        )}
+                                                        {isLoadingReceipt
+                                                            ? "Cargando..."
+                                                            : "Ver Recibo"}
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Paginación */}
                             {ordersTotalPages > 1 && (
                                 <div
                                     style={{
                                         display: "flex",
                                         justifyContent: "center",
                                         alignItems: "center",
-                                        gap: 12,
-                                        marginBottom: 24,
-                                        flexWrap: "wrap",
+                                        gap: "16px",
+                                        marginTop: "24px",
+                                        padding: "16px",
+                                        backgroundColor: "white",
+                                        borderRadius: "8px",
+                                        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
                                     }}
                                 >
-                                    {/* Botón Primera Página */}
-                                    <button
-                                        onClick={() => setOrdersPage(1)}
-                                        disabled={ordersPage === 1}
-                                        style={{
-                                            padding: "8px 12px",
-                                            borderRadius: 6,
-                                            border: "1.5px solid #e3eaf3",
-                                            background:
-                                                ordersPage === 1
-                                                    ? "#f8f9fa"
-                                                    : "#fff",
-                                            color: "#2c3e50",
-                                            fontWeight: 600,
-                                            fontSize: "14px",
-                                            cursor:
-                                                ordersPage === 1
-                                                    ? "not-allowed"
-                                                    : "pointer",
-                                            transition: "all 0.2s ease",
-                                        }}
-                                        title="Primera página"
-                                    >
-                                        ⏮
-                                    </button>
-
-                                    {/* Botón Anterior */}
                                     <button
                                         onClick={() =>
-                                            setOrdersPage((p) =>
-                                                Math.max(1, p - 1)
+                                            setOrdersPage(
+                                                Math.max(1, ordersPage - 1)
                                             )
                                         }
                                         disabled={ordersPage === 1}
                                         style={{
-                                            padding: "8px 12px",
-                                            borderRadius: 6,
-                                            border: "1.5px solid #e3eaf3",
-                                            background:
+                                            padding: "8px 16px",
+                                            backgroundColor:
                                                 ordersPage === 1
-                                                    ? "#f8f9fa"
-                                                    : "#fff",
-                                            color: "#2c3e50",
-                                            fontWeight: 600,
-                                            fontSize: "14px",
+                                                    ? "#e9ecef"
+                                                    : "#3498db",
+                                            color:
+                                                ordersPage === 1
+                                                    ? "#6c757d"
+                                                    : "white",
+                                            border: "none",
+                                            borderRadius: "6px",
                                             cursor:
                                                 ordersPage === 1
                                                     ? "not-allowed"
                                                     : "pointer",
-                                            transition: "all 0.2s ease",
                                         }}
-                                        title="Página anterior"
                                     >
-                                        ←
+                                        Anterior
                                     </button>
 
-                                    {/* Números de Página */}
-                                    <div
+                                    <span
                                         style={{
-                                            display: "flex",
-                                            gap: 4,
-                                            alignItems: "center",
+                                            color: "#495057",
+                                            fontWeight: "600",
                                         }}
                                     >
-                                        {(() => {
-                                            const pages = [];
-                                            const maxVisible = 5;
-                                            let start = Math.max(
-                                                1,
-                                                ordersPage -
-                                                    Math.floor(maxVisible / 2)
-                                            );
-                                            let end = Math.min(
-                                                ordersTotalPages,
-                                                start + maxVisible - 1
-                                            );
+                                        Página {ordersPage} de{" "}
+                                        {ordersTotalPages}
+                                    </span>
 
-                                            if (end - start + 1 < maxVisible) {
-                                                start = Math.max(
-                                                    1,
-                                                    end - maxVisible + 1
-                                                );
-                                            }
-
-                                            // Primera página si no está visible
-                                            if (start > 1) {
-                                                pages.push(
-                                                    <button
-                                                        key="1"
-                                                        onClick={() =>
-                                                            setOrdersPage(1)
-                                                        }
-                                                        style={{
-                                                            padding: "8px 12px",
-                                                            borderRadius: 6,
-                                                            border: "1.5px solid #e3eaf3",
-                                                            background: "#fff",
-                                                            color: "#2c3e50",
-                                                            fontWeight: 600,
-                                                            fontSize: "14px",
-                                                            cursor: "pointer",
-                                                            transition:
-                                                                "all 0.2s ease",
-                                                        }}
-                                                    >
-                                                        1
-                                                    </button>
-                                                );
-                                                if (start > 2) {
-                                                    pages.push(
-                                                        <span
-                                                            key="dots1"
-                                                            style={{
-                                                                color: "#6c757d",
-                                                                fontSize:
-                                                                    "14px",
-                                                            }}
-                                                        >
-                                                            ...
-                                                        </span>
-                                                    );
-                                                }
-                                            }
-
-                                            // Páginas visibles
-                                            for (let i = start; i <= end; i++) {
-                                                pages.push(
-                                                    <button
-                                                        key={i}
-                                                        onClick={() =>
-                                                            setOrdersPage(i)
-                                                        }
-                                                        style={{
-                                                            padding: "8px 12px",
-                                                            borderRadius: 6,
-                                                            border: "1.5px solid #e3eaf3",
-                                                            background:
-                                                                ordersPage === i
-                                                                    ? "#2c3e50"
-                                                                    : "#fff",
-                                                            color:
-                                                                ordersPage === i
-                                                                    ? "#fff"
-                                                                    : "#2c3e50",
-                                                            fontWeight: 600,
-                                                            fontSize: "14px",
-                                                            cursor: "pointer",
-                                                            transition:
-                                                                "all 0.2s ease",
-                                                        }}
-                                                    >
-                                                        {i}
-                                                    </button>
-                                                );
-                                            }
-
-                                            // Última página si no está visible
-                                            if (end < ordersTotalPages) {
-                                                if (
-                                                    end <
-                                                    ordersTotalPages - 1
-                                                ) {
-                                                    pages.push(
-                                                        <span
-                                                            key="dots2"
-                                                            style={{
-                                                                color: "#6c757d",
-                                                                fontSize:
-                                                                    "14px",
-                                                            }}
-                                                        >
-                                                            ...
-                                                        </span>
-                                                    );
-                                                }
-                                                pages.push(
-                                                    <button
-                                                        key={ordersTotalPages}
-                                                        onClick={() =>
-                                                            setOrdersPage(
-                                                                ordersTotalPages
-                                                            )
-                                                        }
-                                                        style={{
-                                                            padding: "8px 12px",
-                                                            borderRadius: 6,
-                                                            border: "1.5px solid #e3eaf3",
-                                                            background: "#fff",
-                                                            color: "#2c3e50",
-                                                            fontWeight: 600,
-                                                            fontSize: "14px",
-                                                            cursor: "pointer",
-                                                            transition:
-                                                                "all 0.2s ease",
-                                                        }}
-                                                    >
-                                                        {ordersTotalPages}
-                                                    </button>
-                                                );
-                                            }
-
-                                            return pages;
-                                        })()}
-                                    </div>
-
-                                    {/* Botón Siguiente */}
                                     <button
                                         onClick={() =>
-                                            setOrdersPage((p) =>
+                                            setOrdersPage(
                                                 Math.min(
                                                     ordersTotalPages,
-                                                    p + 1
+                                                    ordersPage + 1
                                                 )
                                             )
                                         }
@@ -3069,158 +1714,68 @@ const OrdenesDeCompraPage = () => {
                                             ordersPage === ordersTotalPages
                                         }
                                         style={{
-                                            padding: "8px 12px",
-                                            borderRadius: 6,
-                                            border: "1.5px solid #e3eaf3",
-                                            background:
+                                            padding: "8px 16px",
+                                            backgroundColor:
                                                 ordersPage === ordersTotalPages
-                                                    ? "#f8f9fa"
-                                                    : "#fff",
-                                            color: "#2c3e50",
-                                            fontWeight: 600,
-                                            fontSize: "14px",
+                                                    ? "#e9ecef"
+                                                    : "#3498db",
+                                            color:
+                                                ordersPage === ordersTotalPages
+                                                    ? "#6c757d"
+                                                    : "white",
+                                            border: "none",
+                                            borderRadius: "6px",
                                             cursor:
                                                 ordersPage === ordersTotalPages
                                                     ? "not-allowed"
                                                     : "pointer",
-                                            transition: "all 0.2s ease",
                                         }}
-                                        title="Página siguiente"
                                     >
-                                        →
+                                        Siguiente
                                     </button>
 
-                                    {/* Información de Página */}
-                                    <div
-                                        style={{
-                                            marginLeft: 16,
-                                            padding: "8px 12px",
-                                            background: "#f8f9fa",
-                                            borderRadius: 6,
-                                            border: "1px solid #e9ecef",
-                                        }}
-                                    >
-                                        <span
-                                            style={{
-                                                fontWeight: 600,
-                                                fontSize: "14px",
-                                                color: "#6c757d",
-                                            }}
-                                        >
-                                            Página {ordersPage} de{" "}
-                                            {ordersTotalPages}
-                                        </span>
-                                    </div>
-
-                                    {/* Campo para ir a página específica */}
                                     <div
                                         style={{
                                             display: "flex",
                                             alignItems: "center",
-                                            gap: 8,
-                                            marginLeft: 16,
+                                            gap: "8px",
                                         }}
                                     >
                                         <span
                                             style={{
+                                                color: "#495057",
                                                 fontSize: "14px",
-                                                color: "#6c757d",
-                                                fontWeight: 500,
                                             }}
                                         >
                                             Ir a:
                                         </span>
                                         <input
                                             type="number"
-                                            value={goToPage}
-                                            onChange={(e) => {
-                                                let val = e.target.value;
-                                                // Limitar el valor máximo al total de páginas
-                                                if (
-                                                    val !== "" &&
-                                                    Number(val) >
-                                                        ordersTotalPages
-                                                ) {
-                                                    val = ordersTotalPages;
-                                                }
-                                                // Limitar el valor mínimo a 1
-                                                if (
-                                                    val !== "" &&
-                                                    Number(val) < 1
-                                                ) {
-                                                    val = 1;
-                                                }
-                                                setGoToPage(val);
-                                            }}
-                                            onKeyPress={handlePageKeyPress}
-                                            placeholder="Página"
                                             min="1"
                                             max={ordersTotalPages}
+                                            value={goToPage}
+                                            onChange={(e) =>
+                                                setGoToPage(e.target.value)
+                                            }
+                                            onKeyPress={handlePageKeyPress}
                                             style={{
-                                                width: "70px",
-                                                padding: "8px 10px",
-                                                borderRadius: 6,
-                                                border: "2px solid #b2bec3",
-                                                fontSize: "15px",
+                                                width: "60px",
+                                                padding: "4px 8px",
+                                                border: "1px solid #ced4da",
+                                                borderRadius: "4px",
                                                 textAlign: "center",
-                                                outline: "none",
-                                                background: "#f8f9fa",
-                                                color: "#2c3e50",
-                                                fontWeight: 600,
-                                                boxShadow:
-                                                    "0 1px 4px rgba(44,62,80,0.04)",
-                                                transition:
-                                                    "border 0.2s, box-shadow 0.2s",
-                                            }}
-                                            onFocus={(e) => {
-                                                e.target.style.border =
-                                                    "2px solid #2c3e50";
-                                                e.target.style.background =
-                                                    "#fff";
-                                            }}
-                                            onBlur={(e) => {
-                                                e.target.style.border =
-                                                    "2px solid #b2bec3";
-                                                e.target.style.background =
-                                                    "#f8f9fa";
                                             }}
                                         />
                                         <button
                                             onClick={handleGoToPage}
-                                            disabled={
-                                                !goToPage ||
-                                                parseInt(goToPage) < 1 ||
-                                                parseInt(goToPage) >
-                                                    ordersTotalPages
-                                            }
                                             style={{
-                                                padding: "6px 12px",
-                                                borderRadius: 4,
-                                                border: "1px solid #e3eaf3",
-                                                background:
-                                                    !goToPage ||
-                                                    parseInt(goToPage) < 1 ||
-                                                    parseInt(goToPage) >
-                                                        ordersTotalPages
-                                                        ? "#f8f9fa"
-                                                        : "#2c3e50",
-                                                color:
-                                                    !goToPage ||
-                                                    parseInt(goToPage) < 1 ||
-                                                    parseInt(goToPage) >
-                                                        ordersTotalPages
-                                                        ? "#6c757d"
-                                                        : "#fff",
-                                                fontWeight: 600,
+                                                padding: "4px 8px",
+                                                backgroundColor: "#28a745",
+                                                color: "white",
+                                                border: "none",
+                                                borderRadius: "4px",
+                                                cursor: "pointer",
                                                 fontSize: "12px",
-                                                cursor:
-                                                    !goToPage ||
-                                                    parseInt(goToPage) < 1 ||
-                                                    parseInt(goToPage) >
-                                                        ordersTotalPages
-                                                        ? "not-allowed"
-                                                        : "pointer",
-                                                transition: "all 0.2s ease",
                                             }}
                                         >
                                             Ir
@@ -3228,765 +1783,548 @@ const OrdenesDeCompraPage = () => {
                                     </div>
                                 </div>
                             )}
+
+                            {/* Modal de detalle de orden */}
+                            {showOrderDetail && selectedOrder && (
+                                <div
+                                    style={{
+                                        position: "fixed",
+                                        top: 0,
+                                        left: 0,
+                                        right: 0,
+                                        bottom: 0,
+                                        backgroundColor: "rgba(0,0,0,0.5)",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        zIndex: 1000,
+                                        padding: "20px",
+                                    }}
+                                    onClick={() => setShowOrderDetail(false)}
+                                >
+                                    <div
+                                        style={{
+                                            background: "white",
+                                            borderRadius: "16px",
+                                            padding: "32px",
+                                            maxWidth: "800px",
+                                            width: "100%",
+                                            maxHeight: "90vh",
+                                            overflowY: "auto",
+                                        }}
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        <div
+                                            style={{
+                                                display: "flex",
+                                                justifyContent: "space-between",
+                                                alignItems: "center",
+                                                marginBottom: "24px",
+                                            }}
+                                        >
+                                            <h3
+                                                style={{
+                                                    fontSize: "24px",
+                                                    fontWeight: "700",
+                                                    color: "#2c3e50",
+                                                    margin: 0,
+                                                }}
+                                            >
+                                                Detalle de Orden
+                                            </h3>
+                                            <button
+                                                onClick={() =>
+                                                    setShowOrderDetail(false)
+                                                }
+                                                style={{
+                                                    background: "none",
+                                                    border: "none",
+                                                    fontSize: "24px",
+                                                    cursor: "pointer",
+                                                    color: "#6c757d",
+                                                }}
+                                            >
+                                                ×
+                                            </button>
+                                        </div>
+
+                                        {/* Información básica */}
+                                        <div
+                                            style={{
+                                                display: "grid",
+                                                gridTemplateColumns: "1fr 1fr",
+                                                gap: "24px",
+                                                marginBottom: "32px",
+                                            }}
+                                        >
+                                            <div
+                                                style={{
+                                                    background: "#f8f9fa",
+                                                    padding: "20px",
+                                                    borderRadius: "12px",
+                                                }}
+                                            >
+                                                <h4
+                                                    style={{
+                                                        fontSize: "16px",
+                                                        fontWeight: "600",
+                                                        color: "#2c3e50",
+                                                        marginBottom: "12px",
+                                                    }}
+                                                >
+                                                    Información de la Orden
+                                                </h4>
+                                                <div
+                                                    style={{
+                                                        display: "flex",
+                                                        flexDirection: "column",
+                                                        gap: "8px",
+                                                        fontSize: "14px",
+                                                        color: "#495057",
+                                                    }}
+                                                >
+                                                    <div>
+                                                        <strong>Número:</strong>{" "}
+                                                        {selectedOrder.order_number ||
+                                                            selectedOrder.id}
+                                                    </div>
+                                                    <div>
+                                                        <strong>Fecha:</strong>{" "}
+                                                        {selectedOrder.order_date
+                                                            ? new Date(
+                                                                  selectedOrder.order_date
+                                                              ).toLocaleDateString(
+                                                                  "es-ES"
+                                                              )
+                                                            : "-"}
+                                                    </div>
+                                                    <div>
+                                                        <strong>Estado:</strong>{" "}
+                                                        <span
+                                                            className={`status-badge status-${selectedOrder.status}`}
+                                                        >
+                                                            {translateStatus(
+                                                                selectedOrder.status
+                                                            )}
+                                                        </span>
+                                                    </div>
+                                                    <div>
+                                                        <strong>Total:</strong>{" "}
+                                                        <span
+                                                            style={{
+                                                                color: "#27ae60",
+                                                                fontWeight:
+                                                                    "600",
+                                                            }}
+                                                        >
+                                                            $
+                                                            {selectedOrder.total
+                                                                ? parseFloat(
+                                                                      selectedOrder.total
+                                                                  ).toLocaleString()
+                                                                : "0"}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div
+                                                style={{
+                                                    background: "#f8f9fa",
+                                                    padding: "20px",
+                                                    borderRadius: "12px",
+                                                }}
+                                            >
+                                                <h4
+                                                    style={{
+                                                        fontSize: "16px",
+                                                        fontWeight: "600",
+                                                        color: "#2c3e50",
+                                                        marginBottom: "12px",
+                                                    }}
+                                                >
+                                                    Información del Proveedor
+                                                </h4>
+                                                <div
+                                                    style={{
+                                                        display: "flex",
+                                                        flexDirection: "column",
+                                                        gap: "8px",
+                                                        fontSize: "14px",
+                                                        color: "#495057",
+                                                    }}
+                                                >
+                                                    <div>
+                                                        <strong>
+                                                            Proveedor:
+                                                        </strong>{" "}
+                                                        {selectedOrder.supplier_name ||
+                                                            selectedOrder.supplier}
+                                                    </div>
+                                                    <div>
+                                                        <strong>
+                                                            Destino:
+                                                        </strong>{" "}
+                                                        {selectedOrder.destination_name ||
+                                                            selectedOrder.destination}
+                                                    </div>
+                                                    {selectedOrder.notes && (
+                                                        <div>
+                                                            <strong>
+                                                                Notas:
+                                                            </strong>{" "}
+                                                            {
+                                                                selectedOrder.notes
+                                                            }
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Productos de la orden */}
+                                        <div
+                                            style={{
+                                                background: "white",
+                                                borderRadius: "16px",
+                                                padding: "20px",
+                                                boxShadow:
+                                                    "0 4px 16px rgba(44,62,80,0.08)",
+                                                border: "1px solid #e9ecef",
+                                                marginBottom: "24px",
+                                            }}
+                                        >
+                                            <h4
+                                                style={{
+                                                    fontSize: "18px",
+                                                    fontWeight: "600",
+                                                    color: "#2c3e50",
+                                                    marginBottom: "16px",
+                                                }}
+                                            >
+                                                Productos de la Orden
+                                            </h4>
+
+                                            {selectedOrder.items &&
+                                            selectedOrder.items.length > 0 ? (
+                                                <div
+                                                    style={{
+                                                        overflowX: "auto",
+                                                    }}
+                                                >
+                                                    <table
+                                                        style={{
+                                                            width: "100%",
+                                                            borderCollapse:
+                                                                "collapse",
+                                                            fontSize: "14px",
+                                                        }}
+                                                    >
+                                                        <thead>
+                                                            <tr
+                                                                style={{
+                                                                    background:
+                                                                        "#f8f9fa",
+                                                                    borderBottom:
+                                                                        "2px solid #dee2e6",
+                                                                }}
+                                                            >
+                                                                <th
+                                                                    style={{
+                                                                        padding:
+                                                                            "12px",
+                                                                        textAlign:
+                                                                            "left",
+                                                                        fontWeight:
+                                                                            "600",
+                                                                        color: "#495057",
+                                                                    }}
+                                                                >
+                                                                    Producto
+                                                                </th>
+                                                                <th
+                                                                    style={{
+                                                                        padding:
+                                                                            "12px",
+                                                                        textAlign:
+                                                                            "center",
+                                                                        fontWeight:
+                                                                            "600",
+                                                                        color: "#495057",
+                                                                    }}
+                                                                >
+                                                                    Cantidad
+                                                                </th>
+                                                                <th
+                                                                    style={{
+                                                                        padding:
+                                                                            "12px",
+                                                                        textAlign:
+                                                                            "right",
+                                                                        fontWeight:
+                                                                            "600",
+                                                                        color: "#495057",
+                                                                    }}
+                                                                >
+                                                                    Precio Unit.
+                                                                </th>
+                                                                <th
+                                                                    style={{
+                                                                        padding:
+                                                                            "12px",
+                                                                        textAlign:
+                                                                            "right",
+                                                                        fontWeight:
+                                                                            "600",
+                                                                        color: "#495057",
+                                                                    }}
+                                                                >
+                                                                    Subtotal
+                                                                </th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {selectedOrder.items.map(
+                                                                (item, idx) => (
+                                                                    <tr
+                                                                        key={
+                                                                            idx
+                                                                        }
+                                                                        style={{
+                                                                            borderBottom:
+                                                                                "1px solid #f0f0f0",
+                                                                            backgroundColor:
+                                                                                idx %
+                                                                                    2 ===
+                                                                                0
+                                                                                    ? "#fff"
+                                                                                    : "#f8f9fa",
+                                                                        }}
+                                                                    >
+                                                                        <td
+                                                                            style={{
+                                                                                padding:
+                                                                                    "12px",
+                                                                                fontWeight:
+                                                                                    "500",
+                                                                                color: "#2c3e50",
+                                                                            }}
+                                                                        >
+                                                                            {item
+                                                                                .purchase_option_details
+                                                                                ?.product_name ||
+                                                                                item.product_name ||
+                                                                                item.product ||
+                                                                                "-"}
+                                                                        </td>
+                                                                        <td
+                                                                            style={{
+                                                                                padding:
+                                                                                    "12px",
+                                                                                textAlign:
+                                                                                    "center",
+                                                                                color: "#495057",
+                                                                                fontWeight:
+                                                                                    "600",
+                                                                            }}
+                                                                        >
+                                                                            {item.quantity_requested ||
+                                                                                item.quantity ||
+                                                                                "-"}
+                                                                        </td>
+                                                                        <td
+                                                                            style={{
+                                                                                padding:
+                                                                                    "12px",
+                                                                                textAlign:
+                                                                                    "right",
+                                                                                color: "#495057",
+                                                                                fontWeight:
+                                                                                    "500",
+                                                                            }}
+                                                                        >
+                                                                            {item.unit_price
+                                                                                ? `$${parseFloat(
+                                                                                      item.unit_price
+                                                                                  ).toLocaleString(
+                                                                                      "es-CO",
+                                                                                      {
+                                                                                          minimumFractionDigits: 0,
+                                                                                      }
+                                                                                  )}`
+                                                                                : "-"}
+                                                                        </td>
+                                                                        <td
+                                                                            style={{
+                                                                                padding:
+                                                                                    "12px",
+                                                                                color: "#27ae60",
+                                                                                fontWeight:
+                                                                                    "700",
+                                                                                textAlign:
+                                                                                    "right",
+                                                                            }}
+                                                                        >
+                                                                            {item.line_total
+                                                                                ? `$${parseFloat(
+                                                                                      item.line_total
+                                                                                  ).toLocaleString(
+                                                                                      "es-CO",
+                                                                                      {
+                                                                                          minimumFractionDigits: 0,
+                                                                                      }
+                                                                                  )}`
+                                                                                : "-"}
+                                                                        </td>
+                                                                    </tr>
+                                                                )
+                                                            )}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            ) : (
+                                                <div
+                                                    style={{
+                                                        color: "#6c757d",
+                                                        textAlign: "center",
+                                                        padding: "32px 16px",
+                                                        fontSize: "14px",
+                                                        fontStyle: "italic",
+                                                    }}
+                                                >
+                                                    No hay productos en esta
+                                                    orden.
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </>
                     )}
                 </div>
             )}
-            {/* Panel lateral de detalle de orden */}
-            {showOrderDetail && (
+
+            {/* Modal de Orden de Compra */}
+            {showOrderModal && orderModalData && (
+                <PurchaseOrderModal
+                    isOpen={showOrderModal}
+                    onClose={handleCloseOrderModal}
+                    orderData={orderModalData.orderData}
+                    supplierData={orderModalData.supplierData}
+                    locationData={orderModalData.locationData}
+                    orderItems={orderModalData.orderItems}
+                    totals={orderModalData.totals}
+                    notes={orderModalData.notes}
+                />
+            )}
+
+            {/* Modal de recibo para órdenes existentes */}
+            {showReceiptModal && receiptModalData && (
+                <PurchaseOrderModal
+                    isOpen={showReceiptModal}
+                    onClose={handleCloseReceiptModal}
+                    orderData={receiptModalData.orderData}
+                    supplierData={receiptModalData.supplierData}
+                    locationData={receiptModalData.locationData}
+                    orderItems={receiptModalData.orderItems}
+                    totals={receiptModalData.totals}
+                    notes={receiptModalData.notes}
+                />
+            )}
+
+            {/* Modal de Procesando Redirección */}
+            {isProcessingRedirect && (
                 <div
                     style={{
                         position: "fixed",
                         top: 0,
+                        left: 0,
                         right: 0,
-                        width: "480px",
-                        height: "100vh",
-                        background:
-                            "linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%)",
-                        boxShadow: "-8px 0 32px rgba(44,62,80,0.15)",
-                        zIndex: 1000,
-                        padding: "0",
-                        overflowY: "auto",
-                        transition: "transform 0.3s cubic-bezier(.4,2,.3,1)",
-                        animation: "slideInDrawer .3s cubic-bezier(.4,2,.3,1)",
-                        borderLeft: "1px solid #e9ecef",
+                        bottom: 0,
+                        backgroundColor: "rgba(0, 0, 0, 0.7)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        zIndex: 9999,
+                        animation: "fadeIn 0.3s ease-in-out",
                     }}
                 >
-                    <style>{`
-                        @keyframes slideInDrawer {
-                            from { transform: translateX(100%); opacity: 0; }
-                            to { transform: translateX(0); opacity: 1; }
-                        }
-                    `}</style>
-
-                    {/* Header del panel */}
                     <div
                         style={{
-                            background:
-                                "linear-gradient(135deg, #2c3e50 0%, #34495e 100%)",
-                            color: "white",
-                            padding: "24px 32px",
-                            position: "sticky",
-                            top: 0,
-                            zIndex: 10,
-                            boxShadow: "0 2px 8px rgba(44,62,80,0.1)",
+                            backgroundColor: "white",
+                            borderRadius: "16px",
+                            padding: "40px",
+                            boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+                            textAlign: "center",
+                            maxWidth: "500px",
+                            margin: "20px",
+                            animation: "slideIn 0.4s ease-out",
                         }}
                     >
+                        {/* Spinner de carga */}
                         <div
                             style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "center",
+                                width: "60px",
+                                height: "60px",
+                                border: "4px solid #f3f4f6",
+                                borderTop: "4px solid #2c3e50",
+                                borderRadius: "50%",
+                                animation: "spin 1s linear infinite",
+                                margin: "0 auto 24px auto",
+                            }}
+                        ></div>
+
+                        {/* Título */}
+                        <h3
+                            style={{
+                                fontSize: "24px",
+                                fontWeight: "700",
+                                color: "#2c3e50",
+                                margin: "0 0 16px 0",
+                                letterSpacing: "-0.5px",
                             }}
                         >
-                            <div>
-                                <h2
-                                    style={{
-                                        fontWeight: "800",
-                                        fontSize: "24px",
-                                        margin: "0 0 4px 0",
-                                        color: "white",
-                                        letterSpacing: "-0.5px",
-                                    }}
-                                >
-                                    Detalle de Orden
-                                </h2>
-                                <p
-                                    style={{
-                                        margin: 0,
-                                        opacity: 0.9,
-                                        fontSize: "14px",
-                                        fontWeight: "500",
-                                    }}
-                                >
-                                    Información completa de la orden
-                                </p>
-                            </div>
-                            <button
-                                onClick={() => setShowOrderDetail(false)}
-                                style={{
-                                    background: "rgba(255,255,255,0.2)",
-                                    border: "none",
-                                    borderRadius: "50%",
-                                    width: "40px",
-                                    height: "40px",
-                                    fontSize: "20px",
-                                    color: "white",
-                                    cursor: "pointer",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    transition: "all 0.2s ease",
-                                    backdropFilter: "blur(10px)",
-                                }}
-                                onMouseEnter={(e) => {
-                                    e.target.style.background =
-                                        "rgba(255,255,255,0.3)";
-                                    e.target.style.transform = "scale(1.1)";
-                                }}
-                                onMouseLeave={(e) => {
-                                    e.target.style.background =
-                                        "rgba(255,255,255,0.2)";
-                                    e.target.style.transform = "scale(1)";
-                                }}
-                                title="Cerrar"
-                            >
-                                ×
-                            </button>
+                            ✅ Orden Recibida
+                        </h3>
+
+                        {/* Mensaje */}
+                        <p
+                            style={{
+                                fontSize: "16px",
+                                color: "#6c757d",
+                                margin: "0 0 8px 0",
+                                lineHeight: "1.5",
+                            }}
+                        >
+                            Procesando los productos de la orden...
+                        </p>
+                        <p
+                            style={{
+                                fontSize: "14px",
+                                color: "#27ae60",
+                                margin: "0",
+                                fontWeight: "600",
+                            }}
+                        >
+                            📦 Redirigiendo a movimientos de stock
+                        </p>
+
+                        {/* Indicador de progreso */}
+                        <div
+                            style={{
+                                marginTop: "24px",
+                                padding: "12px 16px",
+                                backgroundColor: "#f8f9fa",
+                                borderRadius: "8px",
+                                fontSize: "12px",
+                                color: "#495057",
+                                fontStyle: "italic",
+                            }}
+                        >
+                            💡 Los productos serán pre-cargados automáticamente
                         </div>
                     </div>
-                    {orderDetailLoading ? (
-                        <div
-                            style={{
-                                color: "#888",
-                                textAlign: "center",
-                                padding: 32,
-                                fontSize: 18,
-                            }}
-                        >
-                            Cargando detalle...
-                        </div>
-                    ) : orderDetailError ? (
-                        <div
-                            style={{
-                                color: "#c0392b",
-                                textAlign: "center",
-                                padding: 32,
-                                fontWeight: 600,
-                            }}
-                        >
-                            {orderDetailError}
-                        </div>
-                    ) : selectedOrder ? (
-                        <div style={{ padding: "32px" }}>
-                            {/* Información principal de la orden */}
-                            <div
-                                style={{
-                                    background: "white",
-                                    borderRadius: "16px",
-                                    padding: "24px",
-                                    marginBottom: "24px",
-                                    boxShadow: "0 4px 16px rgba(44,62,80,0.08)",
-                                    border: "1px solid #e9ecef",
-                                }}
-                            >
-                                <div
-                                    style={{
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: "12px",
-                                        marginBottom: "20px",
-                                        paddingBottom: "16px",
-                                        borderBottom: "2px solid #f8f9fa",
-                                    }}
-                                >
-                                    <div
-                                        style={{
-                                            width: "48px",
-                                            height: "48px",
-                                            backgroundColor: "#e3f2fd",
-                                            borderRadius: "12px",
-                                            display: "flex",
-                                            alignItems: "center",
-                                            justifyContent: "center",
-                                            color: "#1976d2",
-                                            fontSize: "20px",
-                                            fontWeight: "700",
-                                        }}
-                                    >
-                                        #{selectedOrder.id}
-                                    </div>
-                                    <div>
-                                        <h3
-                                            style={{
-                                                fontWeight: "800",
-                                                fontSize: "20px",
-                                                margin: "0 0 4px 0",
-                                                color: "#2c3e50",
-                                            }}
-                                        >
-                                            Orden #{selectedOrder.id}
-                                        </h3>
-                                        <span
-                                            style={{
-                                                display: "inline-block",
-                                                padding: "4px 12px",
-                                                borderRadius: "20px",
-                                                fontSize: "12px",
-                                                fontWeight: "700",
-                                                textTransform: "uppercase",
-                                                letterSpacing: "0.5px",
-                                                backgroundColor:
-                                                    selectedOrder.status ===
-                                                    "pending"
-                                                        ? "#fff3cd"
-                                                        : selectedOrder.status ===
-                                                          "approved"
-                                                        ? "#d1ecf1"
-                                                        : selectedOrder.status ===
-                                                          "completed"
-                                                        ? "#d4edda"
-                                                        : selectedOrder.status ===
-                                                          "cancelled"
-                                                        ? "#f8d7da"
-                                                        : "#e2e3e5",
-                                                color:
-                                                    selectedOrder.status ===
-                                                    "pending"
-                                                        ? "#856404"
-                                                        : selectedOrder.status ===
-                                                          "approved"
-                                                        ? "#0c5460"
-                                                        : selectedOrder.status ===
-                                                          "completed"
-                                                        ? "#155724"
-                                                        : selectedOrder.status ===
-                                                          "cancelled"
-                                                        ? "#721c24"
-                                                        : "#383d41",
-                                                border: "1px solid",
-                                                borderColor:
-                                                    selectedOrder.status ===
-                                                    "pending"
-                                                        ? "#ffeaa7"
-                                                        : selectedOrder.status ===
-                                                          "approved"
-                                                        ? "#bee5eb"
-                                                        : selectedOrder.status ===
-                                                          "completed"
-                                                        ? "#c3e6cb"
-                                                        : selectedOrder.status ===
-                                                          "cancelled"
-                                                        ? "#f5c6cb"
-                                                        : "#d6d8db",
-                                            }}
-                                        >
-                                            {selectedOrder.status_display ||
-                                                translateStatus(
-                                                    selectedOrder.status
-                                                ) ||
-                                                "-"}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                {/* Detalles de la orden */}
-                                <div
-                                    style={{
-                                        display: "grid",
-                                        gridTemplateColumns: "1fr 1fr",
-                                        gap: "16px",
-                                    }}
-                                >
-                                    <div
-                                        style={{
-                                            padding: "16px",
-                                            background: "#f8f9fa",
-                                            borderRadius: "12px",
-                                            border: "1px solid #e9ecef",
-                                        }}
-                                    >
-                                        <div
-                                            style={{
-                                                fontSize: "12px",
-                                                fontWeight: "700",
-                                                color: "#6c757d",
-                                                textTransform: "uppercase",
-                                                letterSpacing: "0.5px",
-                                                marginBottom: "4px",
-                                            }}
-                                        >
-                                            Proveedor
-                                        </div>
-                                        <div
-                                            style={{
-                                                fontSize: "14px",
-                                                fontWeight: "600",
-                                                color: "#2c3e50",
-                                            }}
-                                        >
-                                            {selectedOrder.supplierName || "-"}
-                                        </div>
-                                    </div>
-
-                                    <div
-                                        style={{
-                                            padding: "16px",
-                                            background: "#f8f9fa",
-                                            borderRadius: "12px",
-                                            border: "1px solid #e9ecef",
-                                        }}
-                                    >
-                                        <div
-                                            style={{
-                                                fontSize: "12px",
-                                                fontWeight: "700",
-                                                color: "#6c757d",
-                                                textTransform: "uppercase",
-                                                letterSpacing: "0.5px",
-                                                marginBottom: "4px",
-                                            }}
-                                        >
-                                            Sede Destino
-                                        </div>
-                                        <div
-                                            style={{
-                                                fontSize: "14px",
-                                                fontWeight: "600",
-                                                color: "#2c3e50",
-                                            }}
-                                        >
-                                            {selectedOrder.destinationName ||
-                                                "-"}
-                                        </div>
-                                    </div>
-
-                                    <div
-                                        style={{
-                                            padding: "16px",
-                                            background: "#f8f9fa",
-                                            borderRadius: "12px",
-                                            border: "1px solid #e9ecef",
-                                        }}
-                                    >
-                                        <div
-                                            style={{
-                                                fontSize: "12px",
-                                                fontWeight: "700",
-                                                color: "#6c757d",
-                                                textTransform: "uppercase",
-                                                letterSpacing: "0.5px",
-                                                marginBottom: "4px",
-                                            }}
-                                        >
-                                            Fecha
-                                        </div>
-                                        <div
-                                            style={{
-                                                fontSize: "14px",
-                                                fontWeight: "600",
-                                                color: "#2c3e50",
-                                            }}
-                                        >
-                                            {selectedOrder.order_date
-                                                ? new Date(
-                                                      selectedOrder.order_date
-                                                  ).toLocaleDateString(
-                                                      "es-ES",
-                                                      {
-                                                          year: "numeric",
-                                                          month: "long",
-                                                          day: "numeric",
-                                                      }
-                                                  )
-                                                : "-"}
-                                        </div>
-                                    </div>
-
-                                    <div
-                                        style={{
-                                            padding: "16px",
-                                            background: "#f8f9fa",
-                                            borderRadius: "12px",
-                                            border: "1px solid #e9ecef",
-                                        }}
-                                    >
-                                        <div
-                                            style={{
-                                                fontSize: "12px",
-                                                fontWeight: "700",
-                                                color: "#6c757d",
-                                                textTransform: "uppercase",
-                                                letterSpacing: "0.5px",
-                                                marginBottom: "4px",
-                                            }}
-                                        >
-                                            Total
-                                        </div>
-                                        <div
-                                            style={{
-                                                fontSize: "16px",
-                                                fontWeight: "700",
-                                                color: "#27ae60",
-                                            }}
-                                        >
-                                            {selectedOrder.total_amount
-                                                ? `$${parseFloat(
-                                                      selectedOrder.total_amount
-                                                  ).toLocaleString("es-CO", {
-                                                      minimumFractionDigits: 0,
-                                                  })}`
-                                                : "-"}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Notas */}
-                                {selectedOrder.notes && (
-                                    <div
-                                        style={{
-                                            marginTop: "16px",
-                                            padding: "16px",
-                                            background: "#fff3cd",
-                                            borderRadius: "12px",
-                                            border: "1px solid #ffeaa7",
-                                        }}
-                                    >
-                                        <div
-                                            style={{
-                                                fontSize: "12px",
-                                                fontWeight: "700",
-                                                color: "#856404",
-                                                textTransform: "uppercase",
-                                                letterSpacing: "0.5px",
-                                                marginBottom: "8px",
-                                            }}
-                                        >
-                                            Notas
-                                        </div>
-                                        <div
-                                            style={{
-                                                fontSize: "14px",
-                                                color: "#856404",
-                                                lineHeight: "1.5",
-                                            }}
-                                        >
-                                            {selectedOrder.notes}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                            {/* Tabla de productos */}
-                            <div
-                                style={{
-                                    background: "white",
-                                    borderRadius: "16px",
-                                    padding: "24px",
-                                    marginBottom: "24px",
-                                    boxShadow: "0 4px 16px rgba(44,62,80,0.08)",
-                                    border: "1px solid #e9ecef",
-                                }}
-                            >
-                                <div
-                                    style={{
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: "12px",
-                                        marginBottom: "20px",
-                                        paddingBottom: "16px",
-                                        borderBottom: "2px solid #f8f9fa",
-                                    }}
-                                >
-                                    <div
-                                        style={{
-                                            width: "40px",
-                                            height: "40px",
-                                            backgroundColor: "#e8f5e8",
-                                            borderRadius: "10px",
-                                            display: "flex",
-                                            alignItems: "center",
-                                            justifyContent: "center",
-                                            color: "#27ae60",
-                                            fontSize: "16px",
-                                        }}
-                                    >
-                                        📦
-                                    </div>
-                                    <h3
-                                        style={{
-                                            fontWeight: "800",
-                                            fontSize: "18px",
-                                            margin: 0,
-                                            color: "#2c3e50",
-                                        }}
-                                    >
-                                        Productos de la orden
-                                    </h3>
-                                </div>
-                                {Array.isArray(selectedOrder.items) &&
-                                selectedOrder.items.length > 0 ? (
-                                    <div
-                                        style={{
-                                            overflowX: "auto",
-                                            borderRadius: "8px",
-                                            border: "1px solid #e9ecef",
-                                            boxShadow:
-                                                "0 1px 4px rgba(0,0,0,0.04)",
-                                        }}
-                                    >
-                                        <table
-                                            style={{
-                                                width: "100%",
-                                                borderCollapse: "collapse",
-                                                background: "white",
-                                                minWidth: "350px",
-                                            }}
-                                        >
-                                            <thead>
-                                                <tr
-                                                    style={{
-                                                        background:
-                                                            "linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)",
-                                                        borderBottom:
-                                                            "1px solid #dee2e6",
-                                                    }}
-                                                >
-                                                    <th
-                                                        style={{
-                                                            padding: "10px 8px",
-                                                            textAlign: "left",
-                                                            fontWeight: "700",
-                                                            fontSize: "11px",
-                                                            letterSpacing:
-                                                                "0.5px",
-                                                            textTransform:
-                                                                "uppercase",
-                                                            color: "#495057",
-                                                        }}
-                                                    >
-                                                        Producto
-                                                    </th>
-                                                    <th
-                                                        style={{
-                                                            padding: "10px 8px",
-                                                            textAlign: "center",
-                                                            fontWeight: "700",
-                                                            fontSize: "11px",
-                                                            letterSpacing:
-                                                                "0.5px",
-                                                            textTransform:
-                                                                "uppercase",
-                                                            color: "#495057",
-                                                        }}
-                                                    >
-                                                        Cant.
-                                                    </th>
-                                                    <th
-                                                        style={{
-                                                            padding: "10px 8px",
-                                                            textAlign: "right",
-                                                            fontWeight: "700",
-                                                            fontSize: "11px",
-                                                            letterSpacing:
-                                                                "0.5px",
-                                                            textTransform:
-                                                                "uppercase",
-                                                            color: "#495057",
-                                                        }}
-                                                    >
-                                                        Precio
-                                                    </th>
-                                                    <th
-                                                        style={{
-                                                            padding: "10px 8px",
-                                                            textAlign: "right",
-                                                            fontWeight: "700",
-                                                            fontSize: "11px",
-                                                            letterSpacing:
-                                                                "0.5px",
-                                                            textTransform:
-                                                                "uppercase",
-                                                            color: "#495057",
-                                                        }}
-                                                    >
-                                                        Total
-                                                    </th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {selectedOrder.items.map(
-                                                    (item, idx) => (
-                                                        <tr
-                                                            key={idx}
-                                                            style={{
-                                                                borderBottom:
-                                                                    "1px solid #f0f0f0",
-                                                                backgroundColor:
-                                                                    idx % 2 ===
-                                                                    0
-                                                                        ? "#fff"
-                                                                        : "#f8f9fa",
-                                                            }}
-                                                        >
-                                                            <td
-                                                                style={{
-                                                                    padding:
-                                                                        "8px 6px",
-                                                                    fontWeight:
-                                                                        "600",
-                                                                    fontSize:
-                                                                        "12px",
-                                                                    color: "#2c3e50",
-                                                                    textAlign:
-                                                                        "left",
-                                                                }}
-                                                            >
-                                                                {item
-                                                                    .purchase_option_details
-                                                                    ?.product_name ||
-                                                                    item.product_name ||
-                                                                    item.product ||
-                                                                    "-"}
-                                                            </td>
-                                                            <td
-                                                                style={{
-                                                                    padding:
-                                                                        "8px 6px",
-                                                                    fontSize:
-                                                                        "12px",
-                                                                    color: "#495057",
-                                                                    textAlign:
-                                                                        "center",
-                                                                    fontWeight:
-                                                                        "600",
-                                                                }}
-                                                            >
-                                                                {item.quantity_requested ||
-                                                                    item.quantity ||
-                                                                    "-"}
-                                                            </td>
-                                                            <td
-                                                                style={{
-                                                                    padding:
-                                                                        "8px 6px",
-                                                                    fontSize:
-                                                                        "12px",
-                                                                    color: "#495057",
-                                                                    textAlign:
-                                                                        "right",
-                                                                    fontWeight:
-                                                                        "500",
-                                                                }}
-                                                            >
-                                                                {item.unit_price
-                                                                    ? `$${parseFloat(
-                                                                          item.unit_price
-                                                                      ).toLocaleString(
-                                                                          "es-CO",
-                                                                          {
-                                                                              minimumFractionDigits: 0,
-                                                                          }
-                                                                      )}`
-                                                                    : "-"}
-                                                            </td>
-                                                            <td
-                                                                style={{
-                                                                    padding:
-                                                                        "8px 6px",
-                                                                    color: "#27ae60",
-                                                                    fontWeight:
-                                                                        "700",
-                                                                    fontSize:
-                                                                        "12px",
-                                                                    textAlign:
-                                                                        "right",
-                                                                }}
-                                                            >
-                                                                {item.line_total
-                                                                    ? `$${parseFloat(
-                                                                          item.line_total
-                                                                      ).toLocaleString(
-                                                                          "es-CO",
-                                                                          {
-                                                                              minimumFractionDigits: 0,
-                                                                          }
-                                                                      )}`
-                                                                    : "-"}
-                                                            </td>
-                                                        </tr>
-                                                    )
-                                                )}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                ) : (
-                                    <div
-                                        style={{
-                                            color: "#6c757d",
-                                            textAlign: "center",
-                                            padding: "32px 16px",
-                                            fontSize: "14px",
-                                            fontStyle: "italic",
-                                        }}
-                                    >
-                                        No hay productos en esta orden.
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Información adicional */}
-                            <div
-                                style={{
-                                    background: "white",
-                                    borderRadius: "16px",
-                                    padding: "20px",
-                                    boxShadow: "0 4px 16px rgba(44,62,80,0.08)",
-                                    border: "1px solid #e9ecef",
-                                }}
-                            >
-                                <div
-                                    style={{
-                                        fontSize: "12px",
-                                        fontWeight: "700",
-                                        color: "#6c757d",
-                                        textTransform: "uppercase",
-                                        letterSpacing: "0.5px",
-                                        marginBottom: "12px",
-                                    }}
-                                >
-                                    Información del Sistema
-                                </div>
-                                <div
-                                    style={{
-                                        display: "grid",
-                                        gridTemplateColumns: "1fr 1fr",
-                                        gap: "12px",
-                                        fontSize: "13px",
-                                        color: "#495057",
-                                    }}
-                                >
-                                    <div>
-                                        <span style={{ fontWeight: "600" }}>
-                                            ID interno:
-                                        </span>{" "}
-                                        {selectedOrder.id}
-                                    </div>
-                                    <div>
-                                        <span style={{ fontWeight: "600" }}>
-                                            Creado:
-                                        </span>{" "}
-                                        {selectedOrder.created_at
-                                            ? new Date(
-                                                  selectedOrder.created_at
-                                              ).toLocaleDateString("es-ES", {
-                                                  year: "numeric",
-                                                  month: "short",
-                                                  day: "numeric",
-                                                  hour: "2-digit",
-                                                  minute: "2-digit",
-                                              })
-                                            : "-"}
-                                    </div>
-                                    <div>
-                                        <span style={{ fontWeight: "600" }}>
-                                            Actualizado:
-                                        </span>{" "}
-                                        {selectedOrder.updated_at
-                                            ? new Date(
-                                                  selectedOrder.updated_at
-                                              ).toLocaleDateString("es-ES", {
-                                                  year: "numeric",
-                                                  month: "short",
-                                                  day: "numeric",
-                                                  hour: "2-digit",
-                                                  minute: "2-digit",
-                                              })
-                                            : "-"}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    ) : null}
                 </div>
             )}
         </>

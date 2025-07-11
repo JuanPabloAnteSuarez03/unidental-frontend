@@ -308,7 +308,7 @@ const BasicInfoForm = ({
             {/* Manejo por Lotes */}
             <div style={{ marginBottom: "20px" }}>
                 <label
-                    htmlFor="has_batch_management"
+                    htmlFor="requires_batch_control"
                     style={{
                         display: "block",
                         marginBottom: "8px",
@@ -348,13 +348,15 @@ const BasicInfoForm = ({
                 >
                     <input
                         type="checkbox"
-                        id="has_batch_management"
-                        name="has_batch_management"
-                        checked={formData.has_batch_management}
+                        id="requires_batch_control"
+                        name="requires_batch_control"
+                        checked={formData.requires_batch_control}
                         onChange={(e) => {
                             handleInputChange({
                                 target: {
-                                    name: "has_batch_management",
+                                    name: "requires_batch_control",
+                                    type: "checkbox",
+                                    checked: e.target.checked,
                                     value: e.target.checked,
                                 },
                             });
@@ -368,7 +370,7 @@ const BasicInfoForm = ({
                     />
                     <div>
                         <label
-                            htmlFor="has_batch_management"
+                            htmlFor="requires_batch_control"
                             style={{
                                 fontSize: "16px",
                                 fontWeight: "500",

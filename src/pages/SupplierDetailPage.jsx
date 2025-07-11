@@ -4,6 +4,8 @@ import { useAuth } from "../context/AuthContext";
 import { getSupplierById } from "../services/suppliersService";
 import ProductosTable from "../components/Alertas/ProductosTable";
 import { FaArrowLeft, FaBoxOpen } from "react-icons/fa";
+import AddPurchaseOptionModal from "../components/OrdenesDeCompra/AddPurchaseOptionModal";
+import PurchaseOptionDetailModal from "../components/OrdenesDeCompra/PurchaseOptionDetailModal";
 
 const SupplierDetailPage = () => {
     const { supplierName } = useParams();
@@ -14,6 +16,24 @@ const SupplierDetailPage = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [searchTerm, setSearchTerm] = useState("");
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [selectedPurchaseOption, setSelectedPurchaseOption] = useState(null);
+    const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+    const [isDeleteMode, setIsDeleteMode] = useState(false);
+    const [selectedOptions, setSelectedOptions] = useState([]); // IDs de opciones seleccionadas
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+    const [deleteError, setDeleteError] = useState(null);
+    const [isEditInfo, setIsEditInfo] = useState(false);
+    const [editInfo, setEditInfo] = useState({
+        name: "",
+        phone: "",
+        email: "",
+    });
+    const [showEditConfirm, setShowEditConfirm] = useState(false);
+    const [savingEdit, setSavingEdit] = useState(false);
+    const [editError, setEditError] = useState(null);
+    const [editSuccess, setEditSuccess] = useState(false);
 
     // Extraer el ID del proveedor del nombre de la URL
     const extractSupplierId = (urlName) => {
@@ -69,6 +89,43 @@ const SupplierDetailPage = () => {
         navigate("/compras/proveedores");
     };
 
+    const handleOpenModal = () => {
+        setIsModalOpen(true);
+    };
+
+    const handleCloseModal = () => {
+        setIsModalOpen(false);
+    };
+
+    const handleSavePurchaseOption = (purchaseOption) => {
+        // TODO: Implementar lógica para guardar la opción de compra
+        console.log("Opción de compra guardada:", purchaseOption);
+
+        // Actualizar la lista de productos del proveedor
+        if (supplier && supplier.purchase_options) {
+            const updatedSupplier = {
+                ...supplier,
+                purchase_options: [
+                    ...supplier.purchase_options,
+                    purchaseOption,
+                ],
+            };
+            setSupplier(updatedSupplier);
+        }
+
+        // Mostrar notificación de éxito
+        alert("Opción de compra agregada exitosamente");
+    };
+
+    // Función para normalizar tildes y caracteres especiales
+    function normalizeText(text) {
+        if (!text) return "";
+        return text
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .toLowerCase();
+    }
+
     // Función para filtrar productos basado en el término de búsqueda
     const getFilteredProducts = () => {
         if (!supplier || !supplier.purchase_options) return [];
@@ -77,12 +134,14 @@ const SupplierDetailPage = () => {
             return supplier.purchase_options;
         }
 
-        const searchLower = searchTerm.toLowerCase();
+        const normalizedSearch = normalizeText(searchTerm);
         return supplier.purchase_options.filter(
             (option) =>
-                option.product_name.toLowerCase().includes(searchLower) ||
-                option.category_name.toLowerCase().includes(searchLower) ||
-                option.purchase_price.toString().includes(searchLower)
+                normalizeText(option.product_name).includes(normalizedSearch) ||
+                normalizeText(option.category_name).includes(
+                    normalizedSearch
+                ) ||
+                option.purchase_price.toString().includes(searchTerm)
         );
     };
 
@@ -457,37 +516,114 @@ const SupplierDetailPage = () => {
                         display: "flex",
                         alignItems: "center",
                         gap: "16px",
+                        justifyContent: "space-between",
                     }}
                 >
-                    <div
+                    <span
                         style={{
-                            width: "48px",
-                            height: "48px",
-                            borderRadius: "12px",
-                            backgroundColor: "#e3f2fd",
                             display: "flex",
                             alignItems: "center",
-                            justifyContent: "center",
-                            boxShadow: "0 4px 12px rgba(25,118,210,0.15)",
+                            gap: "16px",
                         }}
                     >
-                        <svg
-                            width="24"
-                            height="24"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                            style={{ color: "#1976d2" }}
+                        <div
+                            style={{
+                                width: "48px",
+                                height: "48px",
+                                borderRadius: "12px",
+                                backgroundColor: "#e3f2fd",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                boxShadow: "0 4px 12px rgba(25,118,210,0.15)",
+                            }}
                         >
-                            <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                            />
-                        </svg>
-                    </div>
-                    Información de Contacto
+                            <svg
+                                width="24"
+                                height="24"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                                style={{ color: "#1976d2" }}
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                                />
+                            </svg>
+                        </div>
+                        Información de Contacto
+                    </span>
+                    <span style={{ display: "flex", gap: 12 }}>
+                        {isEditInfo && (
+                            <button
+                                style={{
+                                    padding: "8px 18px",
+                                    backgroundColor: "#dc3545",
+                                    color: "white",
+                                    border: "none",
+                                    borderRadius: "8px",
+                                    fontWeight: 600,
+                                    fontSize: 15,
+                                    cursor: "pointer",
+                                    boxShadow: "0 2px 8px rgba(220,53,69,0.15)",
+                                    transition: "all 0.3s ease",
+                                }}
+                                onClick={() => setIsEditInfo(false)}
+                            >
+                                Cancelar edición
+                            </button>
+                        )}
+                        {isEditInfo && (
+                            <button
+                                style={{
+                                    padding: "8px 18px",
+                                    backgroundColor: "#1976d2",
+                                    color: "white",
+                                    border: "none",
+                                    borderRadius: "8px",
+                                    fontWeight: 600,
+                                    fontSize: 15,
+                                    cursor: "pointer",
+                                    boxShadow:
+                                        "0 2px 8px rgba(25,118,210,0.15)",
+                                    transition: "all 0.3s ease",
+                                }}
+                                onClick={() => setShowEditConfirm(true)}
+                            >
+                                Guardar cambios
+                            </button>
+                        )}
+                        {!isEditInfo && (
+                            <button
+                                style={{
+                                    padding: "8px 18px",
+                                    backgroundColor: "#1976d2",
+                                    color: "white",
+                                    border: "none",
+                                    borderRadius: "8px",
+                                    fontWeight: 600,
+                                    fontSize: 15,
+                                    cursor: "pointer",
+                                    boxShadow:
+                                        "0 2px 8px rgba(25,118,210,0.15)",
+                                    transition: "all 0.3s ease",
+                                }}
+                                onClick={() => {
+                                    setEditInfo({
+                                        name: supplier.name || "",
+                                        phone: supplier.phone || "",
+                                        email: supplier.email || "",
+                                    });
+                                    setIsEditInfo(true);
+                                }}
+                            >
+                                Actualizar info
+                            </button>
+                        )}
+                    </span>
                 </h2>
 
                 <div
@@ -561,46 +697,40 @@ const SupplierDetailPage = () => {
                                         display: "block",
                                     }}
                                 >
-                                    Nombre del Contacto
+                                    Nombre
                                 </label>
-                                <p
-                                    style={{
-                                        fontSize: "16px",
-                                        color: "#2c3e50",
-                                        margin: 0,
-                                        fontWeight: "600",
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: "8px",
-                                    }}
-                                >
-                                    <svg
-                                        width="16"
-                                        height="16"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                        style={{ color: "#28a745" }}
+                                {isEditInfo ? (
+                                    <input
+                                        type="text"
+                                        value={editInfo.name}
+                                        onChange={(e) =>
+                                            setEditInfo((info) => ({
+                                                ...info,
+                                                name: e.target.value,
+                                            }))
+                                        }
+                                        style={{
+                                            fontSize: "16px",
+                                            color: "#2c3e50",
+                                            fontWeight: "600",
+                                            padding: "8px 12px",
+                                            border: "1px solid #bdbdbd",
+                                            borderRadius: "6px",
+                                            width: "100%",
+                                        }}
+                                    />
+                                ) : (
+                                    <p
+                                        style={{
+                                            fontSize: "16px",
+                                            color: "#2c3e50",
+                                            margin: 0,
+                                            fontWeight: "600",
+                                        }}
                                     >
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                                        />
-                                    </svg>
-                                    {supplier.contact_name || (
-                                        <span
-                                            style={{
-                                                color: "#adb5bd",
-                                                fontStyle: "italic",
-                                                fontWeight: "400",
-                                            }}
-                                        >
-                                            No especificado
-                                        </span>
-                                    )}
-                                </p>
+                                        {supplier.name}
+                                    </p>
+                                )}
                             </div>
                             <div
                                 style={{
@@ -624,48 +754,70 @@ const SupplierDetailPage = () => {
                                 >
                                     Teléfono
                                 </label>
-                                <p
-                                    style={{
-                                        fontSize: "16px",
-                                        color: "#2c3e50",
-                                        margin: 0,
-                                        fontWeight: "600",
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: "8px",
-                                    }}
-                                >
-                                    {supplier.phone ? (
-                                        <>
-                                            <svg
-                                                width="16"
-                                                height="16"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                viewBox="0 0 24 24"
-                                                style={{ color: "#28a745" }}
+                                {isEditInfo ? (
+                                    <input
+                                        type="text"
+                                        value={editInfo.phone}
+                                        onChange={(e) =>
+                                            setEditInfo((info) => ({
+                                                ...info,
+                                                phone: e.target.value,
+                                            }))
+                                        }
+                                        style={{
+                                            fontSize: "16px",
+                                            color: "#2c3e50",
+                                            fontWeight: "600",
+                                            padding: "8px 12px",
+                                            border: "1px solid #bdbdbd",
+                                            borderRadius: "6px",
+                                            width: "100%",
+                                        }}
+                                    />
+                                ) : (
+                                    <p
+                                        style={{
+                                            fontSize: "16px",
+                                            color: "#2c3e50",
+                                            margin: 0,
+                                            fontWeight: "600",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "8px",
+                                        }}
+                                    >
+                                        {supplier.phone ? (
+                                            <>
+                                                <svg
+                                                    width="16"
+                                                    height="16"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    viewBox="0 0 24 24"
+                                                    style={{ color: "#28a745" }}
+                                                >
+                                                    <path
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                        strokeWidth={2}
+                                                        d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                                                    />
+                                                </svg>
+                                                {supplier.phone}
+                                            </>
+                                        ) : (
+                                            <span
+                                                style={{
+                                                    color: "#adb5bd",
+                                                    fontStyle: "italic",
+                                                    fontWeight: "400",
+                                                }}
                                             >
-                                                <path
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    strokeWidth={2}
-                                                    d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-                                                />
-                                            </svg>
-                                            {supplier.phone}
-                                        </>
-                                    ) : (
-                                        <span
-                                            style={{
-                                                color: "#adb5bd",
-                                                fontStyle: "italic",
-                                                fontWeight: "400",
-                                            }}
-                                        >
-                                            No especificado
-                                        </span>
-                                    )}
-                                </p>
+                                                No especificado
+                                            </span>
+                                        )}
+                                    </p>
+                                )}
                             </div>
                             <div
                                 style={{
@@ -689,292 +841,76 @@ const SupplierDetailPage = () => {
                                 >
                                     Email
                                 </label>
-                                <p
-                                    style={{
-                                        fontSize: "16px",
-                                        color: "#2c3e50",
-                                        margin: 0,
-                                        fontWeight: "600",
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: "8px",
-                                    }}
-                                >
-                                    {supplier.email ? (
-                                        <>
-                                            <svg
-                                                width="16"
-                                                height="16"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                viewBox="0 0 24 24"
-                                                style={{ color: "#007bff" }}
+                                {isEditInfo ? (
+                                    <input
+                                        type="email"
+                                        value={editInfo.email}
+                                        onChange={(e) =>
+                                            setEditInfo((info) => ({
+                                                ...info,
+                                                email: e.target.value,
+                                            }))
+                                        }
+                                        style={{
+                                            fontSize: "16px",
+                                            color: "#2c3e50",
+                                            fontWeight: "600",
+                                            padding: "8px 12px",
+                                            border: "1px solid #bdbdbd",
+                                            borderRadius: "6px",
+                                            width: "100%",
+                                        }}
+                                    />
+                                ) : (
+                                    <p
+                                        style={{
+                                            fontSize: "16px",
+                                            color: "#2c3e50",
+                                            margin: 0,
+                                            fontWeight: "600",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "8px",
+                                        }}
+                                    >
+                                        {supplier.email ? (
+                                            <>
+                                                <svg
+                                                    width="16"
+                                                    height="16"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    viewBox="0 0 24 24"
+                                                    style={{ color: "#007bff" }}
+                                                >
+                                                    <path
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                        strokeWidth={2}
+                                                        d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                                                    />
+                                                </svg>
+                                                {supplier.email}
+                                            </>
+                                        ) : (
+                                            <span
+                                                style={{
+                                                    color: "#adb5bd",
+                                                    fontStyle: "italic",
+                                                    fontWeight: "400",
+                                                }}
                                             >
-                                                <path
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    strokeWidth={2}
-                                                    d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                                                />
-                                            </svg>
-                                            {supplier.email}
-                                        </>
-                                    ) : (
-                                        <span
-                                            style={{
-                                                color: "#adb5bd",
-                                                fontStyle: "italic",
-                                                fontWeight: "400",
-                                            }}
-                                        >
-                                            No especificado
-                                        </span>
-                                    )}
-                                </p>
+                                                No especificado
+                                            </span>
+                                        )}
+                                    </p>
+                                )}
                             </div>
                         </div>
                     </div>
 
                     {/* Información adicional */}
-                    <div
-                        style={{
-                            backgroundColor: "#fafbfc",
-                            borderRadius: "16px",
-                            padding: "24px",
-                            border: "1px solid #e8f5e9",
-                        }}
-                    >
-                        <h3
-                            style={{
-                                fontSize: "18px",
-                                fontWeight: "700",
-                                color: "#388e3c",
-                                margin: "0 0 24px 0",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "8px",
-                            }}
-                        >
-                            <svg
-                                width="18"
-                                height="18"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                            >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                                />
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-                                />
-                            </svg>
-                            Información Adicional
-                        </h3>
-                        <div
-                            style={{
-                                display: "flex",
-                                flexDirection: "column",
-                                gap: "20px",
-                            }}
-                        >
-                            <div
-                                style={{
-                                    backgroundColor: "white",
-                                    borderRadius: "12px",
-                                    padding: "16px",
-                                    border: "1px solid #e9ecef",
-                                    boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-                                }}
-                            >
-                                <label
-                                    style={{
-                                        fontSize: "11px",
-                                        color: "#6c757d",
-                                        textTransform: "uppercase",
-                                        fontWeight: "700",
-                                        letterSpacing: "0.5px",
-                                        marginBottom: "8px",
-                                        display: "block",
-                                    }}
-                                >
-                                    Dirección
-                                </label>
-                                <p
-                                    style={{
-                                        fontSize: "16px",
-                                        color: "#2c3e50",
-                                        margin: 0,
-                                        fontWeight: "600",
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: "8px",
-                                    }}
-                                >
-                                    <svg
-                                        width="16"
-                                        height="16"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                        style={{ color: "#ff9800" }}
-                                    >
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                                        />
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-                                        />
-                                    </svg>
-                                    {supplier.address || (
-                                        <span
-                                            style={{
-                                                color: "#adb5bd",
-                                                fontStyle: "italic",
-                                                fontWeight: "400",
-                                            }}
-                                        >
-                                            No especificada
-                                        </span>
-                                    )}
-                                </p>
-                            </div>
-                            <div
-                                style={{
-                                    backgroundColor: "white",
-                                    borderRadius: "12px",
-                                    padding: "16px",
-                                    border: "1px solid #e9ecef",
-                                    boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-                                }}
-                            >
-                                <label
-                                    style={{
-                                        fontSize: "11px",
-                                        color: "#6c757d",
-                                        textTransform: "uppercase",
-                                        fontWeight: "700",
-                                        letterSpacing: "0.5px",
-                                        marginBottom: "8px",
-                                        display: "block",
-                                    }}
-                                >
-                                    Ciudad
-                                </label>
-                                <p
-                                    style={{
-                                        fontSize: "16px",
-                                        color: "#2c3e50",
-                                        margin: 0,
-                                        fontWeight: "600",
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: "8px",
-                                    }}
-                                >
-                                    <svg
-                                        width="16"
-                                        height="16"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                        style={{ color: "#9c27b0" }}
-                                    >
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-                                        />
-                                    </svg>
-                                    {supplier.city || (
-                                        <span
-                                            style={{
-                                                color: "#adb5bd",
-                                                fontStyle: "italic",
-                                                fontWeight: "400",
-                                            }}
-                                        >
-                                            No especificada
-                                        </span>
-                                    )}
-                                </p>
-                            </div>
-                            <div
-                                style={{
-                                    backgroundColor: "white",
-                                    borderRadius: "12px",
-                                    padding: "16px",
-                                    border: "1px solid #e9ecef",
-                                    boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-                                }}
-                            >
-                                <label
-                                    style={{
-                                        fontSize: "11px",
-                                        color: "#6c757d",
-                                        textTransform: "uppercase",
-                                        fontWeight: "700",
-                                        letterSpacing: "0.5px",
-                                        marginBottom: "8px",
-                                        display: "block",
-                                    }}
-                                >
-                                    País
-                                </label>
-                                <p
-                                    style={{
-                                        fontSize: "16px",
-                                        color: "#2c3e50",
-                                        margin: 0,
-                                        fontWeight: "600",
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: "8px",
-                                    }}
-                                >
-                                    <svg
-                                        width="16"
-                                        height="16"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                        style={{ color: "#f44336" }}
-                                    >
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                                        />
-                                    </svg>
-                                    {supplier.country || (
-                                        <span
-                                            style={{
-                                                color: "#adb5bd",
-                                                fontStyle: "italic",
-                                                fontWeight: "400",
-                                            }}
-                                        >
-                                            No especificado
-                                        </span>
-                                    )}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
+                    {/* SECCIÓN ELIMINADA */}
                 </div>
             </div>
 
@@ -1005,7 +941,7 @@ const SupplierDetailPage = () => {
                     Productos ofrecidos por este proveedor
                 </h2>
 
-                {/* Barra de búsqueda y contador */}
+                {/* Barra de búsqueda, contador y botón de orden de compra */}
                 <div
                     style={{
                         display: "flex",
@@ -1102,6 +1038,182 @@ const SupplierDetailPage = () => {
                             )}
                         </span>
                     </div>
+
+                    <div
+                        style={{
+                            display: "flex",
+                            gap: 8,
+                            position: "relative",
+                        }}
+                    >
+                        <button
+                            onClick={handleOpenModal}
+                            style={{
+                                padding: "12px 20px",
+                                backgroundColor: "#28a745",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "8px",
+                                fontSize: "14px",
+                                fontWeight: "600",
+                                cursor: "pointer",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "8px",
+                                boxShadow: "0 2px 8px rgba(40,167,69,0.25)",
+                                transition: "all 0.3s ease",
+                            }}
+                            onMouseOver={(e) => {
+                                e.currentTarget.style.backgroundColor =
+                                    "#218838";
+                                e.currentTarget.style.transform =
+                                    "translateY(-1px)";
+                                e.currentTarget.style.boxShadow =
+                                    "0 4px 12px rgba(40,167,69,0.35)";
+                            }}
+                            onMouseOut={(e) => {
+                                e.currentTarget.style.backgroundColor =
+                                    "#28a745";
+                                e.currentTarget.style.transform =
+                                    "translateY(0)";
+                                e.currentTarget.style.boxShadow =
+                                    "0 2px 8px rgba(40,167,69,0.25)";
+                            }}
+                            disabled={isDeleteMode}
+                        >
+                            <svg
+                                width="16"
+                                height="16"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                                />
+                            </svg>
+                            Agregar opción
+                        </button>
+                        <div style={{ position: "relative" }}>
+                            {isDeleteMode && (
+                                <div
+                                    style={{
+                                        position: "absolute",
+                                        bottom: "100%",
+                                        left: "50%",
+                                        transform: "translateX(-50%)",
+                                        marginBottom: 8,
+                                        padding: "8px 16px",
+                                        background: "#fff3cd",
+                                        color: "#856404",
+                                        borderRadius: "20px",
+                                        border: "1px solid #ffeeba",
+                                        fontWeight: 600,
+                                        fontSize: 14,
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: 8,
+                                        whiteSpace: "nowrap",
+                                        zIndex: 10,
+                                    }}
+                                >
+                                    Seleccionadas: {selectedOptions.length}
+                                </div>
+                            )}
+                            <button
+                                style={{
+                                    padding: "12px 20px",
+                                    backgroundColor: isDeleteMode
+                                        ? "#b52a37"
+                                        : "#dc3545",
+                                    color: "white",
+                                    border: "none",
+                                    borderRadius: "8px",
+                                    fontSize: "14px",
+                                    fontWeight: "600",
+                                    cursor: "pointer",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "8px",
+                                    boxShadow: "0 2px 8px rgba(220,53,69,0.15)",
+                                    transition: "all 0.3s ease",
+                                }}
+                                onClick={() => {
+                                    if (
+                                        isDeleteMode &&
+                                        selectedOptions.length > 0
+                                    ) {
+                                        setShowDeleteConfirm(true);
+                                    } else {
+                                        setIsDeleteMode((v) => !v);
+                                        setSelectedOptions([]);
+                                    }
+                                }}
+                                onMouseOver={(e) => {
+                                    e.currentTarget.style.backgroundColor =
+                                        "#b52a37";
+                                    e.currentTarget.style.transform =
+                                        "translateY(-1px)";
+                                    e.currentTarget.style.boxShadow =
+                                        "0 4px 12px rgba(220,53,69,0.25)";
+                                }}
+                                onMouseOut={(e) => {
+                                    e.currentTarget.style.backgroundColor =
+                                        isDeleteMode ? "#b52a37" : "#dc3545";
+                                    e.currentTarget.style.transform =
+                                        "translateY(0)";
+                                    e.currentTarget.style.boxShadow =
+                                        "0 2px 8px rgba(220,53,69,0.15)";
+                                }}
+                            >
+                                <svg
+                                    width="16"
+                                    height="16"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M6 18L18 6M6 6l12 12"
+                                    />
+                                </svg>
+                                {isDeleteMode
+                                    ? "Eliminar opción"
+                                    : "Eliminar opción"}
+                            </button>
+                        </div>
+                        {isDeleteMode && (
+                            <button
+                                style={{
+                                    padding: "12px 20px",
+                                    backgroundColor: "#ff9800",
+                                    color: "white",
+                                    border: "none",
+                                    borderRadius: "8px",
+                                    fontSize: "14px",
+                                    fontWeight: "600",
+                                    cursor: "pointer",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "8px",
+                                    boxShadow: "0 2px 8px rgba(255,152,0,0.15)",
+                                    transition: "all 0.3s ease",
+                                }}
+                                onClick={() => {
+                                    setIsDeleteMode(false);
+                                    setSelectedOptions([]);
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                        )}
+                    </div>
                 </div>
                 {supplier.purchase_options &&
                 supplier.purchase_options.length > 0 ? (
@@ -1178,9 +1290,37 @@ const SupplierDetailPage = () => {
                                         key={option.id}
                                         style={{
                                             backgroundColor:
-                                                idx % 2 === 0
+                                                selectedOptions.includes(
+                                                    option.id
+                                                )
+                                                    ? "#ffeaea"
+                                                    : idx % 2 === 0
                                                     ? "#fff"
                                                     : "#f8f9fa",
+                                            cursor: "pointer",
+                                            border: selectedOptions.includes(
+                                                option.id
+                                            )
+                                                ? "2px solid #dc3545"
+                                                : undefined,
+                                        }}
+                                        onClick={() => {
+                                            if (isDeleteMode) {
+                                                setSelectedOptions((prev) =>
+                                                    prev.includes(option.id)
+                                                        ? prev.filter(
+                                                              (id) =>
+                                                                  id !==
+                                                                  option.id
+                                                          )
+                                                        : [...prev, option.id]
+                                                );
+                                            } else {
+                                                setSelectedPurchaseOption(
+                                                    option
+                                                );
+                                                setIsDetailModalOpen(true);
+                                            }
                                         }}
                                     >
                                         <td
@@ -1540,6 +1680,500 @@ const SupplierDetailPage = () => {
                     }
                 `}
             </style>
+
+            {/* Modal para agregar opción de compra */}
+            <AddPurchaseOptionModal
+                isOpen={isModalOpen}
+                onClose={handleCloseModal}
+                supplierId={supplier?.id}
+                onSave={handleSavePurchaseOption}
+            />
+
+            {/* Modal para ver detalles de la opción de compra */}
+            <PurchaseOptionDetailModal
+                isOpen={isDetailModalOpen}
+                onClose={() => setIsDetailModalOpen(false)}
+                purchaseOption={selectedPurchaseOption}
+            />
+
+            {/* Modal de confirmación de eliminación */}
+            {showDeleteConfirm && (
+                <div
+                    style={{
+                        position: "fixed",
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        background: "rgba(0,0,0,0.4)",
+                        zIndex: 3000,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                    }}
+                >
+                    <div
+                        style={{
+                            background: "white",
+                            borderRadius: 16,
+                            padding: 32,
+                            minWidth: 340,
+                            maxWidth: 420,
+                            boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+                            textAlign: "center",
+                        }}
+                    >
+                        <h3 style={{ color: "#dc3545", marginBottom: 16 }}>
+                            ¿Estás seguro que deseas eliminar las siguientes
+                            opciones de compra?
+                        </h3>
+                        <ul
+                            style={{
+                                textAlign: "left",
+                                margin: "16px 0",
+                                padding: 0,
+                                listStyle: "none",
+                                maxHeight: 180,
+                                overflowY: "auto",
+                            }}
+                        >
+                            {supplier.purchase_options
+                                .filter((opt) =>
+                                    selectedOptions.includes(opt.id)
+                                )
+                                .map((opt) => (
+                                    <li
+                                        key={opt.id}
+                                        style={{
+                                            marginBottom: 6,
+                                            color: "#2c3e50",
+                                            fontWeight: 500,
+                                        }}
+                                    >
+                                        {opt.product_name}
+                                    </li>
+                                ))}
+                        </ul>
+                        <div
+                            style={{
+                                display: "flex",
+                                justifyContent: "center",
+                                gap: 16,
+                                marginTop: 24,
+                            }}
+                        >
+                            <button
+                                onClick={() => setShowDeleteConfirm(false)}
+                                style={{
+                                    padding: "10px 20px",
+                                    background: "#adb5bd",
+                                    color: "white",
+                                    border: "none",
+                                    borderRadius: 8,
+                                    fontWeight: 600,
+                                    fontSize: 15,
+                                    cursor: "pointer",
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                style={{
+                                    padding: "10px 20px",
+                                    background: "#dc3545",
+                                    color: "white",
+                                    border: "none",
+                                    borderRadius: 8,
+                                    fontWeight: 600,
+                                    fontSize: 15,
+                                    cursor: deleting
+                                        ? "not-allowed"
+                                        : "pointer",
+                                    opacity: deleting ? 0.7 : 1,
+                                }}
+                                disabled={deleting}
+                                onClick={async () => {
+                                    setDeleting(true);
+                                    setDeleteError(null);
+                                    try {
+                                        for (const id of selectedOptions) {
+                                            const response = await fetch(
+                                                `https://unidental-backend.onrender.com/api/suppliers/purchase-options/${id}/`,
+                                                {
+                                                    method: "DELETE",
+                                                    headers: {
+                                                        Authorization: `Token ${authToken}`,
+                                                    },
+                                                }
+                                            );
+                                            if (!response.ok) {
+                                                throw new Error(
+                                                    `Error al eliminar opción con id ${id}`
+                                                );
+                                            }
+                                        }
+                                        // Actualizar la lista local eliminando las opciones borradas
+                                        if (
+                                            supplier &&
+                                            supplier.purchase_options
+                                        ) {
+                                            const updatedSupplier = {
+                                                ...supplier,
+                                                purchase_options:
+                                                    supplier.purchase_options.filter(
+                                                        (opt) =>
+                                                            !selectedOptions.includes(
+                                                                opt.id
+                                                            )
+                                                    ),
+                                            };
+                                            setSupplier(updatedSupplier);
+                                        }
+                                        setShowDeleteConfirm(false);
+                                        setIsDeleteMode(false);
+                                        setSelectedOptions([]);
+                                    } catch (err) {
+                                        setDeleteError(err.message);
+                                    } finally {
+                                        setDeleting(false);
+                                    }
+                                }}
+                            >
+                                {deleting ? "Eliminando..." : "Eliminar"}
+                            </button>
+                        </div>
+                        {deleteError && (
+                            <div
+                                style={{
+                                    color: "#dc3545",
+                                    marginTop: 12,
+                                    fontWeight: 500,
+                                }}
+                            >
+                                {deleteError}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de confirmación de edición de info */}
+            {showEditConfirm && (
+                <div
+                    style={{
+                        position: "fixed",
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        background: "rgba(0,0,0,0.4)",
+                        zIndex: 3000,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                    }}
+                >
+                    <div
+                        style={{
+                            background: "white",
+                            borderRadius: 16,
+                            padding: 32,
+                            minWidth: 340,
+                            maxWidth: 420,
+                            boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+                            textAlign: "center",
+                        }}
+                    >
+                        <h3 style={{ color: "#1976d2", marginBottom: 16 }}>
+                            ¿Estás seguro de guardar los siguientes cambios?
+                        </h3>
+                        <ul
+                            style={{
+                                textAlign: "left",
+                                margin: "16px 0",
+                                padding: 0,
+                                listStyle: "none",
+                                maxHeight: 180,
+                                overflowY: "auto",
+                            }}
+                        >
+                            {editInfo.name !== (supplier.name || "") && (
+                                <li
+                                    style={{
+                                        marginBottom: 10,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 10,
+                                    }}
+                                >
+                                    <span
+                                        style={{
+                                            color: "#1976d2",
+                                            fontSize: 18,
+                                        }}
+                                    >
+                                        ✏️
+                                    </span>
+                                    <span
+                                        style={{
+                                            fontWeight: 500,
+                                            color: "#2c3e50",
+                                        }}
+                                    >
+                                        Nombre:
+                                    </span>
+                                    <span
+                                        style={{
+                                            color: "#6c757d",
+                                            textDecoration: "line-through",
+                                            marginLeft: 4,
+                                        }}
+                                    >
+                                        {supplier.name}
+                                    </span>
+                                    <span
+                                        style={{
+                                            color: "#388e3c",
+                                            fontWeight: 700,
+                                            marginLeft: 8,
+                                        }}
+                                    >
+                                        → {editInfo.name}
+                                    </span>
+                                </li>
+                            )}
+                            {editInfo.phone !== (supplier.phone || "") && (
+                                <li
+                                    style={{
+                                        marginBottom: 10,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 10,
+                                    }}
+                                >
+                                    <span
+                                        style={{
+                                            color: "#1976d2",
+                                            fontSize: 18,
+                                        }}
+                                    >
+                                        ✏️
+                                    </span>
+                                    <span
+                                        style={{
+                                            fontWeight: 500,
+                                            color: "#2c3e50",
+                                        }}
+                                    >
+                                        Teléfono:
+                                    </span>
+                                    <span
+                                        style={{
+                                            color: "#6c757d",
+                                            textDecoration: "line-through",
+                                            marginLeft: 4,
+                                        }}
+                                    >
+                                        {supplier.phone || "No especificado"}
+                                    </span>
+                                    <span
+                                        style={{
+                                            color: "#388e3c",
+                                            fontWeight: 700,
+                                            marginLeft: 8,
+                                        }}
+                                    >
+                                        → {editInfo.phone}
+                                    </span>
+                                </li>
+                            )}
+                            {editInfo.email !== (supplier.email || "") && (
+                                <li
+                                    style={{
+                                        marginBottom: 10,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 10,
+                                    }}
+                                >
+                                    <span
+                                        style={{
+                                            color: "#1976d2",
+                                            fontSize: 18,
+                                        }}
+                                    >
+                                        ✏️
+                                    </span>
+                                    <span
+                                        style={{
+                                            fontWeight: 500,
+                                            color: "#2c3e50",
+                                        }}
+                                    >
+                                        Email:
+                                    </span>
+                                    <span
+                                        style={{
+                                            color: "#6c757d",
+                                            textDecoration: "line-through",
+                                            marginLeft: 4,
+                                        }}
+                                    >
+                                        {supplier.email || "No especificado"}
+                                    </span>
+                                    <span
+                                        style={{
+                                            color: "#388e3c",
+                                            fontWeight: 700,
+                                            marginLeft: 8,
+                                        }}
+                                    >
+                                        → {editInfo.email}
+                                    </span>
+                                </li>
+                            )}
+                            {editInfo.name === (supplier.name || "") &&
+                                editInfo.phone === (supplier.phone || "") &&
+                                editInfo.email === (supplier.email || "") && (
+                                    <li
+                                        style={{
+                                            color: "#adb5bd",
+                                            fontStyle: "italic",
+                                        }}
+                                    >
+                                        No hay cambios
+                                    </li>
+                                )}
+                        </ul>
+                        <div
+                            style={{
+                                display: "flex",
+                                justifyContent: "center",
+                                gap: 16,
+                                marginTop: 24,
+                            }}
+                        >
+                            <button
+                                onClick={() => setShowEditConfirm(false)}
+                                style={{
+                                    padding: "10px 20px",
+                                    background: "#adb5bd",
+                                    color: "white",
+                                    border: "none",
+                                    borderRadius: 8,
+                                    fontWeight: 600,
+                                    fontSize: 15,
+                                    cursor: "pointer",
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                style={{
+                                    padding: "10px 20px",
+                                    background: "#1976d2",
+                                    color: "white",
+                                    border: "none",
+                                    borderRadius: 8,
+                                    fontWeight: 600,
+                                    fontSize: 15,
+                                    cursor: savingEdit
+                                        ? "not-allowed"
+                                        : "pointer",
+                                    opacity: savingEdit ? 0.7 : 1,
+                                }}
+                                disabled={savingEdit}
+                                onClick={async () => {
+                                    setSavingEdit(true);
+                                    setEditError(null);
+                                    setEditSuccess(false);
+                                    try {
+                                        const body = {};
+                                        if (
+                                            editInfo.name !==
+                                            (supplier.name || "")
+                                        )
+                                            body.name = editInfo.name;
+                                        if (
+                                            editInfo.phone !==
+                                            (supplier.phone || "")
+                                        )
+                                            body.phone = editInfo.phone;
+                                        if (
+                                            editInfo.email !==
+                                            (supplier.email || "")
+                                        )
+                                            body.email = editInfo.email;
+                                        if (Object.keys(body).length === 0)
+                                            throw new Error(
+                                                "No hay cambios para guardar"
+                                            );
+                                        const response = await fetch(
+                                            `https://unidental-backend.onrender.com/api/suppliers/suppliers/${supplier.id}/`,
+                                            {
+                                                method: "PATCH",
+                                                headers: {
+                                                    "Content-Type":
+                                                        "application/json",
+                                                    Authorization: `Token ${authToken}`,
+                                                },
+                                                body: JSON.stringify(body),
+                                            }
+                                        );
+                                        if (!response.ok) {
+                                            const data = await response
+                                                .json()
+                                                .catch(() => ({}));
+                                            throw new Error(
+                                                data.detail ||
+                                                    "Error al guardar los cambios"
+                                            );
+                                        }
+                                        const updated = await response.json();
+                                        setSupplier((s) => ({
+                                            ...s,
+                                            ...updated,
+                                        }));
+                                        setShowEditConfirm(false);
+                                        setIsEditInfo(false);
+                                        setEditSuccess(true);
+                                    } catch (err) {
+                                        setEditError(err.message);
+                                    } finally {
+                                        setSavingEdit(false);
+                                    }
+                                }}
+                            >
+                                {savingEdit
+                                    ? "Guardando..."
+                                    : "Confirmar cambios"}
+                            </button>
+                        </div>
+                        {editError && (
+                            <div
+                                style={{
+                                    color: "#dc3545",
+                                    marginTop: 12,
+                                    fontWeight: 500,
+                                }}
+                            >
+                                {editError}
+                            </div>
+                        )}
+                        {editSuccess && (
+                            <div
+                                style={{
+                                    color: "#388e3c",
+                                    marginTop: 12,
+                                    fontWeight: 500,
+                                }}
+                            >
+                                ¡Cambios guardados correctamente!
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

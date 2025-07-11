@@ -51,6 +51,16 @@ export const createTransfer = async (transferData, authToken) => {
             .toString(36)
             .substr(2, 9)}`;
 
+        // Log de datos recibidos para debug
+        console.log("🔍 Datos de transferencia recibidos:", {
+            selectedProduct: transferData.selectedProduct,
+            cantidad: transferData.cantidad,
+            sedeOrigen: transferData.sedeOrigen,
+            sedeDestino: transferData.sedeDestino,
+            motivo: transferData.motivo,
+            selectedBatches: transferData.selectedBatches,
+        });
+
         // Crear objeto de transferencia
         const nuevaTransferencia = {
             id: transferId,
@@ -61,10 +71,8 @@ export const createTransfer = async (transferData, authToken) => {
             cantidad: parseInt(transferData.cantidad),
             sedeOrigen: transferData.sedeOrigen,
             sedeDestino: transferData.sedeDestino,
-            estado:
-                transferData.tipoTransferencia === "pull"
-                    ? "Pendiente"
-                    : "Aprobada", // Se cambiará a "Completada" si se crean ambos movimientos
+            estado: "Pendiente", // Siempre pendiente para transferencias internas
+            status_display: "Pendiente", // Nueva columna para mostrar el estado
             solicitadoPor: "Usuario Actual", // TODO: Obtener usuario real del contexto
             motivo: transferData.motivo || "",
             urgencia: transferData.urgencia || "media",
@@ -79,97 +87,20 @@ export const createTransfer = async (transferData, authToken) => {
             batchInfo: transferData.batchInfo || null,
         };
 
-        // Si es un envío (push), validar stock y crear movimiento de inventario
-        if (
-            transferData.tipoTransferencia === "push" &&
-            transferData.selectedProduct &&
-            authToken
-        ) {
-            try {
-                // Buscar ubicación origen por nombre
-                const ubicaciones = await inventoryService.getLocations(
-                    authToken
-                );
-                const ubicacionOrigen = ubicaciones.find(
-                    (ub) => ub.name === transferData.sedeOrigen
-                );
+        console.log("📦 Transferencia creada con datos:", {
+            id: nuevaTransferencia.id,
+            productId: nuevaTransferencia.productId,
+            producto: nuevaTransferencia.producto,
+            cantidad: nuevaTransferencia.cantidad,
+            requiresBatchControl: nuevaTransferencia.requiresBatchControl,
+            selectedBatches: nuevaTransferencia.selectedBatches,
+        });
 
-                if (!ubicacionOrigen) {
-                    throw new Error(
-                        `No se encontró la ubicación origen: ${transferData.sedeOrigen}`
-                    );
-                }
-
-                // VALIDAR STOCK DISPONIBLE antes de crear la transferencia
-                const stockValidation =
-                    await inventoryService.validateStockForTransfer(
-                        transferData.selectedProduct.id,
-                        ubicacionOrigen.id,
-                        parseInt(transferData.cantidad),
-                        authToken
-                    );
-
-                if (!stockValidation.isValid) {
-                    throw new Error(
-                        `Stock insuficiente en ${transferData.sedeOrigen}. ` +
-                            `Disponible: ${stockValidation.availableStock}, ` +
-                            `Solicitado: ${stockValidation.requestedQuantity}, ` +
-                            `Faltante: ${stockValidation.shortfall}`
-                    );
-                }
-
-                // Preparar datos del movimiento de salida
-                const outboundMovementData = {
-                    product: transferData.selectedProduct.id,
-                    location: ubicacionOrigen.id,
-                    movement_type: "out",
-                    quantity: parseInt(transferData.cantidad),
-                    notes: `Transferencia ${transferId} - SALIDA desde ${
-                        transferData.sedeOrigen
-                    } hacia ${transferData.sedeDestino}: ${
-                        transferData.motivo || "Sin motivo especificado"
-                    }`,
-                };
-
-                // ✅ AGREGAR INFORMACIÓN DEL LOTE SI ESTÁ PRESENTE
-                if (transferData.batchInfo && transferData.batchInfo.batch_id) {
-                    outboundMovementData.batch =
-                        transferData.batchInfo.batch_id;
-                    console.log(
-                        `🔗 Asociando movimiento al lote: ${transferData.batchInfo.batch_id} (${transferData.batchInfo.batch_number})`
-                    );
-                }
-
-                const outboundMovementResponse =
-                    await inventoryService.createInventoryMovement(
-                        outboundMovementData,
-                        authToken
-                    );
-
-                // Guardar ID del movimiento de salida
-                nuevaTransferencia.movementId = outboundMovementResponse.id;
-                nuevaTransferencia.validatedStock = stockValidation;
-                nuevaTransferencia.estado = "Aprobada"; // Estado intermedio - requiere completar manualmente
-
-                console.log(
-                    "Movimiento de SALIDA creado:",
-                    outboundMovementResponse.id,
-                    "Stock validado:",
-                    stockValidation,
-                    transferData.batchInfo
-                        ? `Lote: ${transferData.batchInfo.batch_number}`
-                        : "Sin lote",
-                    "NOTA: La ENTRADA se creará al completar la transferencia"
-                );
-            } catch (error) {
-                console.error(
-                    "Error al validar stock o crear movimiento:",
-                    error
-                );
-                // No continuar si hay error de stock - es crítico
-                throw error;
-            }
-        }
+        // Para transferencias internas, NO crear movimientos inmediatamente
+        // Los movimientos se crearán cuando la transferencia cambie de estado
+        console.log(
+            "Transferencia interna creada en estado 'Pendiente' - Los movimientos se crearán al cambiar el estado"
+        );
 
         // Obtener transferencias existentes y agregar la nueva
         const transferenciasExistentes = getTransfersFromStorage();
@@ -216,6 +147,11 @@ export const getTransfers = (params = {}, filters = {}) => {
     const { page = 1, pageSize = 25 } = params;
 
     let transferencias = getTransfersFromStorage();
+
+    // Filtrar solo transferencias internas (que tengan "Transferencia interna" en el motivo)
+    transferencias = transferencias.filter(
+        (t) => t.motivo && t.motivo.includes("Transferencia interna")
+    );
 
     // Aplicar filtros
     if (filters.estado) {
@@ -344,12 +280,119 @@ export const updateTransferStatus = async (
 
         // **NUEVO FLUJO CORREGIDO**: Manejar cambios de estado con movimientos apropiados
 
-        // 1. CUANDO SE CAMBIA A "APROBADA" → SOLO CAMBIAR ESTADO (sin movimientos)
-        if (nuevoEstado === "Aprobada") {
+        // 1. CUANDO SE CAMBIA A "APROBADA" → Crear movimiento de inventario para transferencias internas
+        if (
+            nuevoEstado === "Aprobada" &&
+            transferencia.motivo &&
+            transferencia.motivo.includes("Transferencia interna")
+        ) {
             console.log(
-                `✅ APROBADA - Transferencia ${transferId} aprobada sin crear movimientos de inventario`
+                `✅ APROBADA - Transferencia interna ${transferId} - Creando movimiento de inventario`
             );
-            // No crear movimientos aquí, solo cambiar estado
+            console.log("📋 Datos de transferencia para crear movimiento:", {
+                id: transferencia.id,
+                productId: transferencia.productId,
+                sedeOrigen: transferencia.sedeOrigen,
+                sedeDestino: transferencia.sedeDestino,
+                cantidad: transferencia.cantidad,
+                requiresBatchControl: transferencia.requiresBatchControl,
+                selectedBatches: transferencia.selectedBatches,
+                authToken: authToken ? "Presente" : "Ausente",
+            });
+
+            try {
+                const ubicaciones = await inventoryService.getLocations(
+                    authToken
+                );
+                const ubicacionOrigen = ubicaciones.find(
+                    (ub) => ub.name === transferencia.sedeOrigen
+                );
+
+                if (!ubicacionOrigen) {
+                    throw new Error(
+                        `No se encontró la ubicación origen: ${transferencia.sedeOrigen}`
+                    );
+                }
+
+                // Crear movimiento con información de lotes si está disponible
+                if (
+                    transferencia.requiresBatchControl &&
+                    transferencia.selectedBatches &&
+                    Object.keys(transferencia.selectedBatches).length > 0
+                ) {
+                    // Para productos con control de lotes, crear un movimiento por cada lote seleccionado
+                    console.log(
+                        "📦 CREANDO MOVIMIENTOS POR LOTES SELECCIONADOS"
+                    );
+                    const movementIds = [];
+
+                    for (const [batchId, batchData] of Object.entries(
+                        transferencia.selectedBatches
+                    )) {
+                        if (batchData.quantity && batchData.quantity > 0) {
+                            const outboundMovementData = {
+                                product: transferencia.productId,
+                                location: ubicacionOrigen.id,
+                                movement_type: "out",
+                                quantity: batchData.quantity,
+                                batch: parseInt(batchId),
+                                notes: `${transferencia.motivo} - Salida desde ${transferencia.sedeOrigen} hacia ${transferencia.sedeDestino}`,
+                            };
+
+                            console.log(
+                                "Creando movimiento para lote:",
+                                outboundMovementData
+                            );
+
+                            const outboundMovementResponse =
+                                await inventoryService.createInventoryMovement(
+                                    outboundMovementData,
+                                    authToken
+                                );
+
+                            movementIds.push(outboundMovementResponse.id);
+                            console.log(
+                                `✅ Movimiento de salida creado para lote ${batchId}:`,
+                                outboundMovementResponse.id
+                            );
+                        }
+                    }
+
+                    transferencia.movementIds = movementIds;
+                } else {
+                    // Para productos sin control de lotes
+                    const outboundMovementData = {
+                        product: transferencia.productId,
+                        location: ubicacionOrigen.id,
+                        movement_type: "out",
+                        quantity: parseInt(transferencia.cantidad),
+                        notes: `${transferencia.motivo} - Salida desde ${transferencia.sedeOrigen} hacia ${transferencia.sedeDestino}`,
+                    };
+
+                    console.log(
+                        "Creando movimiento sin lotes:",
+                        outboundMovementData
+                    );
+
+                    const outboundMovementResponse =
+                        await inventoryService.createInventoryMovement(
+                            outboundMovementData,
+                            authToken
+                        );
+
+                    transferencia.movementId = outboundMovementResponse.id;
+                    console.log(
+                        "✅ Movimiento de salida creado:",
+                        outboundMovementResponse.id
+                    );
+                }
+            } catch (error) {
+                console.error(
+                    "Error al crear movimiento para transferencia interna:",
+                    error
+                );
+                throw new Error(`Error al crear movimiento: ${error.message}`);
+            }
         }
 
         // 2. CUANDO SE CAMBIA A "EN TRÁNSITO" o "ENVIADA" → Crear movimiento de SALIDA (descontar stock)
@@ -939,6 +982,7 @@ export const updateTransferStatus = async (
         transferencias[index] = {
             ...transferencia,
             estado: nuevoEstado,
+            status_display: nuevoEstado, // Actualizar también el status_display
             ultimaActualizacion: new Date().toLocaleString("es-ES"),
         };
 

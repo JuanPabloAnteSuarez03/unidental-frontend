@@ -339,6 +339,10 @@ const AnalisisPreciosPage = () => {
         if (authToken && viewMode === "otros") {
             if (globalSearchTerm.trim()) {
                 // Usar búsqueda local en productos de proveedores
+                console.log(
+                    "🔍 Iniciando búsqueda local con término:",
+                    globalSearchTerm
+                );
                 performLocalSearch(globalSearchTerm);
             } else {
                 // Restaurar datos originales cuando se limpia la búsqueda
@@ -356,6 +360,7 @@ const AnalisisPreciosPage = () => {
         viewMode,
         originalLeftData,
         originalRightData,
+        selectedCategory, // Agregar selectedCategory como dependencia
     ]);
 
     // Limpiar búsqueda y filtros al cambiar a 'otros'
@@ -499,15 +504,22 @@ const AnalisisPreciosPage = () => {
     // Función auxiliar para obtener todas las páginas de opciones de compra de un proveedor
     const fetchAllSupplierOptions = async (supplierId) => {
         let allData = [];
-        let nextUrl = `${BASE_URL}?supplier=${supplierId}`;
-        if (selectedCategory.length > 0) {
-            nextUrl += `&category=${selectedCategory[0]}`;
-        }
-        nextUrl += `&page_size=100`;
+        // Usar la nueva URL específica del proveedor - SIN filtro de categoría
+        let nextUrl = `https://unidental-backend.onrender.com/api/suppliers/suppliers/${supplierId}/purchase_options/?page_size=100`;
+
         let pageCount = 0;
         const maxPages = 100;
+
+        console.log(
+            `🔄 Cargando TODAS las opciones de compra del proveedor ${supplierId} desde: ${nextUrl}`
+        );
+
         while (nextUrl && pageCount < maxPages) {
             pageCount++;
+            console.log(
+                `📄 Cargando página ${pageCount} de opciones de compra...`
+            );
+
             const response = await fetch(nextUrl, {
                 headers: {
                     "Content-Type": "application/json",
@@ -527,13 +539,21 @@ const AnalisisPreciosPage = () => {
             } else if (result && result.data && Array.isArray(result.data)) {
                 data = result.data;
             }
+
+            console.log(
+                `✅ Página ${pageCount}: ${data.length} productos cargados`
+            );
             allData.push(...data);
             nextUrl = result.next ? result.next : null;
         }
+
+        console.log(
+            `🏁 Total de productos cargados del proveedor ${supplierId}: ${allData.length}`
+        );
         return allData;
     };
 
-    // Función para cargar datos de un proveedor específico (usando búsqueda del backend)
+    // Función para cargar datos de un proveedor específico (usando la nueva API)
     const loadSupplierData = async (supplierId, side) => {
         if (!supplierId) return;
         const setLoadingState =
@@ -545,25 +565,38 @@ const AnalisisPreciosPage = () => {
         const supplierName =
             suppliers.find((s) => s.id === parseInt(supplierId))?.name ||
             `ID: ${supplierId}`;
+
+        console.log(
+            `🔄 Cargando datos del proveedor: ${supplierName} (ID: ${supplierId})`
+        );
         setLoadingState(true);
+
         try {
-            // Obtener todas las páginas de opciones de compra
+            // Obtener todas las páginas de opciones de compra usando la nueva URL
             const allData = await fetchAllSupplierOptions(supplierId);
-            // Filtrar por proveedor específico (por si acaso el backend no filtró correctamente)
-            const filteredData = allData.filter((item) => {
-                const itemSupplierId =
-                    item.supplier_id || item.supplier || item.supplier_id;
-                const itemSupplierName =
-                    item.supplier_name || item.supplier_name;
-                return (
-                    itemSupplierId === parseInt(supplierId) ||
-                    itemSupplierName === supplierName
-                );
+
+            // Como ahora usamos la URL específica del proveedor, no necesitamos filtrar
+            // pero mantenemos la validación por seguridad
+            const filteredBySupplier = allData.filter((item) => {
+                const itemSupplierId = item.supplier_id || item.supplier;
+                return itemSupplierId === parseInt(supplierId);
             });
-            const sortedData = sortByPurchasePrice(filteredData);
+
+            // Aplicar filtro de categoría localmente
+            const filteredByCategory = filterByCategory(filteredBySupplier);
+
+            const sortedData = sortByPurchasePrice(filteredByCategory);
             setTableData(sortedData);
-            setOriginalData(sortedData); // Guardar datos originales
+            setOriginalData(filteredBySupplier); // Guardar datos originales SIN filtro de categoría
+
+            console.log(
+                `✅ Datos cargados para ${supplierName}: ${filteredByCategory.length} productos (filtrados por categoría)`
+            );
         } catch (err) {
+            console.error(
+                `❌ Error al cargar datos del proveedor ${supplierName}:`,
+                err
+            );
             setTableData([]);
             setOriginalData([]); // Limpiar datos originales en caso de error
         } finally {
@@ -575,6 +608,15 @@ const AnalisisPreciosPage = () => {
     const performLocalSearch = (searchTerm) => {
         if (!searchTerm.trim()) {
             setLocalSearchResults([]);
+            // Restaurar datos originales con filtro de categoría aplicado
+            if (originalLeftData.length > 0) {
+                const filteredLeftData = filterByCategory(originalLeftData);
+                setLeftTableData(sortByPurchasePrice(filteredLeftData));
+            }
+            if (originalRightData.length > 0) {
+                const filteredRightData = filterByCategory(originalRightData);
+                setRightTableData(sortByPurchasePrice(filteredRightData));
+            }
             return;
         }
 
@@ -582,9 +624,13 @@ const AnalisisPreciosPage = () => {
             "🔍 Realizando búsqueda local en productos de proveedores..."
         );
         console.log("Término de búsqueda:", searchTerm);
+        console.log(
+            "Filtro de categoría activo:",
+            selectedCategory[0] || "Todas"
+        );
 
         // Obtener todos los productos de los proveedores seleccionados
-        const allSupplierProducts = [...leftTableData, ...rightTableData];
+        const allSupplierProducts = [...originalLeftData, ...originalRightData];
 
         if (allSupplierProducts.length === 0) {
             console.log(
@@ -633,7 +679,7 @@ const AnalisisPreciosPage = () => {
 
             if (matches) {
                 console.log(
-                    `✅ Coincidencia encontrada: ${productName} (${productSku})`
+                    `✅ Coincidencia encontrada: ${productName} (${productSku}) - Categoría: ${productCategory}`
                 );
             }
 
@@ -645,19 +691,67 @@ const AnalisisPreciosPage = () => {
         );
         setLocalSearchResults(results);
 
-        // Si no hay proveedores seleccionados, mostrar todos los resultados
-        if (!leftSupplier && !rightSupplier) {
-            const sortedResults = sortByPurchasePrice(results);
-            setLeftTableData(sortedResults);
-            setRightTableData(sortedResults);
-        } else {
-            // Si hay proveedores seleccionados, filtrar por ellos
-            filterLocalSearchResultsBySupplier(results);
+        // Filtrar resultados por proveedor seleccionado
+        filterLocalSearchResultsBySupplier(results);
+    };
+
+    // Función para filtrar por categoría localmente
+    const filterByCategory = (data) => {
+        if (!selectedCategory.length) {
+            return data; // Si no hay categoría seleccionada, devolver todos los datos
         }
+
+        const selectedCategoryName = categories.find(
+            (c) => c.id === selectedCategory[0]
+        )?.name;
+        console.log(
+            `📂 Filtrando por categoría: ${selectedCategoryName} (ID: ${selectedCategory[0]})`
+        );
+
+        const filteredData = data.filter((item) => {
+            // Buscar el category_name en diferentes campos posibles
+            const categoryName = getFieldValue(item, "category_name", [
+                "category_name",
+                "category",
+                "product_category",
+                "product_category_name",
+            ]);
+
+            const matches =
+                categoryName &&
+                categoryName.toLowerCase() ===
+                    selectedCategoryName.toLowerCase();
+
+            if (matches) {
+                console.log(
+                    `✅ Producto con categoría correcta: ${getFieldValue(
+                        item,
+                        "product_name",
+                        ["name", "product_name"]
+                    )} - Categoría: ${categoryName}`
+                );
+            }
+
+            return matches;
+        });
+
+        console.log(
+            `📂 Productos filtrados por categoría: ${filteredData.length} de ${data.length} total`
+        );
+        return filteredData;
     };
 
     // Función para filtrar resultados locales por proveedor
     const filterLocalSearchResultsBySupplier = (searchResults) => {
+        // Si no hay proveedores seleccionados, mostrar todos los resultados en ambas tablas
+        if (!leftSupplier && !rightSupplier) {
+            const sortedResults = sortByPurchasePrice(searchResults);
+            setLeftTableData(sortedResults);
+            setRightTableData(sortedResults);
+            return;
+        }
+
+        // Filtrar por proveedor izquierdo
         const leftData = leftSupplier
             ? searchResults.filter((item) => {
                   const itemSupplierId = item.supplier_id || item.supplier;
@@ -671,8 +765,9 @@ const AnalisisPreciosPage = () => {
                       itemSupplierName === selectedSupplierName
                   );
               })
-            : searchResults;
+            : [];
 
+        // Filtrar por proveedor derecho
         const rightData = rightSupplier
             ? searchResults.filter((item) => {
                   const itemSupplierId = item.supplier_id || item.supplier;
@@ -686,14 +781,22 @@ const AnalisisPreciosPage = () => {
                       itemSupplierName === selectedSupplierName
                   );
               })
-            : searchResults;
+            : [];
+
+        // Aplicar filtro de categoría a los resultados filtrados por proveedor
+        const filteredLeftData = filterByCategory(leftData);
+        const filteredRightData = filterByCategory(rightData);
 
         // Ordenar y mostrar resultados
-        const sortedLeftData = sortByPurchasePrice(leftData);
-        const sortedRightData = sortByPurchasePrice(rightData);
+        const sortedLeftData = sortByPurchasePrice(filteredLeftData);
+        const sortedRightData = sortByPurchasePrice(filteredRightData);
 
         setLeftTableData(sortedLeftData);
         setRightTableData(sortedRightData);
+
+        console.log(
+            `📊 Resultados filtrados: ${filteredLeftData.length} productos para proveedor A, ${filteredRightData.length} productos para proveedor B`
+        );
     };
 
     // Filtrar resultados locales cuando cambien los proveedores seleccionados
@@ -703,27 +806,64 @@ const AnalisisPreciosPage = () => {
         }
     }, [leftSupplier, rightSupplier, localSearchResults]);
 
+    // Manejar cambios en el filtro de categorías - aplicar filtro localmente
+    useEffect(() => {
+        if (authToken && viewMode === "otros") {
+            console.log(
+                "🔄 Cambio en filtro de categoría detectado, aplicando filtro local..."
+            );
+
+            // Aplicar filtro de categoría a los datos originales
+            if (originalLeftData.length > 0) {
+                const filteredLeftData = filterByCategory(originalLeftData);
+                const sortedLeftData = sortByPurchasePrice(filteredLeftData);
+                setLeftTableData(sortedLeftData);
+                console.log(
+                    `📂 Proveedor A: ${filteredLeftData.length} productos después del filtro de categoría`
+                );
+            }
+
+            if (originalRightData.length > 0) {
+                const filteredRightData = filterByCategory(originalRightData);
+                const sortedRightData = sortByPurchasePrice(filteredRightData);
+                setRightTableData(sortedRightData);
+                console.log(
+                    `📂 Proveedor B: ${filteredRightData.length} productos después del filtro de categoría`
+                );
+            }
+
+            // Si hay búsqueda activa, reaplicar la búsqueda con el nuevo filtro
+            if (globalSearchTerm.trim()) {
+                console.log(
+                    "🔍 Reaplicando búsqueda con nuevo filtro de categoría..."
+                );
+                performLocalSearch(globalSearchTerm);
+            }
+        }
+    }, [
+        selectedCategory,
+        authToken,
+        viewMode,
+        originalLeftData,
+        originalRightData,
+        globalSearchTerm,
+    ]);
+
     const goToPage = (page) => {
         if (page < 1 || page > totalPages) return;
         fetchData(null, page, search, selectedCategory);
     };
 
-    // Lanzar useEffect para recargar datos cuando cambia el filtro de categoría
+    // Lanzar useEffect para recargar datos cuando cambia el filtro de categoría (solo para vista tabla)
     useEffect(() => {
-        if (viewMode === "otros" && authToken) {
-            if (globalSearchTerm) {
-                loadGlobalSearchData();
-            } else {
-                // Si no hay búsqueda global, recargar datos de proveedores
-                if (leftSupplier) loadSupplierData(leftSupplier, "left");
-                if (rightSupplier) loadSupplierData(rightSupplier, "right");
-            }
-        }
         if (viewMode === "tabla" && authToken) {
-            // Recargar datos con el nuevo filtro de categoría
+            // Solo recargar datos en la vista tabla (que usa búsqueda del backend)
+            console.log(
+                "🔄 Cambio en filtro de categoría en vista tabla, recargando datos..."
+            );
             fetchData(null, 1, search, selectedCategory);
         }
-    }, [selectedCategory, authToken]);
+    }, [selectedCategory, authToken, viewMode]);
 
     // Cargar datos del proveedor izquierdo cuando cambia su selección
     useEffect(() => {
@@ -732,6 +872,9 @@ const AnalisisPreciosPage = () => {
 
             if (leftSupplier) {
                 console.log("📥 Cargando datos del proveedor A...");
+                console.log(
+                    `🌐 Realizando GET /api/suppliers/suppliers/${leftSupplier}/purchase_options/`
+                );
                 loadSupplierData(leftSupplier, "left");
             } else {
                 console.log("🧹 Limpiando datos del proveedor A");
@@ -749,6 +892,9 @@ const AnalisisPreciosPage = () => {
 
             if (rightSupplier) {
                 console.log("📥 Cargando datos del proveedor B...");
+                console.log(
+                    `🌐 Realizando GET /api/suppliers/suppliers/${rightSupplier}/purchase_options/`
+                );
                 loadSupplierData(rightSupplier, "right");
             } else {
                 console.log("🧹 Limpiando datos del proveedor B");
@@ -762,14 +908,23 @@ const AnalisisPreciosPage = () => {
     // Cargar categorías cuando se entra a la vista 'tabla' o 'otros', si no están cargadas
     useEffect(() => {
         if (
-            viewMode === "tabla" &&
+            (viewMode === "tabla" || viewMode === "otros") &&
             categories.length === 0 &&
             !categoriesLoading
         ) {
             setCategoriesLoading(true);
+            console.log("📂 Cargando categorías...");
             getCategories(authToken)
-                .then((cats) => setCategories(cats))
-                .catch(() => setCategories([]))
+                .then((cats) => {
+                    console.log(
+                        `✅ Categorías cargadas: ${cats.length} categorías`
+                    );
+                    setCategories(cats);
+                })
+                .catch((error) => {
+                    console.error("❌ Error al cargar categorías:", error);
+                    setCategories([]);
+                })
                 .finally(() => setCategoriesLoading(false));
         }
     }, [viewMode, authToken, categories.length, categoriesLoading]);
@@ -1741,6 +1896,17 @@ const AnalisisPreciosPage = () => {
                         >
                             🔍 Búsqueda global de productos
                         </label>
+                        <p
+                            style={{
+                                fontSize: 14,
+                                color: "#666",
+                                margin: "4px 0 8px 0",
+                                fontStyle: "italic",
+                            }}
+                        >
+                            Busca productos por nombre entre los proveedores
+                            seleccionados
+                        </p>
                         <div
                             style={{
                                 display: "flex",
@@ -1773,7 +1939,7 @@ const AnalisisPreciosPage = () => {
                                     </span>
                                     <input
                                         type="text"
-                                        placeholder="Buscar productos entre proveedores seleccionados..."
+                                        placeholder="Buscar productos por nombre..."
                                         value={globalSearchInput}
                                         onChange={(e) =>
                                             setGlobalSearchInput(e.target.value)
@@ -1814,6 +1980,35 @@ const AnalisisPreciosPage = () => {
                             marginBottom: 24,
                         }}
                     >
+                        <div style={{ marginBottom: 12 }}>
+                            <h3
+                                style={{
+                                    margin: "0 0 8px 0",
+                                    fontSize: 16,
+                                    fontWeight: 700,
+                                    color: "#1976d2",
+                                }}
+                            >
+                                📂 Filtro de Categorías
+                            </h3>
+                            {selectedCategory.length > 0 && (
+                                <p
+                                    style={{
+                                        margin: "0",
+                                        fontSize: 14,
+                                        color: "#666",
+                                        fontStyle: "italic",
+                                    }}
+                                >
+                                    Categoría activa:{" "}
+                                    <strong>
+                                        {categories.find(
+                                            (c) => c.id === selectedCategory[0]
+                                        )?.name || selectedCategory[0]}
+                                    </strong>
+                                </p>
+                            )}
+                        </div>
                         <CategoryFilter
                             categories={categories}
                             selectedCategories={selectedCategory}

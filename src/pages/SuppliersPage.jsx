@@ -3,6 +3,301 @@ import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { getSuppliers, getAllSuppliers } from "../services/suppliersService";
 
+// Componente de formulario para agregar proveedor
+const NuevoProveedorForm = ({ onClose }) => {
+    const { authToken } = useAuth();
+    const [nombre, setNombre] = useState("");
+    const [telefono, setTelefono] = useState("");
+    const [contacto, setContacto] = useState("");
+    const [email, setEmail] = useState("");
+    const [touched, setTouched] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState("");
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setTouched(true);
+        if (!nombre.trim()) return;
+
+        setIsSubmitting(true);
+        setError("");
+
+        try {
+            const response = await fetch(
+                "https://unidental-backend.onrender.com/api/suppliers/suppliers/",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Token ${authToken}`,
+                    },
+                    body: JSON.stringify({
+                        name: nombre.trim(),
+                        contact_name: contacto.trim(),
+                        phone: telefono.trim(),
+                        email: email.trim(),
+                    }),
+                }
+            );
+
+            if (response.ok) {
+                const newSupplier = await response.json();
+                alert(`Proveedor "${newSupplier.name}" creado exitosamente`);
+                onClose();
+                // Recargar la lista de proveedores
+                window.location.reload();
+            } else {
+                const errorData = await response.json();
+                setError(errorData.message || "Error al crear el proveedor");
+            }
+        } catch (err) {
+            console.error("Error creating supplier:", err);
+            setError("Error de conexión. Por favor, inténtalo de nuevo.");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    return (
+        <div
+            style={{
+                background: "rgba(0,0,0,0.35)",
+                position: "fixed",
+                top: 0,
+                left: 0,
+                width: "100vw",
+                height: "100vh",
+                zIndex: 1000,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+            }}
+        >
+            <form
+                onSubmit={handleSubmit}
+                style={{
+                    background: "#fff",
+                    padding: 36,
+                    borderRadius: 16,
+                    minWidth: 340,
+                    maxWidth: 480,
+                    width: "100%",
+                    boxShadow: "0 8px 32px rgba(44,62,80,0.18)",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 20,
+                    border: "1.5px solid #e1e4ea",
+                    position: "relative",
+                    boxSizing: "border-box",
+                }}
+            >
+                <h2
+                    style={{
+                        margin: 0,
+                        fontWeight: 800,
+                        fontSize: 24,
+                        color: "#2c3e50",
+                        letterSpacing: "-1px",
+                        textAlign: "center",
+                    }}
+                >
+                    Agregar Proveedor
+                </h2>
+                {error && (
+                    <div
+                        style={{
+                            background: "#f8d7da",
+                            border: "1px solid #f5c6cb",
+                            borderRadius: 6,
+                            padding: 12,
+                            color: "#721c24",
+                            fontSize: 14,
+                        }}
+                    >
+                        {error}
+                    </div>
+                )}
+                <label
+                    style={{ fontWeight: 600, color: "#34495e", fontSize: 15 }}
+                >
+                    Nombre <span style={{ color: "#e74c3c" }}>*</span>
+                    <input
+                        type="text"
+                        value={nombre}
+                        onChange={(e) => setNombre(e.target.value)}
+                        onBlur={() => setTouched(true)}
+                        autoFocus
+                        required
+                        style={{
+                            width: "100%",
+                            padding: "10px 14px",
+                            marginTop: 6,
+                            borderRadius: 7,
+                            border:
+                                touched && !nombre.trim()
+                                    ? "1.5px solid #e74c3c"
+                                    : "1.5px solid #bfc9d1",
+                            fontSize: 15,
+                            outline: "none",
+                            background:
+                                touched && !nombre.trim()
+                                    ? "#fff6f6"
+                                    : "#f8fafc",
+                            transition: "border-color 0.2s",
+                            boxSizing: "border-box",
+                        }}
+                    />
+                    {touched && !nombre.trim() && (
+                        <span
+                            style={{
+                                color: "#e74c3c",
+                                fontSize: 13,
+                                marginTop: 2,
+                                display: "block",
+                            }}
+                        >
+                            El nombre es obligatorio
+                        </span>
+                    )}
+                </label>
+                <label
+                    style={{ fontWeight: 600, color: "#34495e", fontSize: 15 }}
+                >
+                    Teléfono
+                    <input
+                        type="text"
+                        value={telefono}
+                        onChange={(e) => setTelefono(e.target.value)}
+                        style={{
+                            width: "100%",
+                            padding: "10px 14px",
+                            marginTop: 6,
+                            borderRadius: 7,
+                            border: "1.5px solid #bfc9d1",
+                            fontSize: 15,
+                            outline: "none",
+                            background: "#f8fafc",
+                            transition: "border-color 0.2s",
+                            boxSizing: "border-box",
+                        }}
+                    />
+                </label>
+                <label
+                    style={{ fontWeight: 600, color: "#34495e", fontSize: 15 }}
+                >
+                    Nombre de contacto
+                    <input
+                        type="text"
+                        value={contacto}
+                        onChange={(e) => setContacto(e.target.value)}
+                        style={{
+                            width: "100%",
+                            padding: "10px 14px",
+                            marginTop: 6,
+                            borderRadius: 7,
+                            border: "1.5px solid #bfc9d1",
+                            fontSize: 15,
+                            outline: "none",
+                            background: "#f8fafc",
+                            transition: "border-color 0.2s",
+                            boxSizing: "border-box",
+                        }}
+                    />
+                </label>
+                <label
+                    style={{ fontWeight: 600, color: "#34495e", fontSize: 15 }}
+                >
+                    Email
+                    <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        style={{
+                            width: "100%",
+                            padding: "10px 14px",
+                            marginTop: 6,
+                            borderRadius: 7,
+                            border: "1.5px solid #bfc9d1",
+                            fontSize: 15,
+                            outline: "none",
+                            background: "#f8fafc",
+                            transition: "border-color 0.2s",
+                            boxSizing: "border-box",
+                        }}
+                    />
+                </label>
+                <div
+                    style={{
+                        display: "flex",
+                        justifyContent: "flex-end",
+                        gap: 14,
+                        marginTop: 8,
+                    }}
+                >
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        disabled={isSubmitting}
+                        style={{
+                            padding: "9px 22px",
+                            background: "#f4f6fa",
+                            border: "none",
+                            borderRadius: 7,
+                            fontWeight: 700,
+                            color: "#34495e",
+                            fontSize: 15,
+                            cursor: isSubmitting ? "not-allowed" : "pointer",
+                            boxShadow: "0 1px 2px rgba(44,62,80,0.04)",
+                        }}
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        type="submit"
+                        disabled={!nombre.trim() || isSubmitting}
+                        style={{
+                            padding: "9px 22px",
+                            background:
+                                nombre.trim() && !isSubmitting
+                                    ? "#27ae60"
+                                    : "#bfc9d1",
+                            color: "white",
+                            border: "none",
+                            borderRadius: 7,
+                            fontWeight: 700,
+                            fontSize: 15,
+                            cursor:
+                                nombre.trim() && !isSubmitting
+                                    ? "pointer"
+                                    : "not-allowed",
+                            boxShadow: "0 1px 2px rgba(44,62,80,0.04)",
+                        }}
+                    >
+                        {isSubmitting ? "Guardando..." : "Guardar"}
+                    </button>
+                </div>
+                <button
+                    type="button"
+                    onClick={onClose}
+                    style={{
+                        position: "absolute",
+                        top: 12,
+                        right: 16,
+                        background: "none",
+                        border: "none",
+                        fontSize: 22,
+                        color: "#bfc9d1",
+                        cursor: "pointer",
+                    }}
+                    title="Cerrar"
+                >
+                    ×
+                </button>
+            </form>
+        </div>
+    );
+};
+
 const SuppliersPage = () => {
     const { authToken } = useAuth();
     const navigate = useNavigate();
@@ -15,6 +310,16 @@ const SuppliersPage = () => {
     const [totalCount, setTotalCount] = useState(0);
     const [pageSize] = useState(25);
     const [isInitialLoad, setIsInitialLoad] = useState(true);
+    const [showNuevoProveedor, setShowNuevoProveedor] = useState(false);
+    const [deleteMode, setDeleteMode] = useState(false);
+    const [selectedSuppliers, setSelectedSuppliers] = useState([]);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [deleteProgress, setDeleteProgress] = useState({
+        success: 0,
+        failed: 0,
+        total: 0,
+    });
 
     // Función para navegar al detalle del proveedor
     const handleSupplierClick = (supplier) => {
@@ -130,6 +435,86 @@ const SuppliersPage = () => {
             hour: "2-digit",
             minute: "2-digit",
         });
+    };
+
+    // Función para eliminar proveedores seleccionados
+    const handleDeleteSuppliers = async () => {
+        if (selectedSuppliers.length === 0) return;
+
+        setIsDeleting(true);
+        setDeleteProgress({
+            success: 0,
+            failed: 0,
+            total: selectedSuppliers.length,
+        });
+
+        const results = [];
+
+        for (const supplierId of selectedSuppliers) {
+            try {
+                const response = await fetch(
+                    `https://unidental-backend.onrender.com/api/suppliers/suppliers/${supplierId}/`,
+                    {
+                        method: "DELETE",
+                        headers: {
+                            Authorization: `Token ${authToken}`,
+                        },
+                    }
+                );
+
+                if (response.ok) {
+                    results.push({ id: supplierId, success: true });
+                    setDeleteProgress((prev) => ({
+                        ...prev,
+                        success: prev.success + 1,
+                    }));
+                } else {
+                    results.push({
+                        id: supplierId,
+                        success: false,
+                        error: response.status,
+                    });
+                    setDeleteProgress((prev) => ({
+                        ...prev,
+                        failed: prev.failed + 1,
+                    }));
+                }
+            } catch (error) {
+                results.push({
+                    id: supplierId,
+                    success: false,
+                    error: "Network error",
+                });
+                setDeleteProgress((prev) => ({
+                    ...prev,
+                    failed: prev.failed + 1,
+                }));
+            }
+        }
+
+        // Mostrar resultados
+        const successful = results.filter((r) => r.success).length;
+        const failed = results.filter((r) => !r.success).length;
+
+        if (successful > 0 && failed === 0) {
+            alert(`✅ ${successful} proveedor(es) eliminado(s) exitosamente`);
+        } else if (successful > 0 && failed > 0) {
+            alert(
+                `⚠️ ${successful} proveedor(es) eliminado(s), ${failed} fallaron`
+            );
+        } else {
+            alert(`❌ Error al eliminar los proveedores seleccionados`);
+        }
+
+        // Limpiar estados y recargar
+        setShowDeleteConfirm(false);
+        setDeleteMode(false);
+        setSelectedSuppliers([]);
+        setIsDeleting(false);
+        setDeleteProgress({ success: 0, failed: 0, total: 0 });
+
+        // Recargar la lista de proveedores
+        window.location.reload();
     };
 
     if (loading && suppliers.length === 0) {
@@ -287,6 +672,117 @@ const SuppliersPage = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Botones de agregar y eliminar proveedor debajo del banner */}
+            <div style={{ display: "flex", gap: "12px", margin: "24px 0" }}>
+                <button
+                    style={{
+                        padding: "10px 18px",
+                        backgroundColor: "#27ae60",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "8px",
+                        fontSize: "14px",
+                        fontWeight: "600",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                    }}
+                    title="Agregar proveedor"
+                    onClick={() => setShowNuevoProveedor(true)}
+                >
+                    <svg
+                        width="16"
+                        height="16"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                    >
+                        <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M12 4v16m8-8H4"
+                        />
+                    </svg>
+                    Agregar Proveedor
+                </button>
+                <button
+                    style={{
+                        padding: "10px 18px",
+                        backgroundColor: deleteMode ? "#c0392b" : "#e74c3c",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "8px",
+                        fontSize: "14px",
+                        fontWeight: "600",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        position: "relative",
+                    }}
+                    title="Eliminar proveedor"
+                    onClick={() => {
+                        if (!deleteMode) {
+                            setDeleteMode(true);
+                            setSelectedSuppliers([]);
+                        } else {
+                            if (selectedSuppliers.length > 0) {
+                                setShowDeleteConfirm(true);
+                            }
+                        }
+                    }}
+                >
+                    <svg
+                        width="16"
+                        height="16"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                    >
+                        <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M6 18L18 6M6 6l12 12"
+                        />
+                    </svg>
+                    {deleteMode
+                        ? `Eliminar (${selectedSuppliers.length})`
+                        : "Eliminar Proveedor"}
+                </button>
+                {deleteMode && (
+                    <button
+                        style={{
+                            padding: "10px 18px",
+                            backgroundColor: "#bfc9d1",
+                            color: "#2c3e50",
+                            border: "none",
+                            borderRadius: "8px",
+                            fontSize: "14px",
+                            fontWeight: "600",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                        }}
+                        title="Cancelar selección"
+                        onClick={() => {
+                            setDeleteMode(false);
+                            setSelectedSuppliers([]);
+                        }}
+                    >
+                        Cancelar
+                    </button>
+                )}
+            </div>
+            {showNuevoProveedor && (
+                <NuevoProveedorForm
+                    onClose={() => setShowNuevoProveedor(false)}
+                />
+            )}
 
             {/* Búsqueda */}
             <div
@@ -482,6 +978,7 @@ const SuppliersPage = () => {
                                     color: "white",
                                 }}
                             >
+                                {/* No checkboxes, solo selección por fila */}
                                 <th
                                     style={{
                                         padding: "16px 12px",
@@ -557,27 +1054,63 @@ const SuppliersPage = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {suppliers.map((supplier, index) => (
+                            {suppliers.map((supplier) => (
                                 <tr
                                     key={supplier.id}
                                     style={{
-                                        backgroundColor:
-                                            index % 2 === 0
-                                                ? "#fff"
-                                                : "#f8f9fa",
-                                        transition: "background-color 0.2s",
+                                        borderBottom: "1px solid #f0f0f0",
+                                        cursor: "pointer",
+                                        background:
+                                            deleteMode &&
+                                            selectedSuppliers.includes(
+                                                supplier.id
+                                            )
+                                                ? "#fdecea"
+                                                : undefined,
+                                        transition: "background 0.18s",
                                     }}
-                                    onMouseEnter={(e) =>
-                                        (e.target.parentElement.style.backgroundColor =
-                                            "#e3f2fd")
-                                    }
-                                    onMouseLeave={(e) =>
-                                        (e.target.parentElement.style.backgroundColor =
-                                            index % 2 === 0
-                                                ? "#fff"
-                                                : "#f8f9fa")
-                                    }
+                                    onClick={() => {
+                                        if (deleteMode) {
+                                            setSelectedSuppliers((prev) =>
+                                                prev.includes(supplier.id)
+                                                    ? prev.filter(
+                                                          (id) =>
+                                                              id !== supplier.id
+                                                      )
+                                                    : [...prev, supplier.id]
+                                            );
+                                        } else {
+                                            handleSupplierClick(supplier);
+                                        }
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        if (
+                                            !(
+                                                deleteMode &&
+                                                selectedSuppliers.includes(
+                                                    supplier.id
+                                                )
+                                            )
+                                        ) {
+                                            e.currentTarget.style.background =
+                                                "#f0f4fa";
+                                        }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        if (
+                                            !(
+                                                deleteMode &&
+                                                selectedSuppliers.includes(
+                                                    supplier.id
+                                                )
+                                            )
+                                        ) {
+                                            e.currentTarget.style.background =
+                                                "";
+                                        }
+                                    }}
                                 >
+                                    {/* No checkboxes, solo selección por fila */}
                                     <td
                                         style={{
                                             padding: "16px 12px",
@@ -608,35 +1141,7 @@ const SuppliersPage = () => {
                                             fontSize: 15,
                                         }}
                                     >
-                                        <button
-                                            onClick={() =>
-                                                handleSupplierClick(supplier)
-                                            }
-                                            style={{
-                                                background: "none",
-                                                border: "none",
-                                                fontSize: "14px",
-                                                fontWeight: "500",
-                                                color: "#007bff",
-                                                cursor: "pointer",
-                                                textAlign: "left",
-                                                padding: "0",
-                                                textDecoration: "underline",
-                                                textDecorationColor:
-                                                    "transparent",
-                                                transition: "all 0.2s",
-                                            }}
-                                            onMouseEnter={(e) =>
-                                                (e.target.style.textDecorationColor =
-                                                    "#007bff")
-                                            }
-                                            onMouseLeave={(e) =>
-                                                (e.target.style.textDecorationColor =
-                                                    "transparent")
-                                            }
-                                        >
-                                            {supplier.name}
-                                        </button>
+                                        {supplier.name}
                                     </td>
                                     <td
                                         style={{
@@ -1070,6 +1575,135 @@ const SuppliersPage = () => {
                                 Ir
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de confirmación de eliminación */}
+            {showDeleteConfirm && (
+                <div
+                    style={{
+                        background: "rgba(0,0,0,0.35)",
+                        position: "fixed",
+                        top: 0,
+                        left: 0,
+                        width: "100vw",
+                        height: "100vh",
+                        zIndex: 2000,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                    }}
+                >
+                    <div
+                        style={{
+                            background: "#fff",
+                            padding: 32,
+                            borderRadius: 14,
+                            minWidth: 340,
+                            maxWidth: 480,
+                            width: "100%",
+                            boxShadow: "0 8px 32px rgba(44,62,80,0.18)",
+                            border: "1.5px solid #e1e4ea",
+                            position: "relative",
+                        }}
+                    >
+                        <h3
+                            style={{
+                                margin: 0,
+                                fontWeight: 800,
+                                fontSize: 22,
+                                color: "#c0392b",
+                                textAlign: "center",
+                            }}
+                        >
+                            ¿Estás seguro de eliminar los siguientes
+                            proveedores?
+                        </h3>
+                        <ul
+                            style={{
+                                margin: "18px 0 0 0",
+                                padding: 0,
+                                listStyle: "none",
+                                maxHeight: 180,
+                                overflowY: "auto",
+                            }}
+                        >
+                            {suppliers
+                                .filter((s) => selectedSuppliers.includes(s.id))
+                                .map((s) => (
+                                    <li
+                                        key={s.id}
+                                        style={{
+                                            padding: "6px 0",
+                                            color: "#2c3e50",
+                                            fontWeight: 600,
+                                            fontSize: 16,
+                                        }}
+                                    >
+                                        {s.name}
+                                    </li>
+                                ))}
+                        </ul>
+                        <div
+                            style={{
+                                display: "flex",
+                                justifyContent: "flex-end",
+                                gap: 14,
+                                marginTop: 28,
+                            }}
+                        >
+                            <button
+                                onClick={() => setShowDeleteConfirm(false)}
+                                style={{
+                                    padding: "9px 22px",
+                                    background: "#f4f6fa",
+                                    border: "none",
+                                    borderRadius: 7,
+                                    fontWeight: 700,
+                                    color: "#34495e",
+                                    fontSize: 15,
+                                    cursor: "pointer",
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={() => {
+                                    handleDeleteSuppliers();
+                                }}
+                                style={{
+                                    padding: "9px 22px",
+                                    background: "#c0392b",
+                                    color: "white",
+                                    border: "none",
+                                    borderRadius: 7,
+                                    fontWeight: 700,
+                                    fontSize: 15,
+                                    cursor: "pointer",
+                                }}
+                                disabled={isDeleting}
+                            >
+                                {isDeleting ? "Eliminando..." : "Sí, eliminar"}
+                            </button>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setShowDeleteConfirm(false)}
+                            style={{
+                                position: "absolute",
+                                top: 12,
+                                right: 16,
+                                background: "none",
+                                border: "none",
+                                fontSize: 22,
+                                color: "#bfc9d1",
+                                cursor: "pointer",
+                            }}
+                            title="Cerrar"
+                        >
+                            ×
+                        </button>
                     </div>
                 </div>
             )}

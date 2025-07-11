@@ -82,6 +82,9 @@ const API_CONFIG = {
 
         // Ventas - Créditos
         CREDITS_ACCOUNTS: "/credits/accounts/",
+
+        // Compras - Órdenes de compra
+        PURCHASE_ORDERS: "/purchases/orders/",
     },
 };
 

@@ -1,4 +1,10 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
+import React, {
+    createContext,
+    useContext,
+    useState,
+    useCallback,
+    useEffect,
+} from "react";
 import { customersService } from "../services/customersService";
 import { useAuth } from "./AuthContext";
 
@@ -19,7 +25,7 @@ export const CustomersProvider = ({ children }) => {
     const [isInitialized, setIsInitialized] = useState(false);
     const [lastFetch, setLastFetch] = useState(null);
     const [error, setError] = useState(null);
-    
+
     // Cache duration in milliseconds (5 minutes)
     const CACHE_DURATION = 5 * 60 * 1000;
 
@@ -30,90 +36,107 @@ export const CustomersProvider = ({ children }) => {
     }, [lastFetch, CACHE_DURATION]);
 
     // Load all customers and cache them
-    const loadAllCustomers = useCallback(async (forceRefresh = false) => {
-        if (!authToken) return;
-        
-        // If cache is valid and not forcing refresh, return cached data
-        if (!forceRefresh && isCacheValid() && customersCache.length > 0) {
-            return customersCache;
-        }
+    const loadAllCustomers = useCallback(
+        async (forceRefresh = false) => {
+            if (!authToken) return;
 
-        try {
-            setIsLoading(true);
-            setError(null);
-            
-            // Load all customers with pagination handling
-            const allCustomers = await customersService.getAllCustomers(authToken);
+            // If cache is valid and not forcing refresh, return cached data
+            if (!forceRefresh && isCacheValid() && customersCache.length > 0) {
+                return customersCache;
+            }
 
-            console.log(`Loaded ${allCustomers.length} customers`);
-            
-            setCustomersCache(allCustomers);
-            setLastFetch(Date.now());
-            setIsInitialized(true);
-            
-            return allCustomers;
+            try {
+                setIsLoading(true);
+                setError(null);
 
-        } catch (error) {
-            console.error("Error loading customers:", error);
-            setError(error.message || "Error al cargar clientes");
-            return customersCache; // Return cached data on error
-        } finally {
-            setIsLoading(false);
-        }
-    }, [authToken, customersCache, isCacheValid]);
+                // Load all customers with pagination handling
+                const allCustomers = await customersService.getAllCustomers(
+                    authToken
+                );
+
+                console.log(`Loaded ${allCustomers.length} customers`);
+
+                setCustomersCache(allCustomers);
+                setLastFetch(Date.now());
+                setIsInitialized(true);
+
+                return allCustomers;
+            } catch (error) {
+                console.error("Error loading customers:", error);
+                setError(error.message || "Error al cargar clientes");
+                return customersCache; // Return cached data on error
+            } finally {
+                setIsLoading(false);
+            }
+        },
+        [authToken, customersCache, isCacheValid]
+    );
 
     // Search customers in cache
-    const searchCustomers = useCallback((searchTerm) => {
-        if (!searchTerm || searchTerm.length < 2) {
-            return [];
-        }
+    const searchCustomers = useCallback(
+        (searchTerm) => {
+            if (!searchTerm || searchTerm.length < 2) {
+                return [];
+            }
 
-        const term = searchTerm.toLowerCase().trim();
-        
-        const results = customersCache.filter(customer => {
-            const name = (customer.name || "").toLowerCase();
-            const phone = (customer.phone || "").toLowerCase();
-            const email = (customer.email || "").toLowerCase();
-            
-            return name.includes(term) || 
-                   phone.includes(term) || 
-                   email.includes(term);
-        });
+            const term = searchTerm.toLowerCase().trim();
 
-        return results;
-    }, [customersCache]);
+            const results = customersCache.filter((customer) => {
+                const name = (customer.name || "").toLowerCase();
+                const phone = (customer.phone || "").toLowerCase();
+                const email = (customer.email || "").toLowerCase();
+
+                return (
+                    name.includes(term) ||
+                    phone.includes(term) ||
+                    email.includes(term)
+                );
+            });
+
+            return results;
+        },
+        [customersCache]
+    );
 
     // Add new customer to cache
     const addCustomerToCache = useCallback((newCustomer) => {
-        setCustomersCache(prev => {
+        setCustomersCache((prev) => {
             // Check if customer already exists
-            const exists = prev.some(customer => customer.id === newCustomer.id);
+            const exists = prev.some(
+                (customer) => customer.id === newCustomer.id
+            );
             if (exists) {
                 // Update existing customer
-                return prev.map(customer => 
+                return prev.map((customer) =>
                     customer.id === newCustomer.id ? newCustomer : customer
                 );
             } else {
                 // Add new customer and sort by name
                 const updated = [...prev, newCustomer];
-                return updated.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+                return updated.sort((a, b) =>
+                    (a.name || "").localeCompare(b.name || "")
+                );
             }
         });
     }, []);
 
     // Update customer in cache
     const updateCustomerInCache = useCallback((updatedCustomer) => {
-        setCustomersCache(prev => 
-            prev.map(customer => 
-                customer.id === updatedCustomer.id ? updatedCustomer : customer
-            ).sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+        setCustomersCache((prev) =>
+            prev
+                .map((customer) =>
+                    customer.id === updatedCustomer.id
+                        ? updatedCustomer
+                        : customer
+                )
+                .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
         );
     }, []);
 
     // Remove customer from cache
     const removeCustomerFromCache = useCallback((customerId) => {
-        setCustomersCache(prev => 
-            prev.filter(customer => customer.id !== customerId)
+        setCustomersCache((prev) =>
+            prev.filter((customer) => customer.id !== customerId)
         );
     }, []);
 
@@ -137,9 +160,16 @@ export const CustomersProvider = ({ children }) => {
             lastFetch: lastFetch ? new Date(lastFetch).toLocaleString() : null,
             isLoading,
             isInitialized,
-            error
+            error,
         };
-    }, [customersCache.length, isCacheValid, lastFetch, isLoading, isInitialized, error]);
+    }, [
+        customersCache.length,
+        isCacheValid,
+        lastFetch,
+        isLoading,
+        isInitialized,
+        error,
+    ]);
 
     const value = {
         // Data
@@ -147,7 +177,7 @@ export const CustomersProvider = ({ children }) => {
         isLoading,
         isInitialized,
         error,
-        
+
         // Functions
         loadAllCustomers,
         searchCustomers,
@@ -156,9 +186,9 @@ export const CustomersProvider = ({ children }) => {
         removeCustomerFromCache,
         refreshCache,
         getCacheInfo,
-        
+
         // Utils
-        isCacheValid
+        isCacheValid,
     };
 
     return (
@@ -166,4 +196,4 @@ export const CustomersProvider = ({ children }) => {
             {children}
         </CustomersContext.Provider>
     );
-}; 
+};

@@ -773,6 +773,11 @@ export const createInventoryMovement = async (movementData, authToken) => {
         throw new Error("No authentication token provided");
     }
 
+    console.log("🚀 createInventoryMovement called with:");
+    console.log("📍 URL:", API_INVENTORY_MOVEMENTS_URL);
+    console.log("📋 Movement Data:", JSON.stringify(movementData, null, 2));
+    console.log("🔑 Auth Token present:", !!authToken);
+
     try {
         const response = await fetch(API_INVENTORY_MOVEMENTS_URL, {
             method: "POST",
@@ -782,6 +787,9 @@ export const createInventoryMovement = async (movementData, authToken) => {
             },
             body: JSON.stringify(movementData),
         });
+
+        console.log("📡 Response status:", response.status);
+        console.log("📡 Response ok:", response.ok);
 
         if (!response.ok) {
             // Try to get error details from response
@@ -815,9 +823,11 @@ export const createInventoryMovement = async (movementData, authToken) => {
             throw new Error(errorMessage);
         }
 
-        return await response.json();
+        const result = await response.json();
+        console.log("✅ Movement created successfully:", result);
+        return result;
     } catch (error) {
-        console.error("Error creating inventory movement:", error);
+        console.error("❌ Error creating inventory movement:", error);
 
         // Mejorar manejo de errores de red
         if (
@@ -981,6 +991,21 @@ export const createProduct = async (productData, authToken) => {
         throw new Error("No authentication token provided");
     }
 
+    // 🔍 DEBUG: Agregar logs para verificar los datos que se envían al backend
+    console.log("🔍 DEBUG - Datos recibidos en createProduct:", productData);
+    console.log(
+        "🔍 DEBUG - Campo requires_batch_control en createProduct:",
+        productData.requires_batch_control
+    );
+    console.log(
+        "🔍 DEBUG - Tipo de requires_batch_control en createProduct:",
+        typeof productData.requires_batch_control
+    );
+    console.log(
+        "🔍 DEBUG - JSON que se enviará al backend:",
+        JSON.stringify(productData, null, 2)
+    );
+
     try {
         const response = await fetch(API_PRODUCTS_URL, {
             method: "POST",
@@ -991,11 +1016,19 @@ export const createProduct = async (productData, authToken) => {
             body: JSON.stringify(productData),
         });
 
+        // 🔍 DEBUG: Agregar logs para verificar la respuesta del backend
+        console.log("🔍 DEBUG - Status de la respuesta:", response.status);
+        console.log(
+            "🔍 DEBUG - Headers de la respuesta:",
+            Object.fromEntries(response.headers.entries())
+        );
+
         if (!response.ok) {
             // Try to get error details from response
             let errorMessage = `Error ${response.status}: ${response.statusText}`;
             try {
                 const errorData = await response.json();
+                console.log("🔍 DEBUG - Error data del backend:", errorData);
                 if (errorData.detail) {
                     errorMessage = errorData.detail;
                 } else if (errorData.error) {
@@ -1018,11 +1051,16 @@ export const createProduct = async (productData, authToken) => {
                 }
             } catch (e) {
                 // If we can't parse the error response, use the default message
+                console.log(
+                    "🔍 DEBUG - No se pudo parsear el error del backend"
+                );
             }
             throw new Error(errorMessage);
         }
 
-        return await response.json();
+        const result = await response.json();
+        console.log("🔍 DEBUG - Respuesta exitosa del backend:", result);
+        return result;
     } catch (error) {
         console.error("Error creating product:", error);
         throw error;

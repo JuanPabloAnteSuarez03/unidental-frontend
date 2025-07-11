@@ -5,6 +5,14 @@ import { render } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import MovimientosDeStockPage from "../pages/MovimientosDeStockPage";
 
+// Mock de react-router-dom
+jest.mock("react-router-dom", () => ({
+    ...jest.requireActual("react-router-dom"),
+    useLocation: jest.fn(() => ({
+        state: null, // Simula que no hay estado prefiltrado
+    })),
+}));
+
 // Mock de todos los componentes y hooks
 jest.mock("../context/AuthContext", () => ({
     useAuth: jest.fn(() => ({
@@ -25,12 +33,26 @@ jest.mock("../services/inventoryService", () => ({
     },
 }));
 
+jest.mock("../services/batchesService", () => ({
+    default: {},
+}));
+
+jest.mock("../services/advancedInventoryService", () => ({
+    default: {},
+}));
+
 jest.mock("../hooks/inventory/useProductSearch", () => ({
     __esModule: true,
     default: jest.fn(() => ({
         searchResults: [],
         isLoading: false,
         error: null,
+        searchTerm: "",
+        filteredProducts: [],
+        loadingMessage: "",
+        handleSearch: jest.fn(),
+        resetSearch: jest.fn(),
+        updateProductsStock: jest.fn(),
     })),
 }));
 
@@ -53,6 +75,10 @@ jest.mock("../components/StockMovements/MovementsTable", () => () => (
 jest.mock("../components/StockMovements/MovementsPagination", () => () => (
     <div>MovementsPagination</div>
 ));
+jest.mock(
+    "../components/StockMovements/MultipleProductsMovementForm",
+    () => () => <div>MultipleProductsMovementForm</div>
+);
 
 describe("MovimientosDeStockPage", () => {
     test("renders without crashing", () => {

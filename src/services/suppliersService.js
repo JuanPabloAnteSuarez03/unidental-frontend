@@ -418,6 +418,92 @@ export async function getSupplierPurchaseOptions(authToken) {
     return await response.json();
 }
 
+/**
+ * Crear una nueva opción de compra para un proveedor
+ * @param {Object} purchaseOptionData - Datos de la opción de compra
+ * @param {number} purchaseOptionData.product - ID del producto
+ * @param {number} purchaseOptionData.supplier - ID del proveedor
+ * @param {string} purchaseOptionData.brand - Marca (opcional)
+ * @param {string} purchaseOptionData.purchase_price - Precio de compra
+ * @param {string} purchaseOptionData.valid_from - Fecha de inicio de vigencia
+ * @param {string} purchaseOptionData.valid_to - Fecha de fin de vigencia
+ * @param {string} authToken - Token de autenticación
+ * @returns {Promise<Object>} - Opción de compra creada
+ */
+export const createPurchaseOption = async (purchaseOptionData, authToken) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    try {
+        console.log("🔄 Creando opción de compra:", purchaseOptionData);
+
+        const response = await fetch(API_PURCHASE_OPTIONS_URL, {
+            method: "POST",
+            headers: {
+                Authorization: `Token ${authToken}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(purchaseOptionData),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            console.error("❌ Error response details:", {
+                status: response.status,
+                statusText: response.statusText,
+                errorData: errorData,
+            });
+            throw new Error(
+                `Error ${response.status}: ${
+                    errorData.detail || errorData.message || response.statusText
+                }`
+            );
+        }
+
+        const data = await response.json();
+        console.log("✅ Opción de compra creada exitosamente:", data);
+        return data;
+    } catch (error) {
+        console.error("❌ Error al crear opción de compra:", error);
+        throw error;
+    }
+};
+
+/**
+ * Obtener detalle de una opción de compra por ID
+ * @param {number} id - ID de la opción de compra
+ * @param {string} authToken - Token de autenticación
+ * @returns {Promise<Object>} - Detalle de la opción de compra
+ */
+export const getPurchaseOptionDetail = async (id, authToken) => {
+    if (!authToken) throw new Error("No authentication token provided");
+    const url = `${API_PURCHASE_OPTIONS_URL}${id}/`;
+    try {
+        const response = await fetch(url, {
+            headers: {
+                Authorization: `Token ${authToken}`,
+                "Content-Type": "application/json",
+            },
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(
+                `Error ${response.status}: ${
+                    errorData.detail || errorData.message || response.statusText
+                }`
+            );
+        }
+        return await response.json();
+    } catch (error) {
+        console.error(
+            "❌ Error al obtener detalle de opción de compra:",
+            error
+        );
+        throw error;
+    }
+};
+
 // Servicio por defecto
 const suppliersService = {
     getSuppliers,
@@ -429,6 +515,8 @@ const suppliersService = {
     getPurchaseOptions,
     clearSuppliersCache,
     getSupplierPurchaseOptions,
+    createPurchaseOption,
+    getPurchaseOptionDetail,
 };
 
 export default suppliersService;

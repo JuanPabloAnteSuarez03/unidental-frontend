@@ -27,10 +27,13 @@ const convertToProxyUrl = (url) => {
 };
 
 /**
- * Get list of sales with optional pagination
- * @param {Object} params - Pagination parameters
+ * Get list of sales with optional pagination and search
+ * Note: API doesn't support date filtering - use getSalesInDateRange for that
+ * @param {Object} params - Pagination and filter parameters
  * @param {string} params.ordering - Field to order by
  * @param {number} params.page - Page number
+ * @param {string} params.search - Search term
+ * @param {number} params.page_size - Number of items per page
  * @param {string} authToken - Authentication token
  * @param {AbortSignal} signal - AbortController signal for request cancellation
  * @returns {Promise<Object>} - Paginated list of sales
@@ -44,9 +47,15 @@ export const getSales = async (params = {}, authToken, signal) => {
         // Build URL with query parameters
         const url = new URL(API_SALES_URL, window.location.origin);
 
+        // Only add supported parameters (API doesn't support date filtering)
         if (params.ordering)
             url.searchParams.append("ordering", params.ordering);
         if (params.page) url.searchParams.append("page", params.page);
+        if (params.search) url.searchParams.append("search", params.search);
+        if (params.page_size)
+            url.searchParams.append("page_size", params.page_size);
+
+        console.log(`🔗 Fetching sales: ${url.toString()}`);
 
         const response = await fetch(url.toString(), {
             method: "GET",
@@ -139,6 +148,16 @@ export const createSale = async (saleData, authToken, signal) => {
                     parseError
                 );
                 errorData = { detail: responseText };
+            }
+
+            // Si es un 409 de ruptura de kits/cajas
+            if (response.status === 409 && errorData) {
+                const breakdownErr = new Error(errorData.message || 'Se requiere confirmación de ruptura');
+                breakdownErr.status = 409;
+                breakdownErr.breakdownRequired = true;
+                breakdownErr.breakdownPlan = errorData.breakdown_plan || [];
+                breakdownErr.raw = errorData;
+                throw breakdownErr;
             }
 
             // Si hay errores de validación, mostrarlos de forma más clara
@@ -359,6 +378,59 @@ export const getSalesStatistics = async (params = {}, authToken, signal) => {
 };
 
 /**
+ * Get sales statistics for last N days (new optimized version)
+ * @param {number} days - Number of days to look back (default: 30)
+ * @param {string} authToken - Authentication token
+ * @param {AbortSignal} signal - AbortController signal for request cancellation
+ * @returns {Promise<Object>} - Sales statistics for the period
+ */
+export const getSalesStatisticsByDays = async (
+    days = 30,
+    authToken,
+    signal
+) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    try {
+        const url = new URL(
+            `${API_SALES_URL}statistics/`,
+            window.location.origin
+        );
+        url.searchParams.append("days", days);
+
+        console.log(
+            `🔗 Fetching sales statistics for last ${days} days: ${url.toString()}`
+        );
+
+        const response = await fetch(url.toString(), {
+            method: "GET",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Token ${authToken}`,
+            },
+            signal,
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(
+                errorData.detail ||
+                    `Error ${response.status}: ${response.statusText}`
+            );
+        }
+
+        const data = await response.json();
+        console.log(`✅ Sales statistics loaded for ${days} days:`, data);
+        return data;
+    } catch (error) {
+        console.error("Error fetching sales statistics:", error);
+        throw error;
+    }
+};
+
+/**
  * Get today's sales
  * @param {Object} params - Pagination parameters
  * @param {string} params.ordering - Field to order by
@@ -410,6 +482,55 @@ export const getTodaySales = async (params = {}, authToken, signal) => {
 };
 
 /**
+ * Get sales by location for last N days
+ * @param {number} days - Number of days to look back (default: 30)
+ * @param {string} authToken - Authentication token
+ * @param {AbortSignal} signal - AbortController signal for request cancellation
+ * @returns {Promise<Array>} - Sales by location for the period
+ */
+export const getSalesByLocation = async (days = 30, authToken, signal) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    try {
+        const url = new URL(
+            `${API_SALES_URL}by_location/`,
+            window.location.origin
+        );
+        url.searchParams.append("days", days);
+
+        console.log(
+            `🔗 Fetching sales by location for last ${days} days: ${url.toString()}`
+        );
+
+        const response = await fetch(url.toString(), {
+            method: "GET",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Token ${authToken}`,
+            },
+            signal,
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(
+                errorData.detail ||
+                    `Error ${response.status}: ${response.statusText}`
+            );
+        }
+
+        const data = await response.json();
+        console.log(`✅ Sales by location loaded for ${days} days:`, data);
+        return data;
+    } catch (error) {
+        console.error("Error fetching sales by location:", error);
+        throw error;
+    }
+};
+
+/**
  * Get top selling products
  * @param {Object} params - Query parameters
  * @param {number} params.days - Number of days to look back (default: 30)
@@ -455,6 +576,62 @@ export const getTopProducts = async (params = {}, authToken, signal) => {
         if (data.next) data.next = convertToProxyUrl(data.next);
         if (data.previous) data.previous = convertToProxyUrl(data.previous);
 
+        return data;
+    } catch (error) {
+        console.error("Error fetching top products:", error);
+        throw error;
+    }
+};
+
+/**
+ * Get top selling products for last N days (new optimized version)
+ * @param {number} days - Number of days to look back (default: 30)
+ * @param {number} limit - Maximum number of products to return (default: 10)
+ * @param {string} authToken - Authentication token
+ * @param {AbortSignal} signal - AbortController signal for request cancellation
+ * @returns {Promise<Array>} - Top selling products for the period
+ */
+export const getTopProductsByDays = async (
+    days = 30,
+    limit = 10,
+    authToken,
+    signal
+) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    try {
+        const url = new URL(
+            `${API_SALE_ITEMS_URL}top_products/`,
+            window.location.origin
+        );
+        url.searchParams.append("days", days);
+        url.searchParams.append("limit", limit);
+
+        console.log(
+            `🔗 Fetching top ${limit} products for last ${days} days: ${url.toString()}`
+        );
+
+        const response = await fetch(url.toString(), {
+            method: "GET",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Token ${authToken}`,
+            },
+            signal,
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(
+                errorData.detail ||
+                    `Error ${response.status}: ${response.statusText}`
+            );
+        }
+
+        const data = await response.json();
+        console.log(`✅ Top products loaded for ${days} days:`, data);
         return data;
     } catch (error) {
         console.error("Error fetching top products:", error);
@@ -660,6 +837,258 @@ export const getDebtSummary = async (authToken, search = "") => {
     }
 };
 
+/**
+ * Get sales for a specific date range using local filtering
+ * Since the API doesn't support date filtering, we fetch all sales and filter locally
+ * @param {string} startDate - Start date (YYYY-MM-DD)
+ * @param {string} endDate - End date (YYYY-MM-DD)
+ * @param {string} authToken - Authentication token
+ * @param {AbortSignal} signal - AbortController signal for request cancellation
+ * @returns {Promise<Array>} - Array of sales in the date range
+ */
+export const getSalesInDateRange = async (
+    startDate,
+    endDate,
+    authToken,
+    signal
+) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    try {
+        console.log(
+            `🔄 Fetching and filtering sales from ${startDate} to ${endDate}`
+        );
+        console.warn(
+            "⚠️ API doesn't support date filtering - using local filtering"
+        );
+
+        // Fetch ALL sales since the API doesn't support date filtering
+        const allSales = [];
+        let nextUrl = new URL(API_SALES_URL, window.location.origin);
+        nextUrl.searchParams.append("page_size", "100");
+        nextUrl.searchParams.append("ordering", "-sale_date");
+
+        let pageCount = 0;
+        const maxPages = 50;
+
+        while (nextUrl && pageCount < maxPages) {
+            pageCount++;
+            console.log(`📄 Loading page ${pageCount} of all sales...`);
+
+            const response = await fetch(nextUrl.toString(), {
+                headers: {
+                    Authorization: `Token ${authToken}`,
+                    "Content-Type": "application/json",
+                },
+                signal,
+            });
+
+            if (!response.ok) {
+                throw new Error(
+                    `Error ${response.status}: ${response.statusText}`
+                );
+            }
+
+            const data = await response.json();
+            const sales = data.results || [];
+
+            allSales.push(...sales);
+            console.log(`✅ Page ${pageCount}: ${sales.length} sales loaded`);
+
+            // Check for next page
+            nextUrl = data.next
+                ? new URL(convertToProxyUrl(data.next), window.location.origin)
+                : null;
+
+            if (!nextUrl) {
+                console.log(
+                    `🏁 All pages loaded. Total sales: ${allSales.length}`
+                );
+                break;
+            }
+
+            if (signal?.aborted) break;
+        }
+
+        if (pageCount >= maxPages) {
+            console.warn(`⚠️ Reached maximum ${maxPages} pages limit`);
+        }
+
+        // Now filter locally by date
+        const filteredSales = allSales.filter((sale) => {
+            if (!sale.sale_date) return false;
+
+            // Convertir a objeto Date local (no solo string)
+            const saleDateObj = new Date(sale.sale_date);
+            // Normalizar a solo fecha local (sin hora)
+            const saleDateLocal = new Date(
+                saleDateObj.getFullYear(),
+                saleDateObj.getMonth(),
+                saleDateObj.getDate()
+            );
+
+            let isAfterStart = true;
+            let isBeforeEnd = true;
+
+            if (startDate) {
+                const start = new Date(startDate + "T00:00:00");
+                isAfterStart = saleDateLocal >= start;
+            }
+            if (endDate) {
+                const end = new Date(endDate + "T23:59:59");
+                isBeforeEnd = saleDateLocal <= end;
+            }
+
+            return isAfterStart && isBeforeEnd;
+        });
+
+        console.log(
+            `✅ Filtered ${allSales.length} → ${filteredSales.length} sales for date range`
+        );
+        return filteredSales;
+    } catch (error) {
+        if (error.name === "AbortError") {
+            console.log("Sales request was aborted");
+            return [];
+        }
+        console.error("Error fetching sales in date range:", error);
+        throw error;
+    }
+};
+
+/**
+ * Obtener todas las ventas sin paginación para reportes
+ * @param {Object} params - Parámetros de filtro
+ * @param {string} authToken - Token de autenticación
+ * @param {AbortSignal} signal - AbortController signal
+ * @returns {Promise<Array>} - Lista completa de ventas
+ */
+export const getAllSales = async (params = {}, authToken, signal) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    try {
+        const hasDateFilters = params.sale_date_from || params.sale_date_to;
+        if (!hasDateFilters) {
+            // Si no hay filtros de fecha, usar el endpoint /today
+            console.log("🔄 Cargando ventas SOLO de hoy usando /today ...");
+            const todayData = await getTodaySales({}, authToken, signal);
+            // getTodaySales devuelve un objeto paginado { results: [], count: 0, next: null, previous: null }
+            // Extraer solo el array de resultados
+            if (
+                todayData &&
+                todayData.results &&
+                Array.isArray(todayData.results)
+            ) {
+                console.log(
+                    `✅ Ventas de hoy cargadas: ${todayData.results.length} ventas`
+                );
+                return todayData.results;
+            } else if (Array.isArray(todayData)) {
+                console.log(
+                    `✅ Ventas de hoy cargadas: ${todayData.length} ventas`
+                );
+                return todayData;
+            } else {
+                console.log("✅ No hay ventas de hoy");
+                return [];
+            }
+        }
+
+        const filterInfo = hasDateFilters
+            ? `con filtros de fecha (${
+                  params.sale_date_from || "sin límite"
+              } - ${params.sale_date_to || "sin límite"})`
+            : "TODAS";
+
+        console.log(`🔄 Cargando ventas ${filterInfo}...`);
+        const allSales = [];
+        let nextUrl = new URL(API_SALES_URL, window.location.origin);
+
+        // Agregar parámetros de consulta (solo los soportados por la API)
+        // Nota: La API no soporta filtros de fecha, solo search, ordering y page
+        const supportedParams = ["search", "ordering", "page", "page_size"];
+        Object.keys(params).forEach((key) => {
+            if (
+                supportedParams.includes(key) &&
+                params[key] !== null &&
+                params[key] !== undefined &&
+                params[key] !== ""
+            ) {
+                nextUrl.searchParams.append(key, params[key]);
+            }
+        });
+
+        // Agregar page_size para optimizar
+        nextUrl.searchParams.append("page_size", "100");
+
+        let pageCount = 0;
+        const maxPages = 50; // Límite de seguridad
+
+        while (nextUrl && pageCount < maxPages) {
+            pageCount++;
+            console.log(`📄 Cargando página ${pageCount} de ventas...`);
+
+            const response = await fetch(nextUrl.toString(), {
+                headers: {
+                    Authorization: `Token ${authToken}`,
+                    "Content-Type": "application/json",
+                },
+                signal,
+            });
+
+            if (!response.ok) {
+                throw new Error(
+                    `Error ${response.status}: ${response.statusText}`
+                );
+            }
+
+            const data = await response.json();
+            const sales = data.results || [];
+
+            // Agregar ventas de esta página
+            allSales.push(...sales);
+            console.log(
+                `✅ Página ${pageCount}: ${sales.length} ventas cargadas`
+            );
+
+            // Verificar si hay más páginas
+            nextUrl = data.next
+                ? new URL(convertToProxyUrl(data.next), window.location.origin)
+                : null;
+
+            // Si no hay más páginas, terminar
+            if (!nextUrl) {
+                console.log(
+                    `🏁 No hay más páginas. Total de ventas cargadas ${filterInfo}: ${allSales.length}`
+                );
+                break;
+            }
+
+            if (signal?.aborted) break;
+        }
+
+        // Advertencia si llegamos al límite
+        if (pageCount >= maxPages) {
+            console.warn(
+                `⚠️ Se alcanzó el límite de ${maxPages} páginas. Es posible que no se hayan cargado todas las ventas.`
+            );
+        }
+
+        return allSales;
+    } catch (error) {
+        if (error.name === "AbortError") {
+            console.log("All sales request was aborted");
+            return [];
+        }
+        console.error("Error fetching all sales:", error);
+        throw error;
+    }
+};
+
 // Export all functions as a service object
 export const salesService = {
     getSales,
@@ -668,14 +1097,19 @@ export const salesService = {
     getSaleById,
     deleteSale,
     getSalesStatistics,
+    getSalesStatisticsByDays,
     getTodaySales,
+    getSalesByLocation,
     getTopProducts,
+    getTopProductsByDays,
     updateSaleItem,
     deleteSaleItem,
     getCreditAccounts,
     createCreditAccount,
     createCreditFromSale,
     getDebtSummary,
+    getAllSales,
+    getSalesInDateRange,
 };
 
 // Default export

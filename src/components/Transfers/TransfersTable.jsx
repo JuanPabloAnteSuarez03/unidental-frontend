@@ -277,6 +277,18 @@ const TransfersTable = ({
                                     textTransform: "uppercase",
                                 }}
                             >
+                                📊 Status Display
+                            </th>
+                            <th
+                                style={{
+                                    padding: "16px 12px",
+                                    textAlign: "center",
+                                    fontWeight: "600",
+                                    fontSize: "14px",
+                                    letterSpacing: "0.5px",
+                                    textTransform: "uppercase",
+                                }}
+                            >
                                 🔥 Urgencia
                             </th>
                             <th
@@ -394,6 +406,18 @@ const TransfersTable = ({
                                         <span style={getEstadoBadge(t.estado)}>
                                             {t.estado}
                                         </span>
+                                    </td>
+                                    <td
+                                        style={{
+                                            padding: "16px 12px",
+                                            borderBottom: "1px solid #e9ecef",
+                                            textAlign: "center",
+                                            fontSize: "14px",
+                                            fontWeight: "500",
+                                            color: "#495057",
+                                        }}
+                                    >
+                                        {t.status_display || t.estado}
                                     </td>
                                     <td
                                         style={{

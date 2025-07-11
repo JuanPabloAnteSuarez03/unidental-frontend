@@ -10,7 +10,6 @@ import SendTransferModalV2 from "../components/Transfers/SendTransferModalV2";
 import TransfersTable from "../components/Transfers/TransfersTable";
 import TransfersPagination from "../components/Transfers/TransfersPagination";
 import TransferDetailsModal from "../components/Transfers/TransferDetailsModal";
-import TransferPersistenceInfo from "../components/Transfers/TransferPersistenceInfo";
 
 const TransferenciasInternasPage = () => {
     const { authToken } = useAuth();
@@ -479,9 +478,6 @@ const TransferenciasInternasPage = () => {
 
             {/* Notificación */}
             <TransferNotification notification={notification} />
-
-            {/* Información de Persistencia */}
-            <TransferPersistenceInfo />
 
             <div
                 style={{
