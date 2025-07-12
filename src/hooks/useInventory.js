@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useProducts } from "../context/ProductsContext"; // ✨ NUEVO: Importar contexto de productos
-import inventoryService from "../services/inventoryService";
+import inventoryService, {
+    getLastPurchasePrice,
+} from "../services/inventoryService";
 import {
     useNameSearch,
     usePagination,
@@ -282,8 +284,22 @@ const useInventory = () => {
 
                 const products = data.results || [];
 
+                // Enriquecer productos con el último precio de compra
+                const enrichedProducts = await Promise.all(
+                    products.map(async (product) => {
+                        const purchasePrice = await getLastPurchasePrice(
+                            product.id,
+                            authToken
+                        );
+                        return {
+                            ...product,
+                            latest_purchase_price: purchasePrice,
+                        };
+                    })
+                );
+
                 // Actualizar el estado con los datos recibidos
-                setProducts(products);
+                setProducts(enrichedProducts);
                 setCount(
                     typeof data.count === "number"
                         ? data.count
@@ -292,7 +308,7 @@ const useInventory = () => {
 
                 // ✨ OPTIMIZACIÓN: Mostrar productos inmediatamente
                 const productsWithPlaceholder =
-                    createProductsWithPlaceholder(products);
+                    createProductsWithPlaceholder(enrichedProducts);
                 setProductsWithPlaceholder(productsWithPlaceholder);
 
                 // Calcular número de páginas
@@ -700,8 +716,22 @@ const useInventory = () => {
 
                     const products = data.results || [];
 
+                    // Enriquecer productos con el último precio de compra
+                    const enrichedProducts = await Promise.all(
+                        products.map(async (product) => {
+                            const purchasePrice = await getLastPurchasePrice(
+                                product.id,
+                                authToken
+                            );
+                            return {
+                                ...product,
+                                latest_purchase_price: purchasePrice,
+                            };
+                        })
+                    );
+
                     // Actualizar el estado con los datos recibidos
-                    setProducts(products);
+                    setProducts(enrichedProducts);
                     setCount(
                         typeof data.count === "number"
                             ? data.count
@@ -710,7 +740,7 @@ const useInventory = () => {
 
                     // ✨ OPTIMIZACIÓN: Mostrar productos inmediatamente
                     const productsWithPlaceholder =
-                        createProductsWithPlaceholder(products);
+                        createProductsWithPlaceholder(enrichedProducts);
                     setProductsWithPlaceholder(productsWithPlaceholder);
 
                     // Calcular número de páginas

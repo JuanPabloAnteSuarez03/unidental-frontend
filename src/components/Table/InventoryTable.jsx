@@ -61,14 +61,16 @@ const InventoryTable = ({
                 textAlign: "right",
             },
             // Definición de anchos específicos para columnas
-            skuColumn: { width: "12%" },
+            skuColumn: { width: "10%" },
             nameColumn: { width: "25%" },
-            categoryColumn: { width: "15%" },
-            unitColumn: { width: "10%" },
-            stockColumn: { width: "12%" },
-            expiryColumn: { width: "15%" },
-            lastSaleColumn: { width: "15%" },
-            descriptionColumn: { width: "20%" },
+            categoryColumn: { width: "12%" },
+            unitColumn: { width: "8%" },
+            stockColumn: { width: "10%" },
+            expiryColumn: { width: "12%" },
+            purchasePriceColumn: { width: "10%" },
+            lastSaleColumn: { width: "10%" },
+            marginColumn: { width: "8%" },
+            descriptionColumn: { width: "15%" },
             // ✨ Loading completo para productos iniciales
             fullLoadingContainer: {
                 textAlign: "center",
@@ -239,10 +241,28 @@ const InventoryTable = ({
                                 style={{
                                     ...styles.header,
                                     ...styles.headerLeft,
+                                    ...styles.purchasePriceColumn,
+                                }}
+                            >
+                                Precio Compra
+                            </th>
+                            <th
+                                style={{
+                                    ...styles.header,
+                                    ...styles.headerLeft,
                                     ...styles.lastSaleColumn,
                                 }}
                             >
-                                Precio de Venta
+                                Precio Venta
+                            </th>
+                            <th
+                                style={{
+                                    ...styles.header,
+                                    ...styles.headerCenter,
+                                    ...styles.marginColumn,
+                                }}
+                            >
+                                Margen
                             </th>
                             <th
                                 style={{
@@ -256,10 +276,13 @@ const InventoryTable = ({
                         </tr>
                     </thead>
                     <tbody>
-                        {products.map((product, index) => (
+                        {products.map((product) => (
                             <TableRow
-                                key={product.id || index}
+                                key={product.id}
                                 product={product}
+                                isStockLoading={
+                                    product.stockLoading || isStockLoading
+                                }
                             />
                         ))}
                     </tbody>
