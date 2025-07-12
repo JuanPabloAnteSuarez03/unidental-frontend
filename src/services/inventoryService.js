@@ -9,6 +9,7 @@ const API_STOCK_SUMMARY_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.STOC
 const API_CATEGORIES_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.CATEGORIES}`;
 const API_INVENTORY_MOVEMENTS_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.INVENTORY_MOVEMENTS}`;
 const API_LOCATIONS_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.LOCATIONS}`;
+const API_PURCHASE_ITEMS_URL = `${API_CONFIG.BASE_URL}/purchases/items/`; // Corregido
 const API_SKU_GENERATE_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.SKU_GENERATE}`;
 const API_SKU_VALIDATE_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.SKU_VALIDATE}`;
 const API_SKU_SYSTEM_INFO_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.SKU_SYSTEM_INFO}`;
@@ -1324,9 +1325,9 @@ export const getIntelligentPrice = async (productId, authToken) => {
             productId,
             authToken
         );
-        if (lastPurchasePrice.price > 0) {
+        if (lastPurchasePrice > 0) {
             return {
-                price: lastPurchasePrice.price,
+                price: lastPurchasePrice,
                 source: "purchase",
                 source_label: "Último precio de compra",
             };
@@ -1381,17 +1382,21 @@ const getLastSalePrice = async (productId, authToken) => {
 };
 
 /**
- * Get last purchase price for a product
- * @param {number} productId - Product ID
- * @param {string} authToken - Authentication token
- * @returns {Promise<Object>} - Price information
+ * Obtiene el precio de la última compra registrada para un producto.
+ * @param {number} productId - ID del producto.
+ * @param {string} authToken - Token de autenticación.
+ * @returns {Promise<number|null>} - El precio unitario de la última compra o null si no hay registros.
  */
-const getLastPurchasePrice = async (productId, authToken) => {
-    try {
-        // Primero obtenemos purchase items por producto
-        const purchasesUrl = `${API_CONFIG.BASE_URL}/purchases/items/?purchase_option__product=${productId}&ordering=-id&limit=1`;
+export const getLastPurchasePrice = async (productId, authToken) => {
+    if (!productId || !authToken) {
+        return null;
+    }
 
-        const response = await fetch(purchasesUrl, {
+    // Endpoint para obtener los items de compra, filtrados por producto y ordenados por fecha descendente
+    const url = `${API_PURCHASE_ITEMS_URL}?product=${productId}&ordering=-order__order_date`; // Corregido
+
+    try {
+        const response = await fetch(url, {
             headers: {
                 Authorization: `Token ${authToken}`,
                 "Content-Type": "application/json",
@@ -1399,84 +1404,62 @@ const getLastPurchasePrice = async (productId, authToken) => {
         });
 
         if (!response.ok) {
-            return { price: 0, source: "none" };
+            console.warn(
+                `Could not fetch last purchase price for product ${productId}. Status: ${response.status}`
+            );
+            return null;
         }
 
-        const data = await response.json();
+        const purchaseItems = await response.json();
 
-        if (data.results && data.results.length > 0) {
-            const lastPurchase = data.results[0];
-            return {
-                price: parseFloat(lastPurchase.unit_price) || 0,
-                source: "purchase",
-                item_id: lastPurchase.id,
-                date: lastPurchase.created_at || null,
-            };
+        // Si hay resultados, el primero es el más reciente
+        if (purchaseItems.results && purchaseItems.results.length > 0) {
+            return parseFloat(purchaseItems.results[0].unit_price);
         }
 
-        return { price: 0, source: "none" };
+        return null;
     } catch (error) {
-        console.error("Error fetching last purchase price:", error);
-        return { price: 0, source: "none" };
+        console.error(
+            `Error fetching last purchase price for product ${productId}:`,
+            error
+        );
+        return null;
     }
 };
 
 /**
- * Fallback function to get intelligent price from existing product data
+ * Fallback to get a product's price using a series of fallbacks.
+ * This is useful when the primary price source might be missing.
  * @param {number} productId - Product ID
  * @param {string} authToken - Authentication token
- * @returns {Promise<Object>} - Price information with source
+ * @returns {Promise<Object>} - Price information
  */
 const getProductIntelligentPriceFallback = async (productId, authToken) => {
-    try {
-        // Obtener el producto individual para usar selling_price o cost_price
-        const productUrl = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.INVENTORY}${productId}/`;
-
-        const response = await fetch(productUrl, {
-            headers: {
-                Authorization: `Token ${authToken}`,
-                "Content-Type": "application/json",
-            },
-        });
-
-        if (!response.ok) {
-            return {
-                price: 0,
-                source: "none",
-                source_label: "Sin precio disponible",
-            };
-        }
-
-        const product = await response.json();
-
-        // Lógica de fallback: selling_price > cost_price > 0
-        if (product.selling_price && product.selling_price > 0) {
-            return {
-                price: product.selling_price,
-                source: "suggested",
-                source_label: "Precio de venta sugerido",
-            };
-        } else if (product.cost_price && product.cost_price > 0) {
-            return {
-                price: product.cost_price,
-                source: "cost",
-                source_label: "Precio de costo",
-            };
-        } else {
-            return {
-                price: 0,
-                source: "none",
-                source_label: "Sin precio disponible",
-            };
-        }
-    } catch (error) {
-        console.error("Error in price fallback:", error);
+    // 1. Try last purchase price first
+    const lastPurchasePrice = await getLastPurchasePrice(productId, authToken);
+    if (lastPurchasePrice && lastPurchasePrice.price > 0) {
         return {
-            price: 0,
-            source: "none",
-            source_label: "Sin precio disponible",
+            price: lastPurchasePrice.price,
+            source: "purchase",
+            source_label: "Último precio de compra",
         };
     }
+
+    // 2. Fallback to last sale price
+    const lastSalePrice = await getLastSalePrice(productId, authToken);
+    if (lastSalePrice.price > 0) {
+        return {
+            price: lastSalePrice.price,
+            source: "sale",
+            source_label: "Último precio de venta",
+        };
+    }
+
+    return {
+        price: 0,
+        source: "none",
+        source_label: "No disponible",
+    };
 };
 
 /**
