@@ -82,6 +82,10 @@ const MainLayout = ({ children }) => {
                     name: "Créditos WhatsApp",
                     path: "/ventas/creditos-whatsapp",
                 },
+                {
+                    name: "Total de Ventas",
+                    path: "/ventas/total",
+                },
             ],
         },
         clientes: {
