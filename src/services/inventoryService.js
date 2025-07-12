@@ -844,6 +844,94 @@ export const createInventoryMovement = async (movementData, authToken) => {
 };
 
 /**
+ * Update movement status
+ * @param {number} movementId - Movement ID to update
+ * @param {string} newStatus - New status (pending, completed, cancelled)
+ * @param {string} authToken - Authentication token
+ * @returns {Promise<Object>} - Updated movement data
+ */
+export const updateMovementStatus = async (
+    movementId,
+    newStatus,
+    authToken
+) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    console.log("🚀 updateMovementStatus called with:");
+    console.log("📍 Movement ID:", movementId);
+    console.log("📊 New Status:", newStatus);
+    console.log("🔑 Auth Token present:", !!authToken);
+
+    try {
+        const response = await fetch(
+            `${API_INVENTORY_MOVEMENTS_URL}${movementId}/`,
+            {
+                method: "PATCH",
+                headers: {
+                    Authorization: `Token ${authToken}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ status: newStatus }),
+            }
+        );
+
+        console.log("📡 Response status:", response.status);
+        console.log("📡 Response ok:", response.ok);
+
+        if (!response.ok) {
+            // Try to get error details from response
+            let errorMessage = `Error ${response.status}: ${response.statusText}`;
+            try {
+                const errorData = await response.json();
+                if (errorData.detail) {
+                    errorMessage = errorData.detail;
+                } else if (errorData.error) {
+                    errorMessage = errorData.error;
+                } else if (typeof errorData === "object") {
+                    // Handle field-specific errors
+                    const fieldErrors = Object.entries(errorData)
+                        .map(
+                            ([field, errors]) =>
+                                `${field}: ${
+                                    Array.isArray(errors)
+                                        ? errors.join(", ")
+                                        : errors
+                                }`
+                        )
+                        .join("; ");
+                    if (fieldErrors) {
+                        errorMessage = fieldErrors;
+                    }
+                }
+            } catch (e) {
+                console.warn("No se pudo parsear el mensaje de error", e);
+            }
+            throw new Error(errorMessage);
+        }
+
+        const result = await response.json();
+        console.log("✅ Movement status updated successfully:", result);
+        return result;
+    } catch (error) {
+        console.error("❌ Error updating movement status:", error);
+
+        // Mejorar manejo de errores de red
+        if (
+            error.name === "TypeError" &&
+            error.message.includes("Failed to fetch")
+        ) {
+            throw new Error(
+                "Error de conexión: No se pudo conectar al servidor. Verifique su conexión a internet."
+            );
+        }
+
+        throw error;
+    }
+};
+
+/**
  * ✨ OPTIMIZADO: Get comprehensive stock map with better error handling
  * @param {string} authToken - Authentication token
  * @param {AbortSignal} signal - AbortController signal
@@ -1505,15 +1593,13 @@ export const getBatchesWithStockAtLocation = async (
         throw new Error("Product ID and Location ID are required");
     }
 
-    const API_BATCHES_BY_LOCATION_URL = `${API_CONFIG.BASE_URL}/inventory/movements/by_batches/`;
-
     try {
-        // Build URL with product and location filters
+        // Build URL with product and location filters using the correct endpoint
         const params = new URLSearchParams();
         params.append("product", productId);
         params.append("location", locationId);
 
-        const url = `${API_BATCHES_BY_LOCATION_URL}?${params.toString()}`;
+        const url = `${API_STOCK_URL}?${params.toString()}`;
 
         const response = await fetch(url, {
             headers: {
@@ -1528,14 +1614,39 @@ export const getBatchesWithStockAtLocation = async (
 
         const data = await response.json();
 
+        // Handle pagination if needed
+        let allBatches = data.results || data;
+
+        // If there are more pages, fetch them all
+        if (data.next) {
+            let nextUrl = data.next;
+            while (nextUrl) {
+                const nextResponse = await fetch(nextUrl, {
+                    headers: {
+                        Authorization: `Token ${authToken}`,
+                        "Content-Type": "application/json",
+                    },
+                });
+
+                if (nextResponse.ok) {
+                    const nextData = await nextResponse.json();
+                    allBatches = allBatches.concat(nextData.results || []);
+                    nextUrl = nextData.next;
+                } else {
+                    break;
+                }
+            }
+        }
+
         // Filter out batches with zero stock and add additional properties
-        const batchesWithStock = data
+        const batchesWithStock = allBatches
             .filter((batch) => batch.quantity > 0)
             .map((batch) => ({
                 ...batch,
                 availableStock: batch.quantity,
                 selectedQuantity: 0,
                 useFullBatch: false,
+                batch_id: batch.batch || batch.batch_id || batch.id,
             }));
 
         return batchesWithStock;
@@ -1558,6 +1669,7 @@ const inventoryService = {
     getStockSummary,
     getInventoryMovements,
     createInventoryMovement,
+    updateMovementStatus,
     getStockMap,
     generateNextSku,
     validateSku,

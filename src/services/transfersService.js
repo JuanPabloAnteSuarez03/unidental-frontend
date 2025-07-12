@@ -39,98 +39,160 @@ export const saveTransfersToStorage = (transfers) => {
 };
 
 /**
- * Crear una nueva transferencia
+ * Crear una nueva transferencia como un solo movimiento de inventario
  * @param {Object} transferData - Datos de la transferencia
  * @param {string} authToken - Token de autenticación
- * @returns {Promise<Object>} - Transferencia creada
+ * @returns {Promise<Object>} - Resultado de la transferencia creada
  */
 export const createTransfer = async (transferData, authToken) => {
     try {
-        // Crear ID único para la transferencia
-        const transferId = `TRF-${Date.now()}-${Math.random()
-            .toString(36)
-            .substr(2, 9)}`;
+        console.log("🔍 Datos de transferencia recibidos:", transferData);
 
-        // Log de datos recibidos para debug
-        console.log("🔍 Datos de transferencia recibidos:", {
-            selectedProduct: transferData.selectedProduct,
-            cantidad: transferData.cantidad,
-            sedeOrigen: transferData.sedeOrigen,
-            sedeDestino: transferData.sedeDestino,
-            motivo: transferData.motivo,
-            selectedBatches: transferData.selectedBatches,
-        });
+        if (!authToken) {
+            throw new Error("Token de autenticación requerido");
+        }
 
-        // Crear objeto de transferencia
-        const nuevaTransferencia = {
-            id: transferId,
-            fechaSolicitud: new Date().toLocaleString("es-ES"),
-            producto:
-                transferData.producto || transferData.selectedProduct?.name,
-            productId: transferData.selectedProduct?.id,
-            cantidad: parseInt(transferData.cantidad),
-            sedeOrigen: transferData.sedeOrigen,
-            sedeDestino: transferData.sedeDestino,
-            estado: "Pendiente", // Siempre pendiente para transferencias internas
-            status_display: "Pendiente", // Nueva columna para mostrar el estado
-            solicitadoPor: "Usuario Actual", // TODO: Obtener usuario real del contexto
-            motivo: transferData.motivo || "",
-            urgencia: transferData.urgencia || "media",
-            tipoTransferencia: transferData.tipoTransferencia,
-            fechaEntrega: transferData.fechaEntrega || null,
-            ultimaActualizacion: new Date().toLocaleString("es-ES"),
-            movementId: null, // Se llenará si se crea un movimiento de inventario
-            // 🆕 Agregar información de lotes (nuevo formato)
-            requiresBatchControl: transferData.requiresBatchControl || false,
-            selectedBatches: transferData.selectedBatches || [],
-            // Agregar información de lote si está presente (formato legacy)
-            batchInfo: transferData.batchInfo || null,
-        };
-
-        console.log("📦 Transferencia creada con datos:", {
-            id: nuevaTransferencia.id,
-            productId: nuevaTransferencia.productId,
-            producto: nuevaTransferencia.producto,
-            cantidad: nuevaTransferencia.cantidad,
-            requiresBatchControl: nuevaTransferencia.requiresBatchControl,
-            selectedBatches: nuevaTransferencia.selectedBatches,
-        });
-
-        // Para transferencias internas, NO crear movimientos inmediatamente
-        // Los movimientos se crearán cuando la transferencia cambie de estado
-        console.log(
-            "Transferencia interna creada en estado 'Pendiente' - Los movimientos se crearán al cambiar el estado"
+        // Obtener IDs de ubicaciones
+        const ubicaciones = await inventoryService.getLocations(authToken);
+        const sedeOrigen = ubicaciones.find(
+            (u) => u.name === transferData.sedeOrigen
+        );
+        const sedeDestino = ubicaciones.find(
+            (u) => u.name === transferData.sedeDestino
         );
 
-        // Obtener transferencias existentes y agregar la nueva
-        const transferenciasExistentes = getTransfersFromStorage();
-        const transferenciasActualizadas = [
-            nuevaTransferencia,
-            ...transferenciasExistentes,
-        ];
-
-        // Guardar en localStorage
-        saveTransfersToStorage(transferenciasActualizadas);
-
-        console.log("Transferencia creada y guardada:", nuevaTransferencia);
-
-        // 🆕 Logging adicional para lotes
-        if (
-            nuevaTransferencia.requiresBatchControl &&
-            nuevaTransferencia.selectedBatches &&
-            nuevaTransferencia.selectedBatches.length > 0
-        ) {
-            console.log(
-                `📦 Transferencia con ${nuevaTransferencia.selectedBatches.length} lotes guardada:`,
-                nuevaTransferencia.selectedBatches.map(
-                    (b) => `${b.batch_number}: ${b.selectedQuantity}`
-                )
+        if (!sedeOrigen || !sedeDestino) {
+            throw new Error(
+                "No se pudieron encontrar las ubicaciones especificadas"
             );
         }
 
-        return nuevaTransferencia;
+        console.log("📍 Ubicaciones encontradas:", {
+            origen: { id: sedeOrigen.id, name: sedeOrigen.name },
+            destino: { id: sedeDestino.id, name: sedeDestino.name },
+        });
+
+        const API_MOVEMENTS_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.INVENTORY_MOVEMENTS}`;
+        const productId = transferData.selectedProduct?.id;
+        const notas =
+            transferData.notas ||
+            `Transferencia interna de ${sedeOrigen.name} a ${sedeDestino.name}`;
+
+        // Crear solo UN movimiento con destination_location
+        let movimiento;
+
+        if (
+            transferData.requiresBatchControl &&
+            transferData.selectedBatches?.length > 0
+        ) {
+            // Para productos con lotes: crear un movimiento por cada lote seleccionado
+            console.log(
+                "📦 Creando movimientos por lotes:",
+                transferData.selectedBatches
+            );
+
+            const movimientos = [];
+
+            for (const lote of transferData.selectedBatches) {
+                // Payload único para transferencia con destination_location
+                const movementPayload = {
+                    product: productId,
+                    location: sedeOrigen.id,
+                    destination_location: sedeDestino.id,
+                    movement_type: "out",
+                    quantity: lote.selectedQuantity,
+                    status: "pending",
+                    is_internal_transfer: true,
+                    notes: notas,
+                };
+
+                // Agregar batch y expiry_date solo si están disponibles
+                if (lote.batch_id) {
+                    movementPayload.batch = lote.batch_id;
+                }
+                if (lote.expiry_date) {
+                    movementPayload.expiry_date = lote.expiry_date;
+                }
+
+                console.log(
+                    "🔄 Creando movimiento de transferencia para lote:",
+                    movementPayload
+                );
+
+                const response = await fetch(API_MOVEMENTS_URL, {
+                    method: "POST",
+                    headers: {
+                        Authorization: `Token ${authToken}`,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(movementPayload),
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(
+                        `Error al crear movimiento de transferencia: ${errorText}`
+                    );
+                }
+
+                const mov = await response.json();
+                movimientos.push(mov);
+            }
+
+            movimiento = movimientos;
+        } else {
+            // Para productos sin lotes: crear un solo movimiento
+            console.log("📋 Creando movimiento simple (sin lotes)");
+
+            // Payload único para transferencia con destination_location
+            const movementPayload = {
+                product: productId,
+                location: sedeOrigen.id,
+                destination_location: sedeDestino.id,
+                movement_type: "out",
+                quantity: parseInt(transferData.cantidad),
+                status: "pending",
+                is_internal_transfer: true,
+                expiry_date: "2025-08-24", // Fecha por defecto como en tu ejemplo
+                notes: notas,
+            };
+
+            console.log(
+                "🔄 Creando movimiento de transferencia:",
+                movementPayload
+            );
+
+            const response = await fetch(API_MOVEMENTS_URL, {
+                method: "POST",
+                headers: {
+                    Authorization: `Token ${authToken}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(movementPayload),
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(
+                    `Error al crear movimiento de transferencia: ${errorText}`
+                );
+            }
+
+            movimiento = await response.json();
+        }
+
+        console.log("✅ Transferencia creada exitosamente:", {
+            movimiento: movimiento,
+        });
+
+        return {
+            success: true,
+            movimiento,
+            id: Array.isArray(movimiento) ? movimiento[0]?.id : movimiento.id,
+            message: "Transferencia creada exitosamente",
+        };
     } catch (error) {
-        console.error("Error al crear transferencia:", error);
+        console.error("❌ Error al crear transferencia:", error);
         throw error;
     }
 };
@@ -1044,6 +1106,139 @@ export const deleteTransfer = (transferId) => {
 };
 
 /**
+ * Completar una transferencia interna
+ * @param {number} movementId - ID del movimiento de transferencia
+ * @param {string} authToken - Token de autenticación
+ * @returns {Promise<Object>} - Resultado de la operación
+ */
+export const completeTransfer = async (movementId, authToken) => {
+    try {
+        if (!authToken) {
+            throw new Error("Token de autenticación requerido");
+        }
+
+        console.log(`🔄 Completando transferencia interna: ${movementId}`);
+
+        // Completar el movimiento usando el endpoint específico
+        const API_MOVEMENTS_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.INVENTORY_MOVEMENTS}`;
+        const completeResponse = await fetch(
+            `${API_MOVEMENTS_URL}${movementId}/complete/`,
+            {
+                method: "POST",
+                headers: {
+                    Authorization: `Token ${authToken}`,
+                    "Content-Type": "application/json",
+                },
+            }
+        );
+
+        if (!completeResponse.ok) {
+            const errorText = await completeResponse.text();
+            throw new Error(`Error al completar movimiento: ${errorText}`);
+        }
+
+        const completedMovement = await completeResponse.json();
+        console.log("✅ Movimiento completado:", completedMovement);
+
+        return {
+            success: true,
+            movement: completedMovement,
+            message: "Transferencia completada exitosamente",
+        };
+    } catch (error) {
+        console.error("❌ Error al completar transferencia:", error);
+        throw error;
+    }
+};
+
+/**
+ * Cancelar una transferencia interna
+ * @param {number} movementId - ID del movimiento de transferencia
+ * @param {string} authToken - Token de autenticación
+ * @returns {Promise<Object>} - Resultado de la operación
+ */
+export const cancelTransfer = async (movementId, authToken) => {
+    try {
+        if (!authToken) {
+            throw new Error("Token de autenticación requerido");
+        }
+
+        console.log(`🔄 Cancelando transferencia interna: ${movementId}`);
+
+        // Obtener los detalles del movimiento para validar
+        const API_MOVEMENTS_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.INVENTORY_MOVEMENTS}`;
+        const movementResponse = await fetch(
+            `${API_MOVEMENTS_URL}${movementId}/`,
+            {
+                headers: {
+                    Authorization: `Token ${authToken}`,
+                    "Content-Type": "application/json",
+                },
+            }
+        );
+
+        if (!movementResponse.ok) {
+            throw new Error(
+                `Error al obtener movimiento: ${movementResponse.statusText}`
+            );
+        }
+
+        const movement = await movementResponse.json();
+        console.log("📋 Movimiento a cancelar:", movement);
+
+        // Validar que sea una transferencia interna
+        if (!movement.is_internal_transfer) {
+            throw new Error("Este movimiento no es una transferencia interna");
+        }
+
+        if (movement.status === "completed") {
+            throw new Error(
+                "No se puede cancelar una transferencia ya completada"
+            );
+        }
+
+        if (movement.status === "cancelled") {
+            throw new Error("Esta transferencia ya está cancelada");
+        }
+
+        // Cancelar el movimiento usando el endpoint de actualización de estado
+        const cancelResponse = await fetch(
+            `${API_MOVEMENTS_URL}${movementId}/`,
+            {
+                method: "PATCH",
+                headers: {
+                    Authorization: `Token ${authToken}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    status: "cancelled",
+                    notes: movement.notes
+                        ? `${movement.notes} - CANCELADA`
+                        : "Transferencia cancelada",
+                }),
+            }
+        );
+
+        if (!cancelResponse.ok) {
+            const errorText = await cancelResponse.text();
+            throw new Error(`Error al cancelar movimiento: ${errorText}`);
+        }
+
+        const cancelledMovement = await cancelResponse.json();
+        console.log("✅ Movimiento cancelado:", cancelledMovement);
+
+        return {
+            success: true,
+            movement: cancelledMovement,
+            message: "Transferencia cancelada exitosamente",
+        };
+    } catch (error) {
+        console.error("❌ Error al cancelar transferencia:", error);
+        throw error;
+    }
+};
+
+/**
  * Obtener estadísticas de transferencias
  * @returns {Object} - Estadísticas
  */
@@ -1083,6 +1278,8 @@ const transfersService = {
     createTransfer,
     getTransfers,
     updateTransferStatus,
+    completeTransfer,
+    cancelTransfer,
     getTransferById,
     deleteTransfer,
     getTransferStats,

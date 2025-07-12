@@ -2,100 +2,94 @@ import React from "react";
 
 const TransfersTable = ({
     transferencias,
-    onVerDetalles,
     onCambiarEstado,
+    onCompletarTransferencia,
+    onCancelarTransferencia,
     changingStates = new Set(),
 }) => {
-    const getEstadoBadge = (estado) => {
+    const getMovementTypeBadge = (movementType, movementTypeDisplay) => {
         const styles = {
-            padding: "4px 8px",
+            padding: "6px 12px",
             borderRadius: "12px",
             fontSize: "12px",
             fontWeight: "600",
             textAlign: "center",
-            minWidth: "80px",
+            minWidth: "90px",
             display: "inline-block",
         };
 
-        switch (estado) {
-            case "Pendiente":
+        switch (movementType) {
+            case "out":
+                return {
+                    ...styles,
+                    backgroundColor: "#ffebee",
+                    color: "#c62828",
+                    border: "1px solid #ffcdd2",
+                };
+            case "in":
+                return {
+                    ...styles,
+                    backgroundColor: "#e8f5e8",
+                    color: "#2e7d32",
+                    border: "1px solid #c8e6c9",
+                };
+            case "transfer":
+                return {
+                    ...styles,
+                    backgroundColor: "#e3f2fd",
+                    color: "#1565c0",
+                    border: "1px solid #bbdefb",
+                };
+            default:
+                return {
+                    ...styles,
+                    backgroundColor: "#f5f5f5",
+                    color: "#616161",
+                    border: "1px solid #e0e0e0",
+                };
+        }
+    };
+
+    const getStatusBadge = (status, statusDisplay) => {
+        const styles = {
+            padding: "4px 10px",
+            borderRadius: "10px",
+            fontSize: "11px",
+            fontWeight: "600",
+            textAlign: "center",
+            minWidth: "70px",
+            display: "inline-block",
+        };
+
+        switch (status) {
+            case "pending":
                 return {
                     ...styles,
                     backgroundColor: "#fff3cd",
                     color: "#856404",
                     border: "1px solid #ffeaa7",
                 };
-            case "Aprobada":
-                return {
-                    ...styles,
-                    backgroundColor: "#d1ecf1",
-                    color: "#0c5460",
-                    border: "1px solid #bee5eb",
-                };
-            case "En Tránsito":
-                return {
-                    ...styles,
-                    backgroundColor: "#ffe8d1",
-                    color: "#8b4000",
-                    border: "1px solid #ffcc9a",
-                };
-            case "Completada":
+            case "completed":
                 return {
                     ...styles,
                     backgroundColor: "#d4edda",
                     color: "#155724",
                     border: "1px solid #c3e6cb",
                 };
-            case "Rechazada":
+            case "cancelled":
                 return {
                     ...styles,
                     backgroundColor: "#f8d7da",
                     color: "#721c24",
                     border: "1px solid #f5c6cb",
                 };
-            case "Cancelada":
+            default:
                 return {
                     ...styles,
                     backgroundColor: "#e2e3e5",
                     color: "#383d41",
                     border: "1px solid #d6d8db",
                 };
-            default:
-                return styles;
-        }
-    };
-
-    const getUrgenciaBadge = (urgencia) => {
-        const baseStyles = {
-            padding: "2px 6px",
-            borderRadius: "8px",
-            fontSize: "11px",
-            fontWeight: "600",
-            textTransform: "uppercase",
-            letterSpacing: "0.5px",
-        };
-
-        switch (urgencia) {
-            case "alta":
-                return {
-                    ...baseStyles,
-                    backgroundColor: "#ffebee",
-                    color: "#c62828",
-                };
-            case "media":
-                return {
-                    ...baseStyles,
-                    backgroundColor: "#fff3e0",
-                    color: "#f57c00",
-                };
-            case "baja":
-                return {
-                    ...baseStyles,
-                    backgroundColor: "#e8f5e8",
-                    color: "#2e7d32",
-                };
-            default:
-                return baseStyles;
         }
     };
 
@@ -140,7 +134,7 @@ const TransfersTable = ({
                             letterSpacing: "-0.5px",
                         }}
                     >
-                        Historial de Transferencias
+                        Movimientos de Transferencias Internas
                     </h2>
                     {transferencias.length > 0 && (
                         <p
@@ -151,8 +145,8 @@ const TransfersTable = ({
                                 fontWeight: "400",
                             }}
                         >
-                            {transferencias.length} transferencia
-                            {transferencias.length !== 1 ? "s" : ""} registrada
+                            {transferencias.length} movimiento
+                            {transferencias.length !== 1 ? "s" : ""} registrado
                             {transferencias.length !== 1 ? "s" : ""}
                         </p>
                     )}
@@ -241,7 +235,31 @@ const TransfersTable = ({
                                     textTransform: "uppercase",
                                 }}
                             >
-                                📍 Origen
+                                📍 Ubicación
+                            </th>
+                            <th
+                                style={{
+                                    padding: "16px 12px",
+                                    textAlign: "center",
+                                    fontWeight: "600",
+                                    fontSize: "14px",
+                                    letterSpacing: "0.5px",
+                                    textTransform: "uppercase",
+                                }}
+                            >
+                                🔄 Tipo
+                            </th>
+                            <th
+                                style={{
+                                    padding: "16px 12px",
+                                    textAlign: "center",
+                                    fontWeight: "600",
+                                    fontSize: "14px",
+                                    letterSpacing: "0.5px",
+                                    textTransform: "uppercase",
+                                }}
+                            >
+                                📊 Estado
                             </th>
                             <th
                                 style={{
@@ -253,55 +271,7 @@ const TransfersTable = ({
                                     textTransform: "uppercase",
                                 }}
                             >
-                                📍 Destino
-                            </th>
-                            <th
-                                style={{
-                                    padding: "16px 12px",
-                                    textAlign: "center",
-                                    fontWeight: "600",
-                                    fontSize: "14px",
-                                    letterSpacing: "0.5px",
-                                    textTransform: "uppercase",
-                                }}
-                            >
-                                🔄 Estado
-                            </th>
-                            <th
-                                style={{
-                                    padding: "16px 12px",
-                                    textAlign: "center",
-                                    fontWeight: "600",
-                                    fontSize: "14px",
-                                    letterSpacing: "0.5px",
-                                    textTransform: "uppercase",
-                                }}
-                            >
-                                📊 Status Display
-                            </th>
-                            <th
-                                style={{
-                                    padding: "16px 12px",
-                                    textAlign: "center",
-                                    fontWeight: "600",
-                                    fontSize: "14px",
-                                    letterSpacing: "0.5px",
-                                    textTransform: "uppercase",
-                                }}
-                            >
-                                🔥 Urgencia
-                            </th>
-                            <th
-                                style={{
-                                    padding: "16px 12px",
-                                    textAlign: "left",
-                                    fontWeight: "600",
-                                    fontSize: "14px",
-                                    letterSpacing: "0.5px",
-                                    textTransform: "uppercase",
-                                }}
-                            >
-                                👤 Solicitado por
+                                👤 Usuario
                             </th>
                             <th
                                 style={{
@@ -349,7 +319,27 @@ const TransfersTable = ({
                                             color: "#495057",
                                         }}
                                     >
-                                        {t.fechaSolicitud}
+                                        {new Date(
+                                            t.occurred_at
+                                        ).toLocaleDateString("es-ES", {
+                                            year: "numeric",
+                                            month: "short",
+                                            day: "numeric",
+                                        })}
+                                        <br />
+                                        <span
+                                            style={{
+                                                fontSize: "12px",
+                                                color: "#6c757d",
+                                            }}
+                                        >
+                                            {new Date(
+                                                t.occurred_at
+                                            ).toLocaleTimeString("es-ES", {
+                                                hour: "2-digit",
+                                                minute: "2-digit",
+                                            })}
+                                        </span>
                                     </td>
                                     <td
                                         style={{
@@ -360,85 +350,109 @@ const TransfersTable = ({
                                             color: "#2c3e50",
                                         }}
                                     >
-                                        {t.producto}
+                                        <div>{t.product_name || "N/A"}</div>
+                                        {t.product_sku && (
+                                            <div
+                                                style={{
+                                                    fontSize: "12px",
+                                                    color: "#6c757d",
+                                                    fontWeight: "normal",
+                                                    marginTop: "2px",
+                                                }}
+                                            >
+                                                SKU: {t.product_sku}
+                                            </div>
+                                        )}
                                     </td>
                                     <td
                                         style={{
                                             padding: "16px 12px",
                                             borderBottom: "1px solid #e9ecef",
                                             fontSize: "14px",
-                                            fontWeight: "500",
+                                            fontWeight: "600",
                                             color: "#495057",
-                                            textAlign: "center",
-                                        }}
-                                    >
-                                        {t.cantidad}
-                                    </td>
-                                    <td
-                                        style={{
-                                            padding: "16px 12px",
-                                            borderBottom: "1px solid #e9ecef",
-                                            fontSize: "14px",
-                                            fontWeight: "500",
-                                            color: "#495057",
-                                        }}
-                                    >
-                                        {t.sedeOrigen}
-                                    </td>
-                                    <td
-                                        style={{
-                                            padding: "16px 12px",
-                                            borderBottom: "1px solid #e9ecef",
-                                            fontSize: "14px",
-                                            fontWeight: "500",
-                                            color: "#495057",
-                                        }}
-                                    >
-                                        {t.sedeDestino}
-                                    </td>
-                                    <td
-                                        style={{
-                                            padding: "16px 12px",
-                                            borderBottom: "1px solid #e9ecef",
-                                            textAlign: "center",
-                                        }}
-                                    >
-                                        <span style={getEstadoBadge(t.estado)}>
-                                            {t.estado}
-                                        </span>
-                                    </td>
-                                    <td
-                                        style={{
-                                            padding: "16px 12px",
-                                            borderBottom: "1px solid #e9ecef",
-                                            textAlign: "center",
-                                            fontSize: "14px",
-                                            fontWeight: "500",
-                                            color: "#495057",
-                                        }}
-                                    >
-                                        {t.status_display || t.estado}
-                                    </td>
-                                    <td
-                                        style={{
-                                            padding: "16px 12px",
                                             textAlign: "center",
                                         }}
                                     >
                                         <span
-                                            style={getUrgenciaBadge(t.urgencia)}
+                                            style={{
+                                                backgroundColor: "#f8f9fa",
+                                                padding: "4px 8px",
+                                                borderRadius: "8px",
+                                                fontSize: "13px",
+                                            }}
                                         >
-                                            {t.urgencia}
+                                            {t.quantity}
                                         </span>
                                     </td>
                                     <td
                                         style={{
                                             padding: "16px 12px",
+                                            borderBottom: "1px solid #e9ecef",
                                             fontSize: "14px",
+                                            fontWeight: "500",
                                             color: "#495057",
                                         }}
                                     >
-                                        {t.solicitadoPor}
+                                        <div>{t.location_name || "N/A"}</div>
+                                        {t.location_type && (
+                                            <div
+                                                style={{
+                                                    fontSize: "11px",
+                                                    color: "#6c757d",
+                                                    textTransform: "capitalize",
+                                                    marginTop: "2px",
+                                                }}
+                                            >
+                                                {t.location_type}
+                                            </div>
+                                        )}
+                                    </td>
+                                    <td
+                                        style={{
+                                            padding: "16px 12px",
+                                            borderBottom: "1px solid #e9ecef",
+                                            textAlign: "center",
+                                        }}
+                                    >
+                                        <div style={{ marginBottom: "4px" }}>
+                                            <span
+                                                style={getMovementTypeBadge(
+                                                    t.movement_type,
+                                                    t.movement_type_display
+                                                )}
+                                            >
+                                                {t.movement_type_display ||
+                                                    t.movement_type}
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td
+                                        style={{
+                                            padding: "16px 12px",
+                                            borderBottom: "1px solid #e9ecef",
+                                            textAlign: "center",
+                                        }}
+                                    >
+                                        <span
+                                            style={getStatusBadge(
+                                                t.status,
+                                                t.status_display
+                                            )}
+                                        >
+                                            {t.status_display || t.status}
+                                        </span>
+                                    </td>
+                                    <td
+                                        style={{
+                                            padding: "16px 12px",
+                                            borderBottom: "1px solid #e9ecef",
+                                            fontSize: "14px",
+                                            fontWeight: "500",
+                                            color: "#495057",
+                                        }}
+                                    >
+                                        {t.user_username || "N/A"}
                                     </td>
                                     <td
                                         style={{
@@ -454,92 +468,92 @@ const TransfersTable = ({
                                                 flexWrap: "wrap",
                                             }}
                                         >
-                                            <button
-                                                onClick={() => onVerDetalles(t)}
-                                                style={{
-                                                    backgroundColor: "#e3f2fd",
-                                                    color: "#1976d2",
-                                                    border: "1px solid #bbdefb",
-                                                    borderRadius: "6px",
-                                                    padding: "6px 12px",
-                                                    fontSize: "12px",
-                                                    cursor: "pointer",
-                                                    fontWeight: "500",
-                                                    transition: "all 0.2s ease",
-                                                }}
-                                                onMouseOver={(e) => {
-                                                    e.target.style.backgroundColor =
-                                                        "#1976d2";
-                                                    e.target.style.color =
-                                                        "white";
-                                                }}
-                                                onMouseOut={(e) => {
-                                                    e.target.style.backgroundColor =
-                                                        "#e3f2fd";
-                                                    e.target.style.color =
-                                                        "#1976d2";
-                                                }}
-                                            >
-                                                Ver Detalles
-                                            </button>
-
-                                            {t.estado === "Pendiente" && (
-                                                <>
-                                                    <button
-                                                        onClick={() =>
-                                                            onCambiarEstado(
-                                                                t.id,
-                                                                "Aprobada"
-                                                            )
-                                                        }
-                                                        disabled={changingStates.has(
-                                                            t.id
-                                                        )}
-                                                        style={{
-                                                            backgroundColor:
-                                                                changingStates.has(
-                                                                    t.id
-                                                                )
-                                                                    ? "#f5f5f5"
-                                                                    : "#e8f5e9",
-                                                            color: changingStates.has(
-                                                                t.id
-                                                            )
-                                                                ? "#999"
-                                                                : "#2e7d32",
-                                                            border: changingStates.has(
-                                                                t.id
-                                                            )
-                                                                ? "1px solid #ddd"
-                                                                : "1px solid #c8e6c9",
-                                                            borderRadius: "6px",
-                                                            padding: "6px 12px",
-                                                            fontSize: "12px",
-                                                            cursor: changingStates.has(
-                                                                t.id
-                                                            )
-                                                                ? "not-allowed"
-                                                                : "pointer",
-                                                            fontWeight: "500",
-                                                            opacity:
-                                                                changingStates.has(
-                                                                    t.id
-                                                                )
-                                                                    ? 0.6
-                                                                    : 1,
-                                                        }}
-                                                    >
-                                                        {changingStates.has(
+                                            {/* Botón Completar - solo mostrar si está pendiente */}
+                                            {t.status === "pending" && (
+                                                <button
+                                                    onClick={() =>
+                                                        onCompletarTransferencia(
                                                             t.id
                                                         )
-                                                            ? "⏳ Aprobando..."
-                                                            : "Aprobar"}
-                                                    </button>
+                                                    }
+                                                    disabled={changingStates.has(
+                                                        t.id
+                                                    )}
+                                                    style={{
+                                                        backgroundColor:
+                                                            changingStates.has(
+                                                                t.id
+                                                            )
+                                                                ? "#f5f5f5"
+                                                                : "#e8f5e8",
+                                                        color: changingStates.has(
+                                                            t.id
+                                                        )
+                                                            ? "#999"
+                                                            : "#2e7d32",
+                                                        border: `1px solid ${
+                                                            changingStates.has(
+                                                                t.id
+                                                            )
+                                                                ? "#ddd"
+                                                                : "#c8e6c9"
+                                                        }`,
+                                                        borderRadius: "6px",
+                                                        padding: "6px 12px",
+                                                        fontSize: "12px",
+                                                        cursor: changingStates.has(
+                                                            t.id
+                                                        )
+                                                            ? "not-allowed"
+                                                            : "pointer",
+                                                        fontWeight: "500",
+                                                        transition:
+                                                            "all 0.2s ease",
+                                                        opacity:
+                                                            changingStates.has(
+                                                                t.id
+                                                            )
+                                                                ? 0.6
+                                                                : 1,
+                                                    }}
+                                                    onMouseOver={(e) => {
+                                                        if (
+                                                            !changingStates.has(
+                                                                t.id
+                                                            )
+                                                        ) {
+                                                            e.target.style.backgroundColor =
+                                                                "#2e7d32";
+                                                            e.target.style.color =
+                                                                "white";
+                                                        }
+                                                    }}
+                                                    onMouseOut={(e) => {
+                                                        if (
+                                                            !changingStates.has(
+                                                                t.id
+                                                            )
+                                                        ) {
+                                                            e.target.style.backgroundColor =
+                                                                "#e8f5e8";
+                                                            e.target.style.color =
+                                                                "#2e7d32";
+                                                        }
+                                                    }}
+                                                >
+                                                    {changingStates.has(t.id)
+                                                        ? "⏳ Procesando..."
+                                                        : "✅ Completar"}
+                                                </button>
+                                            )}
+
+                                            {/* Botón Cancelar - solo mostrar si no está completada ni cancelada */}
+                                            {t.status !== "completed" &&
+                                                t.status !== "cancelled" && (
                                                     <button
                                                         onClick={() =>
-                                                            onCambiarEstado(
-                                                                t.id,
-                                                                "Rechazada"
+                                                            onCancelarTransferencia(
+                                                                t.id
                                                             )
                                                         }
                                                         disabled={changingStates.has(
@@ -557,11 +571,13 @@ const TransfersTable = ({
                                                             )
                                                                 ? "#999"
                                                                 : "#c62828",
-                                                            border: changingStates.has(
-                                                                t.id
-                                                            )
-                                                                ? "1px solid #ddd"
-                                                                : "1px solid #ffcdd2",
+                                                            border: `1px solid ${
+                                                                changingStates.has(
+                                                                    t.id
+                                                                )
+                                                                    ? "#ddd"
+                                                                    : "#ffcdd2"
+                                                            }`,
                                                             borderRadius: "6px",
                                                             padding: "6px 12px",
                                                             fontSize: "12px",
@@ -571,6 +587,8 @@ const TransfersTable = ({
                                                                 ? "not-allowed"
                                                                 : "pointer",
                                                             fontWeight: "500",
+                                                            transition:
+                                                                "all 0.2s ease",
                                                             opacity:
                                                                 changingStates.has(
                                                                     t.id
@@ -578,117 +596,38 @@ const TransfersTable = ({
                                                                     ? 0.6
                                                                     : 1,
                                                         }}
+                                                        onMouseOver={(e) => {
+                                                            if (
+                                                                !changingStates.has(
+                                                                    t.id
+                                                                )
+                                                            ) {
+                                                                e.target.style.backgroundColor =
+                                                                    "#c62828";
+                                                                e.target.style.color =
+                                                                    "white";
+                                                            }
+                                                        }}
+                                                        onMouseOut={(e) => {
+                                                            if (
+                                                                !changingStates.has(
+                                                                    t.id
+                                                                )
+                                                            ) {
+                                                                e.target.style.backgroundColor =
+                                                                    "#ffebee";
+                                                                e.target.style.color =
+                                                                    "#c62828";
+                                                            }
+                                                        }}
                                                     >
                                                         {changingStates.has(
                                                             t.id
                                                         )
-                                                            ? "⏳ Rechazando..."
-                                                            : "Rechazar"}
+                                                            ? "⏳ Procesando..."
+                                                            : "❌ Cancelar"}
                                                     </button>
-                                                </>
-                                            )}
-
-                                            {t.estado === "Aprobada" && (
-                                                <button
-                                                    onClick={() =>
-                                                        onCambiarEstado(
-                                                            t.id,
-                                                            "En Tránsito"
-                                                        )
-                                                    }
-                                                    disabled={changingStates.has(
-                                                        t.id
-                                                    )}
-                                                    style={{
-                                                        backgroundColor:
-                                                            changingStates.has(
-                                                                t.id
-                                                            )
-                                                                ? "#f5f5f5"
-                                                                : "#fff3e0",
-                                                        color: changingStates.has(
-                                                            t.id
-                                                        )
-                                                            ? "#999"
-                                                            : "#f57c00",
-                                                        border: changingStates.has(
-                                                            t.id
-                                                        )
-                                                            ? "1px solid #ddd"
-                                                            : "1px solid #ffcc9a",
-                                                        borderRadius: "6px",
-                                                        padding: "6px 12px",
-                                                        fontSize: "12px",
-                                                        cursor: changingStates.has(
-                                                            t.id
-                                                        )
-                                                            ? "not-allowed"
-                                                            : "pointer",
-                                                        fontWeight: "500",
-                                                        opacity:
-                                                            changingStates.has(
-                                                                t.id
-                                                            )
-                                                                ? 0.6
-                                                                : 1,
-                                                    }}
-                                                >
-                                                    {changingStates.has(t.id)
-                                                        ? "⏳ Enviando..."
-                                                        : "Marcar Enviada"}
-                                                </button>
-                                            )}
-
-                                            {t.estado === "En Tránsito" && (
-                                                <button
-                                                    onClick={() =>
-                                                        onCambiarEstado(
-                                                            t.id,
-                                                            "Completada"
-                                                        )
-                                                    }
-                                                    disabled={changingStates.has(
-                                                        t.id
-                                                    )}
-                                                    style={{
-                                                        backgroundColor:
-                                                            changingStates.has(
-                                                                t.id
-                                                            )
-                                                                ? "#f5f5f5"
-                                                                : "#e8f5e9",
-                                                        color: changingStates.has(
-                                                            t.id
-                                                        )
-                                                            ? "#999"
-                                                            : "#2e7d32",
-                                                        border: changingStates.has(
-                                                            t.id
-                                                        )
-                                                            ? "1px solid #ddd"
-                                                            : "1px solid #c8e6c9",
-                                                        borderRadius: "6px",
-                                                        padding: "6px 12px",
-                                                        fontSize: "12px",
-                                                        cursor: changingStates.has(
-                                                            t.id
-                                                        )
-                                                            ? "not-allowed"
-                                                            : "pointer",
-                                                        fontWeight: "500",
-                                                        opacity:
-                                                            changingStates.has(
-                                                                t.id
-                                                            )
-                                                                ? 0.6
-                                                                : 1,
-                                                    }}
-                                                >
-                                                    {changingStates.has(t.id)
-                                                        ? "⏳ Completando..."
-                                                        : "Marcar Recibida"}
-                                                </button>
-                                            )}
+                                                )}
                                         </div>
                                     </td>
                                 </tr>
@@ -696,7 +635,7 @@ const TransfersTable = ({
                         ) : (
                             <tr>
                                 <td
-                                    colSpan="10"
+                                    colSpan="9"
                                     style={{
                                         padding: "60px 8px",
                                         textAlign: "center",
@@ -713,7 +652,7 @@ const TransfersTable = ({
                                         }}
                                     >
                                         <span style={{ fontSize: "48px" }}>
-                                            📋
+                                            🔄
                                         </span>
                                         <div>
                                             <div
@@ -722,8 +661,8 @@ const TransfersTable = ({
                                                     marginBottom: "8px",
                                                 }}
                                             >
-                                                No hay transferencias
-                                                registradas
+                                                No hay movimientos de
+                                                transferencias internas
                                             </div>
                                             <div
                                                 style={{
@@ -731,9 +670,9 @@ const TransfersTable = ({
                                                     color: "#999",
                                                 }}
                                             >
-                                                Haz clic en "Nueva
-                                                Transferencia" para crear tu
-                                                primera transferencia
+                                                Los movimientos de
+                                                transferencias aparecerán aquí
+                                                una vez que se creen
                                             </div>
                                         </div>
                                     </div>
