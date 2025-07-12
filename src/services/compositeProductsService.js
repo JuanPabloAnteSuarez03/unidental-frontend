@@ -11,8 +11,12 @@ const API_BREAKDOWN_COMPOSITE_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINT
  */
 const buildUrlWithParams = (baseUrl, params = {}) => {
     const url = new URL(baseUrl, window.location.origin);
-    Object.keys(params).forEach(key => {
-        if (params[key] !== null && params[key] !== undefined && params[key] !== '') {
+    Object.keys(params).forEach((key) => {
+        if (
+            params[key] !== null &&
+            params[key] !== undefined &&
+            params[key] !== ""
+        ) {
             url.searchParams.append(key, params[key]);
         }
     });
@@ -74,7 +78,9 @@ export const createProductComponent = async (componentData, authToken) => {
 
         if (!response.ok) {
             const errorData = await response.json();
-            throw new Error(`Error ${response.status}: ${JSON.stringify(errorData)}`);
+            throw new Error(
+                `Error ${response.status}: ${JSON.stringify(errorData)}`
+            );
         }
 
         return await response.json();
@@ -187,7 +193,11 @@ export const getProductComponentById = async (componentId, authToken) => {
  * @param {string} authToken - Token de autenticación
  * @returns {Promise<Object>} - Componente actualizado
  */
-export const updateProductComponent = async (componentId, componentData, authToken) => {
+export const updateProductComponent = async (
+    componentId,
+    componentData,
+    authToken
+) => {
     if (!authToken) {
         throw new Error("No authentication token provided");
     }
@@ -204,7 +214,9 @@ export const updateProductComponent = async (componentId, componentData, authTok
 
         if (!response.ok) {
             const errorData = await response.json();
-            throw new Error(`Error ${response.status}: ${JSON.stringify(errorData)}`);
+            throw new Error(
+                `Error ${response.status}: ${JSON.stringify(errorData)}`
+            );
         }
 
         return await response.json();
@@ -266,7 +278,9 @@ export const breakdownCompositeProduct = async (breakdownData, authToken) => {
 
         if (!response.ok) {
             const errorData = await response.json();
-            throw new Error(`Error ${response.status}: ${JSON.stringify(errorData)}`);
+            throw new Error(
+                `Error ${response.status}: ${JSON.stringify(errorData)}`
+            );
         }
 
         return await response.json();
@@ -282,7 +296,7 @@ export const breakdownCompositeProduct = async (breakdownData, authToken) => {
  * @returns {string} - Tipo de producto: 'simple', 'component', 'composite'
  */
 export const getProductType = (product) => {
-    return product?.product_type || 'simple';
+    return product?.product_type || "simple";
 };
 
 /**
@@ -291,7 +305,7 @@ export const getProductType = (product) => {
  * @returns {boolean} - True si es un producto compuesto
  */
 export const isCompositeProduct = (product) => {
-    return getProductType(product) === 'composite';
+    return getProductType(product) === "composite";
 };
 
 /**
@@ -300,7 +314,7 @@ export const isCompositeProduct = (product) => {
  * @returns {boolean} - True si es un producto componente
  */
 export const isComponentProduct = (product) => {
-    return getProductType(product) === 'component';
+    return getProductType(product) === "component";
 };
 
 /**
@@ -309,7 +323,7 @@ export const isComponentProduct = (product) => {
  * @returns {boolean} - True si es un producto simple
  */
 export const isSimpleProduct = (product) => {
-    return getProductType(product) === 'simple';
+    return getProductType(product) === "simple";
 };
 
 /**
@@ -319,9 +333,9 @@ export const isSimpleProduct = (product) => {
  * @returns {Array} - Lista de componentes con cantidades calculadas
  */
 export const calculateComponentsNeeded = (components, compositeQuantity) => {
-    return components.map(component => ({
+    return components.map((component) => ({
         ...component,
-        totalQuantityNeeded: component.quantity * compositeQuantity
+        totalQuantityNeeded: component.quantity * compositeQuantity,
     }));
 };
 
@@ -335,17 +349,17 @@ export const validateComponentsStock = (components, compositeQuantity) => {
     const insufficientStock = [];
     let canAssemble = true;
 
-    components.forEach(component => {
+    components.forEach((component) => {
         const neededQuantity = component.quantity * compositeQuantity;
         const availableStock = component.available_stock || 0;
-        
+
         if (availableStock < neededQuantity) {
             canAssemble = false;
             insufficientStock.push({
                 component_name: component.component_product_name,
                 needed: neededQuantity,
                 available: availableStock,
-                missing: neededQuantity - availableStock
+                missing: neededQuantity - availableStock,
             });
         }
     });
@@ -353,9 +367,11 @@ export const validateComponentsStock = (components, compositeQuantity) => {
     return {
         canAssemble,
         insufficientStock,
-        message: canAssemble 
-            ? 'Stock suficiente para armar los productos compuestos'
-            : `Stock insuficiente para los siguientes componentes: ${insufficientStock.map(c => c.component_name).join(', ')}`
+        message: canAssemble
+            ? "Stock suficiente para armar los productos compuestos"
+            : `Stock insuficiente para los siguientes componentes: ${insufficientStock
+                  .map((c) => c.component_name)
+                  .join(", ")}`,
     };
 };
 
@@ -377,4 +393,4 @@ const compositeProductsService = {
     validateComponentsStock,
 };
 
-export default compositeProductsService; 
+export default compositeProductsService;

@@ -28,10 +28,7 @@ const buildUrlWithParams = (baseUrl, params = {}) => {
  * @param {string} authToken - Token de autenticación
  * @returns {Promise<Object>} - Datos de deudas con WhatsApp
  */
-export const getOverdueDebtsWithWhatsApp = async (
-    params = {},
-    authToken
-) => {
+export const getOverdueDebtsWithWhatsApp = async (params = {}, authToken) => {
     if (!authToken) {
         throw new Error("No authentication token provided");
     }
@@ -77,11 +74,15 @@ export const calculateDebtStats = (debts) => {
 
     const stats = {
         total_debts: debts.length,
-        total_amount: debts.reduce((sum, debt) => sum + parseFloat(debt.remaining_amount || 0), 0),
-        overdue_count: debts.filter(debt => debt.days_overdue > 0).length,
-        upcoming_count: debts.filter(debt => debt.status === 'proximo').length,
-        with_phone_count: debts.filter(debt => debt.has_phone).length,
-        urgent_count: debts.filter(debt => debt.days_overdue >= 15).length,
+        total_amount: debts.reduce(
+            (sum, debt) => sum + parseFloat(debt.remaining_amount || 0),
+            0
+        ),
+        overdue_count: debts.filter((debt) => debt.days_overdue > 0).length,
+        upcoming_count: debts.filter((debt) => debt.status === "proximo")
+            .length,
+        with_phone_count: debts.filter((debt) => debt.has_phone).length,
+        urgent_count: debts.filter((debt) => debt.days_overdue >= 15).length,
     };
 
     return stats;
@@ -94,16 +95,16 @@ export const calculateDebtStats = (debts) => {
  * @returns {string} - Clase CSS para el color de urgencia
  */
 export const getUrgencyClass = (daysOverdue, status) => {
-    if (status === 'proximo') {
-        return 'urgency-upcoming';
+    if (status === "proximo") {
+        return "urgency-upcoming";
     } else if (daysOverdue >= 16) {
-        return 'urgency-high';
+        return "urgency-high";
     } else if (daysOverdue >= 6) {
-        return 'urgency-medium';
+        return "urgency-medium";
     } else if (daysOverdue >= 1) {
-        return 'urgency-low';
+        return "urgency-low";
     } else {
-        return 'urgency-upcoming';
+        return "urgency-upcoming";
     }
 };
 
@@ -114,9 +115,9 @@ export const getUrgencyClass = (daysOverdue, status) => {
  */
 export const formatCurrency = (amount) => {
     const numAmount = parseFloat(amount || 0);
-    return numAmount.toLocaleString('es-CL', {
-        style: 'currency',
-        currency: 'CLP',
+    return numAmount.toLocaleString("es-CL", {
+        style: "currency",
+        currency: "CLP",
         minimumFractionDigits: 0,
         maximumFractionDigits: 0,
     });
@@ -137,18 +138,19 @@ export const filterDebts = (debts, filters) => {
 
     // Filtrar solo con teléfono
     if (filters.onlyWithPhone) {
-        filteredDebts = filteredDebts.filter(debt => debt.has_phone);
+        filteredDebts = filteredDebts.filter((debt) => debt.has_phone);
     }
 
     // Filtrar por búsqueda de texto
     if (filters.searchTerm && filters.searchTerm.trim()) {
         const searchLower = filters.searchTerm.toLowerCase();
-        filteredDebts = filteredDebts.filter(debt => 
-            debt.supplier_name?.toLowerCase().includes(searchLower) ||
-            debt.contact_name?.toLowerCase().includes(searchLower) ||
-            debt.phone?.includes(searchLower)
+        filteredDebts = filteredDebts.filter(
+            (debt) =>
+                debt.supplier_name?.toLowerCase().includes(searchLower) ||
+                debt.contact_name?.toLowerCase().includes(searchLower) ||
+                debt.phone?.includes(searchLower)
         );
     }
 
     return filteredDebts;
-}; 
+};

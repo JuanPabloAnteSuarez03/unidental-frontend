@@ -45,7 +45,7 @@ jest.mock("../components/Table/InventoryTable", () => {
                 data-products-count={props.products?.length || 0}
             >
                 {/* Simplemente mostramos los productos, sin botón de ordenación */}
-                {props.products.map((product) => (
+                {props.products?.map((product) => (
                     <div key={product.id} data-testid={`product-${product.id}`}>
                         {product.name}
                     </div>
@@ -55,34 +55,352 @@ jest.mock("../components/Table/InventoryTable", () => {
     };
 });
 
-jest.mock("../components/Pagination/Pagination", () => {
+// Mock del componente InventoryContent para simular la paginación
+jest.mock("../components/Inventory/InventoryContent", () => {
     return {
         __esModule: true,
-        default: jest.fn().mockImplementation((props) => (
-            <div data-testid="pagination">
-                <button
-                    data-testid="prev-page-button"
-                    onClick={props.goToPrevPage}
-                    disabled={!props.hasPrevPage}
-                >
-                    Anterior
-                </button>
-                <span data-testid="current-page">{props.currentPage}</span>
-                <button
-                    data-testid="next-page-button"
-                    onClick={props.goToNextPage}
-                    disabled={!props.hasNextPage}
-                >
-                    Siguiente
-                </button>
-                <button
-                    data-testid="goto-page-button"
-                    onClick={() => props.goToPage(2)}
-                >
-                    Ir a página 2
-                </button>
-            </div>
-        )),
+        default: jest.fn().mockImplementation((props) => {
+            // Si no hay productos y no hay error, mostrar mensaje de no productos
+            if (
+                !props.isLoading &&
+                !props.error &&
+                props.totalGeneralProducts === 0
+            ) {
+                return (
+                    <div
+                        style={{
+                            backgroundColor: "white",
+                            borderRadius: "12px",
+                            padding: "40px 25px",
+                            marginBottom: "20px",
+                            boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
+                            border: "1px solid #e9ecef",
+                            textAlign: "center",
+                        }}
+                    >
+                        <div
+                            style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: "12px",
+                                marginBottom: "15px",
+                            }}
+                        >
+                            <div
+                                style={{
+                                    width: "24px",
+                                    height: "24px",
+                                    borderRadius: "50%",
+                                    backgroundColor: "#6c757d",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    color: "white",
+                                    fontSize: "14px",
+                                    fontWeight: "bold",
+                                }}
+                            >
+                                ?
+                            </div>
+                            <h3
+                                style={{
+                                    color: "#2c3e50",
+                                    fontSize: "18px",
+                                    fontWeight: "600",
+                                    margin: 0,
+                                }}
+                            >
+                                No se encontraron productos
+                            </h3>
+                        </div>
+                        <p
+                            style={{
+                                color: "#6c757d",
+                                fontSize: "16px",
+                                margin: 0,
+                                lineHeight: "1.5",
+                            }}
+                        >
+                            No hay productos que coincidan con los criterios de
+                            búsqueda actuales.
+                            <br />
+                            Intenta ajustar los filtros o agregar nuevos
+                            productos al inventario.
+                        </p>
+                    </div>
+                );
+            }
+
+            // Solo renderizar paginación si hay productos
+            if (props.totalGeneralProducts > 0) {
+                return (
+                    <div
+                        className="inventory-card inventory-table-container"
+                        style={{
+                            backgroundColor: "white",
+                            borderRadius: "12px",
+                            padding: "25px",
+                            marginBottom: "20px",
+                            boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
+                            border: "1px solid #e9ecef",
+                            position: "relative",
+                            minHeight: "500px",
+                        }}
+                    >
+                        <div
+                            className="inventory-section-header"
+                            style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "12px",
+                                marginBottom: "20px",
+                            }}
+                        >
+                            <div
+                                style={{
+                                    width: "3px",
+                                    height: "24px",
+                                    backgroundColor: "#17a2b8",
+                                    borderRadius: "2px",
+                                }}
+                            />
+                            <h3
+                                className="inventory-section-title"
+                                style={{
+                                    color: "#2c3e50",
+                                    fontSize: "18px",
+                                    fontWeight: "600",
+                                    margin: 0,
+                                }}
+                            >
+                                Productos del Inventario
+                            </h3>
+                        </div>
+                        <div
+                            data-products-count={
+                                props.filteredProducts?.length || 0
+                            }
+                            data-testid="inventory-table"
+                        >
+                            {props.filteredProducts?.map((product) => (
+                                <div
+                                    key={product.id}
+                                    data-testid={`product-${product.id}`}
+                                >
+                                    {product.name}
+                                </div>
+                            ))}
+                        </div>
+                        <div style={{ flexGrow: 1, minHeight: "20px" }} />
+                        <div
+                            style={{
+                                marginTop: "20px",
+                                paddingTop: "20px",
+                                borderTop: "1px solid #e9ecef",
+                            }}
+                        >
+                            <div
+                                aria-label="Paginación"
+                                role="navigation"
+                                data-testid="pagination"
+                                style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    margin: "20px 0",
+                                    flexWrap: "wrap",
+                                    gap: "15px",
+                                }}
+                            >
+                                <div
+                                    style={{
+                                        fontSize: "14px",
+                                        color: "#495057",
+                                        fontWeight: "500",
+                                    }}
+                                >
+                                    Mostrando {(props.currentPage - 1) * 25 + 1}
+                                    -
+                                    {Math.min(
+                                        props.currentPage * 25,
+                                        props.totalGeneralProducts
+                                    )}{" "}
+                                    de {props.totalGeneralProducts} elementos
+                                </div>
+                                <div
+                                    style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "10px",
+                                    }}
+                                >
+                                    <button
+                                        data-testid="prev-page-button"
+                                        onClick={props.goToPrevPage}
+                                        disabled={
+                                            !props.hasPrevPage ||
+                                            props.isLoading
+                                        }
+                                        style={{
+                                            padding: "8px 16px",
+                                            backgroundColor:
+                                                props.hasPrevPage &&
+                                                !props.isLoading
+                                                    ? "#2c3e50"
+                                                    : "#e9ecef",
+                                            color:
+                                                props.hasPrevPage &&
+                                                !props.isLoading
+                                                    ? "#ffffff"
+                                                    : "#adb5bd",
+                                            border: "none",
+                                            borderRadius: "4px",
+                                            fontSize: "14px",
+                                            fontWeight: "500",
+                                            cursor:
+                                                props.hasPrevPage &&
+                                                !props.isLoading
+                                                    ? "pointer"
+                                                    : "not-allowed",
+                                            transition: "all 0.2s ease",
+                                        }}
+                                        aria-label="Ir a la página anterior"
+                                    >
+                                        Anterior
+                                    </button>
+                                    <div
+                                        style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "5px",
+                                        }}
+                                    >
+                                        <button
+                                            data-testid="current-page"
+                                            aria-current="page"
+                                            aria-label="Ir a la página 1"
+                                            style={{
+                                                padding: "6px 12px",
+                                                backgroundColor: "#2c3e50",
+                                                color: "#ffffff",
+                                                border: "1px solid #dee2e6",
+                                                borderRadius: "4px",
+                                                fontSize: "14px",
+                                                cursor: "pointer",
+                                                transition: "all 0.2s ease",
+                                            }}
+                                        >
+                                            {props.currentPage}
+                                        </button>
+                                        {props.totalPages > 1 && (
+                                            <button
+                                                data-testid="goto-page-button"
+                                                onClick={() =>
+                                                    props.goToPage(2)
+                                                }
+                                                style={{
+                                                    padding: "6px 12px",
+                                                    backgroundColor: "#ffffff",
+                                                    color: "#495057",
+                                                    border: "1px solid #dee2e6",
+                                                    borderRadius: "4px",
+                                                    fontSize: "14px",
+                                                    cursor: "pointer",
+                                                    transition: "all 0.2s ease",
+                                                }}
+                                                aria-label="Ir a la página 2"
+                                            >
+                                                2
+                                            </button>
+                                        )}
+                                    </div>
+                                    <button
+                                        data-testid="next-page-button"
+                                        onClick={props.goToNextPage}
+                                        disabled={
+                                            !props.hasNextPage ||
+                                            props.isLoading
+                                        }
+                                        style={{
+                                            padding: "8px 16px",
+                                            backgroundColor:
+                                                props.hasNextPage &&
+                                                !props.isLoading
+                                                    ? "#2c3e50"
+                                                    : "#e9ecef",
+                                            color:
+                                                props.hasNextPage &&
+                                                !props.isLoading
+                                                    ? "#ffffff"
+                                                    : "#adb5bd",
+                                            border: "none",
+                                            borderRadius: "4px",
+                                            fontSize: "14px",
+                                            fontWeight: "500",
+                                            cursor:
+                                                props.hasNextPage &&
+                                                !props.isLoading
+                                                    ? "pointer"
+                                                    : "not-allowed",
+                                            transition: "all 0.2s ease",
+                                        }}
+                                        aria-label="Ir a la página siguiente"
+                                    >
+                                        Siguiente
+                                    </button>
+                                </div>
+                                <div
+                                    style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "8px",
+                                    }}
+                                >
+                                    <label htmlFor="inventory-page-input">
+                                        Ir a página:
+                                    </label>
+                                    <input
+                                        aria-label="Número de página"
+                                        id="inventory-page-input"
+                                        max={props.totalPages}
+                                        min="1"
+                                        style={{
+                                            width: "60px",
+                                            padding: "6px 8px",
+                                            border: "1px solid #ced4da",
+                                            borderRadius: "4px",
+                                            fontSize: "14px",
+                                            textAlign: "center",
+                                        }}
+                                        type="number"
+                                        defaultValue={props.currentPage}
+                                        onChange={() => {}} // Add onChange to avoid warning
+                                    />
+                                    <button
+                                        aria-label="Ir a la página especificada"
+                                        style={{
+                                            padding: "6px 12px",
+                                            backgroundColor: "#2c3e50",
+                                            color: "#ffffff",
+                                            border: "none",
+                                            borderRadius: "4px",
+                                            fontSize: "14px",
+                                            cursor: "pointer",
+                                            transition:
+                                                "background-color 0.2s ease",
+                                        }}
+                                    >
+                                        Ir
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+            return null;
+        }),
     };
 });
 
@@ -91,7 +409,7 @@ import InventoryPage from "../pages/InventoryPage";
 import useInventory from "../hooks/useInventory";
 import SearchFiltersContainer from "../components/SearchFilters/SearchFiltersContainer";
 import InventoryTable from "../components/Table/InventoryTable";
-import Pagination from "../components/Pagination/Pagination";
+import InventoryContent from "../components/Inventory/InventoryContent";
 
 // --- Estado base para el mock de useInventory ---
 const mockUseInventoryDefaultState = {
@@ -142,7 +460,15 @@ describe("InventoryPage", () => {
         expect(
             screen.getByText(/Administra y consulta el inventario de productos/)
         ).toBeInTheDocument();
-        expect(screen.getByText("150", { exact: false })).toBeInTheDocument();
+        // Use a more specific selector to avoid multiple matches
+        expect(
+            screen.getByText((content, element) => {
+                return (
+                    element.tagName.toLowerCase() === "span" &&
+                    content === "150"
+                );
+            })
+        ).toBeInTheDocument();
     });
 
     test("displays loading message when isLoading is true", () => {
@@ -151,8 +477,8 @@ describe("InventoryPage", () => {
             isLoading: true,
         });
         render(<InventoryPage />);
-        // Verificamos que se renderizaron los componentes correctos
-        expect(screen.getByTestId("inventory-table")).toBeInTheDocument();
+        // When loading, the table should not be rendered
+        expect(screen.queryByTestId("inventory-table")).not.toBeInTheDocument();
         expect(screen.queryByTestId("pagination")).not.toBeInTheDocument();
     });
 
@@ -275,6 +601,7 @@ describe("InventoryPage", () => {
                 ...mockUseInventoryDefaultState,
                 filteredProducts: mockProducts,
                 totalGeneralProducts: 50,
+                totalPages: 2, // Need more than 1 page for goto-page-button to appear
                 goToPage: mockGoToPage,
             });
 
@@ -382,27 +709,7 @@ describe("InventoryPage", () => {
             expect(typeof callArgs.onReset).toBe("function");
         });
 
-        test("InventoryTable is rendered with correct props", () => {
-            const mockProducts = [{ id: 1, name: "Test Product" }];
-
-            useInventory.mockReturnValue({
-                ...mockUseInventoryDefaultState,
-                filteredProducts: mockProducts,
-                isLoading: true,
-            });
-
-            render(<InventoryPage />);
-
-            // Verificamos que InventoryTable fue llamado
-            expect(InventoryTable).toHaveBeenCalled();
-
-            // Verificamos las props
-            const callArgs = InventoryTable.mock.calls[0][0];
-            expect(callArgs.products).toEqual(mockProducts);
-            expect(callArgs.isLoading).toBe(true);
-        });
-
-        test("Pagination is rendered with correct props when products exist", () => {
+        test("InventoryContent is rendered with correct props when products exist", () => {
             const mockGoToPage = jest.fn();
             const mockGoToNextPage = jest.fn();
             const mockGoToPrevPage = jest.fn();
@@ -422,11 +729,11 @@ describe("InventoryPage", () => {
 
             render(<InventoryPage />);
 
-            // Verificamos que Pagination fue llamado
-            expect(Pagination).toHaveBeenCalled();
+            // Verificamos que InventoryContent fue llamado
+            expect(InventoryContent).toHaveBeenCalled();
 
             // Verificamos las props
-            const callArgs = Pagination.mock.calls[0][0];
+            const callArgs = InventoryContent.mock.calls[0][0];
             expect(callArgs.currentPage).toBe(2);
             expect(callArgs.totalPages).toBe(5);
             expect(callArgs.goToPage).toBe(mockGoToPage);
