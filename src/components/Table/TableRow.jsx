@@ -72,6 +72,16 @@ const TableRow = ({ product, index }) => {
                 fontWeight: "600",
                 color: "#28a745",
             },
+            purchasePriceCell: {
+                textAlign: "left",
+                fontFamily: "monospace",
+                fontWeight: "500",
+                color: "#dc3545",
+            },
+            marginCell: {
+                textAlign: "center",
+                fontWeight: "600",
+            },
             loadingCell: {
                 color: "#6c757d",
                 fontStyle: "italic",
@@ -139,6 +149,51 @@ const TableRow = ({ product, index }) => {
         );
     };
 
+    // Renderizar precio de compra (latest_purchase_price)
+    const renderPurchasePrice = () => {
+        const purchasePrice = product.latest_purchase_price;
+
+        if (purchasePrice === null || purchasePrice === undefined) {
+            return <span style={{ color: "#6c757d" }}>N/A</span>;
+        }
+
+        return (
+            <span
+                style={styles.purchasePriceCell}
+                title={`Último precio de compra para ${product.name}`}
+            >
+                ${Number(purchasePrice).toLocaleString("es-CO")}
+            </span>
+        );
+    };
+
+    // Renderizar el margen de ganancia
+    const renderMargin = () => {
+        const salePrice = product.sale_price;
+        const purchasePrice = product.latest_purchase_price;
+
+        if (
+            salePrice === null ||
+            salePrice === undefined ||
+            purchasePrice === null ||
+            purchasePrice === undefined
+        ) {
+            return <span style={{ color: "#6c757d" }}>N/A</span>;
+        }
+
+        const margin = salePrice - purchasePrice;
+        const marginColor = margin >= 0 ? "#28a745" : "#dc3545";
+
+        return (
+            <span
+                style={{ ...styles.marginCell, color: marginColor }}
+                title={`Margen de ganancia para ${product.name}`}
+            >
+                ${Number(margin).toLocaleString("es-CO")}
+            </span>
+        );
+    };
+
     // Obtener la descripción del producto usando el primer campo disponible
     const desc =
         product.description ||
@@ -176,7 +231,13 @@ const TableRow = ({ product, index }) => {
                 {renderExpiryInfo()}
             </td>
             <td style={{ ...styles.cell, ...styles.priceCell }}>
+                {renderPurchasePrice()}
+            </td>
+            <td style={{ ...styles.cell, ...styles.priceCell }}>
                 {renderSalePrice()}
+            </td>
+            <td style={{ ...styles.cell, ...styles.marginCell }}>
+                {renderMargin()}
             </td>
             <td
                 style={{ ...styles.cell, ...styles.descriptionCell }}
