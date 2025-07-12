@@ -773,6 +773,11 @@ export const createInventoryMovement = async (movementData, authToken) => {
         throw new Error("No authentication token provided");
     }
 
+    console.log("🚀 createInventoryMovement called with:");
+    console.log("📍 URL:", API_INVENTORY_MOVEMENTS_URL);
+    console.log("📋 Movement Data:", JSON.stringify(movementData, null, 2));
+    console.log("🔑 Auth Token present:", !!authToken);
+
     try {
         const response = await fetch(API_INVENTORY_MOVEMENTS_URL, {
             method: "POST",
@@ -782,6 +787,9 @@ export const createInventoryMovement = async (movementData, authToken) => {
             },
             body: JSON.stringify(movementData),
         });
+
+        console.log("📡 Response status:", response.status);
+        console.log("📡 Response ok:", response.ok);
 
         if (!response.ok) {
             // Try to get error details from response
@@ -815,9 +823,99 @@ export const createInventoryMovement = async (movementData, authToken) => {
             throw new Error(errorMessage);
         }
 
-        return await response.json();
+        const result = await response.json();
+        console.log("✅ Movement created successfully:", result);
+        return result;
     } catch (error) {
-        console.error("Error creating inventory movement:", error);
+        console.error("❌ Error creating inventory movement:", error);
+
+        // Mejorar manejo de errores de red
+        if (
+            error.name === "TypeError" &&
+            error.message.includes("Failed to fetch")
+        ) {
+            throw new Error(
+                "Error de conexión: No se pudo conectar al servidor. Verifique su conexión a internet."
+            );
+        }
+
+        throw error;
+    }
+};
+
+/**
+ * Update movement status
+ * @param {number} movementId - Movement ID to update
+ * @param {string} newStatus - New status (pending, completed, cancelled)
+ * @param {string} authToken - Authentication token
+ * @returns {Promise<Object>} - Updated movement data
+ */
+export const updateMovementStatus = async (
+    movementId,
+    newStatus,
+    authToken
+) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    console.log("🚀 updateMovementStatus called with:");
+    console.log("📍 Movement ID:", movementId);
+    console.log("📊 New Status:", newStatus);
+    console.log("🔑 Auth Token present:", !!authToken);
+
+    try {
+        const response = await fetch(
+            `${API_INVENTORY_MOVEMENTS_URL}${movementId}/`,
+            {
+                method: "PATCH",
+                headers: {
+                    Authorization: `Token ${authToken}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ status: newStatus }),
+            }
+        );
+
+        console.log("📡 Response status:", response.status);
+        console.log("📡 Response ok:", response.ok);
+
+        if (!response.ok) {
+            // Try to get error details from response
+            let errorMessage = `Error ${response.status}: ${response.statusText}`;
+            try {
+                const errorData = await response.json();
+                if (errorData.detail) {
+                    errorMessage = errorData.detail;
+                } else if (errorData.error) {
+                    errorMessage = errorData.error;
+                } else if (typeof errorData === "object") {
+                    // Handle field-specific errors
+                    const fieldErrors = Object.entries(errorData)
+                        .map(
+                            ([field, errors]) =>
+                                `${field}: ${
+                                    Array.isArray(errors)
+                                        ? errors.join(", ")
+                                        : errors
+                                }`
+                        )
+                        .join("; ");
+                    if (fieldErrors) {
+                        errorMessage = fieldErrors;
+                    }
+                }
+            } catch (e) {
+                console.warn("No se pudo parsear el mensaje de error", e);
+            }
+            throw new Error(errorMessage);
+        }
+
+        const result = await response.json();
+        console.log("✅ Movement status updated successfully:", result);
+        return result;
+    } catch (error) {
+        console.error("❌ Error updating movement status:", error);
 
         // Mejorar manejo de errores de red
         if (
@@ -981,6 +1079,21 @@ export const createProduct = async (productData, authToken) => {
         throw new Error("No authentication token provided");
     }
 
+    // 🔍 DEBUG: Agregar logs para verificar los datos que se envían al backend
+    console.log("🔍 DEBUG - Datos recibidos en createProduct:", productData);
+    console.log(
+        "🔍 DEBUG - Campo requires_batch_control en createProduct:",
+        productData.requires_batch_control
+    );
+    console.log(
+        "🔍 DEBUG - Tipo de requires_batch_control en createProduct:",
+        typeof productData.requires_batch_control
+    );
+    console.log(
+        "🔍 DEBUG - JSON que se enviará al backend:",
+        JSON.stringify(productData, null, 2)
+    );
+
     try {
         const response = await fetch(API_PRODUCTS_URL, {
             method: "POST",
@@ -991,11 +1104,19 @@ export const createProduct = async (productData, authToken) => {
             body: JSON.stringify(productData),
         });
 
+        // 🔍 DEBUG: Agregar logs para verificar la respuesta del backend
+        console.log("🔍 DEBUG - Status de la respuesta:", response.status);
+        console.log(
+            "🔍 DEBUG - Headers de la respuesta:",
+            Object.fromEntries(response.headers.entries())
+        );
+
         if (!response.ok) {
             // Try to get error details from response
             let errorMessage = `Error ${response.status}: ${response.statusText}`;
             try {
                 const errorData = await response.json();
+                console.log("🔍 DEBUG - Error data del backend:", errorData);
                 if (errorData.detail) {
                     errorMessage = errorData.detail;
                 } else if (errorData.error) {
@@ -1018,11 +1139,16 @@ export const createProduct = async (productData, authToken) => {
                 }
             } catch (e) {
                 // If we can't parse the error response, use the default message
+                console.log(
+                    "🔍 DEBUG - No se pudo parsear el error del backend"
+                );
             }
             throw new Error(errorMessage);
         }
 
-        return await response.json();
+        const result = await response.json();
+        console.log("🔍 DEBUG - Respuesta exitosa del backend:", result);
+        return result;
     } catch (error) {
         console.error("Error creating product:", error);
         throw error;
@@ -1152,17 +1278,7 @@ export const getIntelligentPrice = async (productId, authToken) => {
     }
 
     try {
-        // 1. NUEVO: Intentar obtener precio de venta del producto (sale_price)
-        const productSalePrice = await getProductSalePrice(productId, authToken);
-        if (productSalePrice.price > 0) {
-            return {
-                price: productSalePrice.price,
-                source: "product_sale_price",
-                source_label: "Precio de venta del producto",
-            };
-        }
-
-        // 2. Intentar obtener último precio de venta histórico
+        // 1. Intentar obtener último precio de venta
         const lastSalePrice = await getLastSalePrice(productId, authToken);
         if (lastSalePrice.price > 0) {
             return {
@@ -1172,7 +1288,7 @@ export const getIntelligentPrice = async (productId, authToken) => {
             };
         }
 
-        // 3. Intentar obtener último precio de compra
+        // 2. Intentar obtener último precio de compra
         const lastPurchasePrice = await getLastPurchasePrice(
             productId,
             authToken
@@ -1185,50 +1301,11 @@ export const getIntelligentPrice = async (productId, authToken) => {
             };
         }
 
-        // 4. Usar precios del producto (fallback)
+        // 3. Usar precios del producto (fallback)
         return await getProductIntelligentPriceFallback(productId, authToken);
     } catch (error) {
         console.error("Error fetching intelligent price:", error);
         return await getProductIntelligentPriceFallback(productId, authToken);
-    }
-};
-
-/**
- * Get product sale price (sale_price field from product model)
- * @param {number} productId - Product ID
- * @param {string} authToken - Authentication token
- * @returns {Promise<Object>} - Price information
- */
-const getProductSalePrice = async (productId, authToken) => {
-    try {
-        // Obtener el producto individual para usar el campo sale_price
-        const productUrl = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.INVENTORY}${productId}/`;
-
-        const response = await fetch(productUrl, {
-            headers: {
-                Authorization: `Token ${authToken}`,
-                "Content-Type": "application/json",
-            },
-        });
-
-        if (!response.ok) {
-            return { price: 0, source: "none" };
-        }
-
-        const product = await response.json();
-
-        // Verificar si existe sale_price y es mayor a 0
-        if (product.sale_price && parseFloat(product.sale_price) > 0) {
-            return {
-                price: parseFloat(product.sale_price),
-                source: "product_sale_price",
-            };
-        }
-
-        return { price: 0, source: "none" };
-    } catch (error) {
-        console.error("Error fetching product sale price:", error);
-        return { price: 0, source: "none" };
     }
 };
 
@@ -1341,14 +1418,8 @@ const getProductIntelligentPriceFallback = async (productId, authToken) => {
 
         const product = await response.json();
 
-        // Lógica de fallback: sale_price > selling_price > cost_price > 0
-        if (product.sale_price && parseFloat(product.sale_price) > 0) {
-            return {
-                price: parseFloat(product.sale_price),
-                source: "product_sale_price",
-                source_label: "Precio de venta del producto",
-            };
-        } else if (product.selling_price && product.selling_price > 0) {
+        // Lógica de fallback: selling_price > cost_price > 0
+        if (product.selling_price && product.selling_price > 0) {
             return {
                 price: product.selling_price,
                 source: "suggested",
@@ -1522,15 +1593,13 @@ export const getBatchesWithStockAtLocation = async (
         throw new Error("Product ID and Location ID are required");
     }
 
-    const API_BATCHES_BY_LOCATION_URL = `${API_CONFIG.BASE_URL}/inventory/movements/by_batches/`;
-
     try {
-        // Build URL with product and location filters
+        // Build URL with product and location filters using the correct endpoint
         const params = new URLSearchParams();
         params.append("product", productId);
         params.append("location", locationId);
 
-        const url = `${API_BATCHES_BY_LOCATION_URL}?${params.toString()}`;
+        const url = `${API_STOCK_URL}?${params.toString()}`;
 
         const response = await fetch(url, {
             headers: {
@@ -1545,14 +1614,39 @@ export const getBatchesWithStockAtLocation = async (
 
         const data = await response.json();
 
+        // Handle pagination if needed
+        let allBatches = data.results || data;
+
+        // If there are more pages, fetch them all
+        if (data.next) {
+            let nextUrl = data.next;
+            while (nextUrl) {
+                const nextResponse = await fetch(nextUrl, {
+                    headers: {
+                        Authorization: `Token ${authToken}`,
+                        "Content-Type": "application/json",
+                    },
+                });
+
+                if (nextResponse.ok) {
+                    const nextData = await nextResponse.json();
+                    allBatches = allBatches.concat(nextData.results || []);
+                    nextUrl = nextData.next;
+                } else {
+                    break;
+                }
+            }
+        }
+
         // Filter out batches with zero stock and add additional properties
-        const batchesWithStock = data
+        const batchesWithStock = allBatches
             .filter((batch) => batch.quantity > 0)
             .map((batch) => ({
                 ...batch,
                 availableStock: batch.quantity,
                 selectedQuantity: 0,
                 useFullBatch: false,
+                batch_id: batch.batch || batch.batch_id || batch.id,
             }));
 
         return batchesWithStock;
@@ -1575,6 +1669,7 @@ const inventoryService = {
     getStockSummary,
     getInventoryMovements,
     createInventoryMovement,
+    updateMovementStatus,
     getStockMap,
     generateNextSku,
     validateSku,

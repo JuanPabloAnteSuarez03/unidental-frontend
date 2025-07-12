@@ -45,6 +45,10 @@ const MainLayout = ({ children }) => {
                     name: "Alertas por Stock",
                     path: "/inventario/alertas-stock",
                 },
+                {
+                    name: "Ver Reportes",
+                    path: "/inventario/reportes",
+                },
             ],
         },
         compras: {
@@ -70,14 +74,17 @@ const MainLayout = ({ children }) => {
                     name: "Gestión de Devoluciones",
                     path: "/ventas/devoluciones",
                 },
-                { name: "Gestión de Domicilios", path: "/ventas/domicilios" },
                 {
-                    name: "Cuentas por Cobrar (Créditos)",
-                    path: "/ventas/creditos",
+                    name: "Total de Ventas",
+                    path: "/ventas/total",
                 },
                 {
                     name: "Créditos WhatsApp",
                     path: "/ventas/creditos-whatsapp",
+                },
+                {
+                    name: "Total de Ventas",
+                    path: "/ventas/total",
                 },
             ],
         },
@@ -86,7 +93,6 @@ const MainLayout = ({ children }) => {
             items: [
                 { name: "Lista de Clientes", path: "/clientes/lista" },
                 { name: "Nuevo Cliente", path: "/clientes/nuevo" },
-                { name: "Ver Reportes", path: "/clientes/reportes" },
             ],
         },
         configuracion: {

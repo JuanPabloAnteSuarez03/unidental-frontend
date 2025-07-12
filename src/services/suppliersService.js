@@ -148,28 +148,70 @@ export const getAllSuppliers = async (authToken) => {
     }
 
     try {
-        const response = await fetch(`${API_SUPPLIERS_URL}?page_size=1000`, {
-            headers: {
-                Authorization: `Token ${authToken}`,
-                "Content-Type": "application/json",
-            },
-        });
+        console.log("🔄 Cargando TODOS los proveedores...");
+        const allSuppliers = [];
+        let nextUrl = `${API_SUPPLIERS_URL}?page_size=100`; // Usar 100 por página para optimizar
+        let pageCount = 0;
+        const maxPages = 100; // Límite de seguridad
 
-        if (!response.ok) {
-            throw new Error(`Error ${response.status}: ${response.statusText}`);
+        while (nextUrl && pageCount < maxPages) {
+            pageCount++;
+            console.log(`📄 Cargando página ${pageCount} de proveedores...`);
+
+            const response = await fetch(nextUrl, {
+                headers: {
+                    Authorization: `Token ${authToken}`,
+                    "Content-Type": "application/json",
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error(
+                    `Error ${response.status}: ${response.statusText}`
+                );
+            }
+
+            const data = await response.json();
+            const suppliers = data.results || [];
+
+            // Agregar proveedores de esta página
+            allSuppliers.push(...suppliers);
+            console.log(
+                `✅ Página ${pageCount}: ${suppliers.length} proveedores cargados`
+            );
+
+            // Verificar si hay más páginas
+            nextUrl = data.next ? data.next : null;
+
+            // Si no hay más páginas, terminar
+            if (!nextUrl) {
+                console.log(
+                    `🏁 No hay más páginas. Total de proveedores cargados: ${allSuppliers.length}`
+                );
+                break;
+            }
         }
 
-        const data = await response.json();
+        // Advertencia si llegamos al límite
+        if (pageCount >= maxPages) {
+            console.warn(
+                `⚠️ Se alcanzó el límite de ${maxPages} páginas. Es posible que no se hayan cargado todos los proveedores.`
+            );
+        }
 
         // Actualizar cache con todos los datos
         suppliersCache = {
-            data: data.results || [],
-            totalCount: data.count || 0,
+            data: allSuppliers,
+            totalCount: allSuppliers.length,
             lastFetch: Date.now(),
             searchTerm: null,
         };
 
-        return data.results || [];
+        console.log(
+            `🎉 Carga completa finalizada: ${allSuppliers.length} proveedores cargados en ${pageCount} páginas`
+        );
+
+        return allSuppliers;
     } catch (error) {
         console.error("Error fetching all suppliers:", error);
         throw error;
@@ -376,6 +418,92 @@ export async function getSupplierPurchaseOptions(authToken) {
     return await response.json();
 }
 
+/**
+ * Crear una nueva opción de compra para un proveedor
+ * @param {Object} purchaseOptionData - Datos de la opción de compra
+ * @param {number} purchaseOptionData.product - ID del producto
+ * @param {number} purchaseOptionData.supplier - ID del proveedor
+ * @param {string} purchaseOptionData.brand - Marca (opcional)
+ * @param {string} purchaseOptionData.purchase_price - Precio de compra
+ * @param {string} purchaseOptionData.valid_from - Fecha de inicio de vigencia
+ * @param {string} purchaseOptionData.valid_to - Fecha de fin de vigencia
+ * @param {string} authToken - Token de autenticación
+ * @returns {Promise<Object>} - Opción de compra creada
+ */
+export const createPurchaseOption = async (purchaseOptionData, authToken) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    try {
+        console.log("🔄 Creando opción de compra:", purchaseOptionData);
+
+        const response = await fetch(API_PURCHASE_OPTIONS_URL, {
+            method: "POST",
+            headers: {
+                Authorization: `Token ${authToken}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(purchaseOptionData),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            console.error("❌ Error response details:", {
+                status: response.status,
+                statusText: response.statusText,
+                errorData: errorData,
+            });
+            throw new Error(
+                `Error ${response.status}: ${
+                    errorData.detail || errorData.message || response.statusText
+                }`
+            );
+        }
+
+        const data = await response.json();
+        console.log("✅ Opción de compra creada exitosamente:", data);
+        return data;
+    } catch (error) {
+        console.error("❌ Error al crear opción de compra:", error);
+        throw error;
+    }
+};
+
+/**
+ * Obtener detalle de una opción de compra por ID
+ * @param {number} id - ID de la opción de compra
+ * @param {string} authToken - Token de autenticación
+ * @returns {Promise<Object>} - Detalle de la opción de compra
+ */
+export const getPurchaseOptionDetail = async (id, authToken) => {
+    if (!authToken) throw new Error("No authentication token provided");
+    const url = `${API_PURCHASE_OPTIONS_URL}${id}/`;
+    try {
+        const response = await fetch(url, {
+            headers: {
+                Authorization: `Token ${authToken}`,
+                "Content-Type": "application/json",
+            },
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(
+                `Error ${response.status}: ${
+                    errorData.detail || errorData.message || response.statusText
+                }`
+            );
+        }
+        return await response.json();
+    } catch (error) {
+        console.error(
+            "❌ Error al obtener detalle de opción de compra:",
+            error
+        );
+        throw error;
+    }
+};
+
 // Servicio por defecto
 const suppliersService = {
     getSuppliers,
@@ -387,6 +515,8 @@ const suppliersService = {
     getPurchaseOptions,
     clearSuppliersCache,
     getSupplierPurchaseOptions,
+    createPurchaseOption,
+    getPurchaseOptionDetail,
 };
 
 export default suppliersService;

@@ -1,16 +1,19 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useProducts } from "../context/ProductsContext";
-import transfersService from "../services/transfersService";
+import {
+    getInventoryMovements,
+    createInventoryMovement,
+} from "../services/inventoryService";
+import { updateMovementStatus } from "../services/inventoryService";
+import { completeTransfer, cancelTransfer } from "../services/transfersService";
 import TransferHeader from "../components/Transfers/TransferHeader";
 import TransferNotification from "../components/Transfers/TransferNotification";
 import TransferFilters from "../components/Transfers/TransferFilters";
-import RequestTransferModalV2 from "../components/Transfers/RequestTransferModalV2";
-import SendTransferModalV2 from "../components/Transfers/SendTransferModalV2";
+import SimpleTransferForm from "../components/Transfers/SimpleTransferForm";
+
 import TransfersTable from "../components/Transfers/TransfersTable";
 import TransfersPagination from "../components/Transfers/TransfersPagination";
-import TransferDetailsModal from "../components/Transfers/TransferDetailsModal";
-import TransferPersistenceInfo from "../components/Transfers/TransferPersistenceInfo";
 
 const TransferenciasInternasPage = () => {
     const { authToken } = useAuth();
@@ -18,49 +21,18 @@ const TransferenciasInternasPage = () => {
 
     // Estados para los filtros del historial
     const [filters, setFilters] = useState({
-        estado: "",
-        sedeOrigen: "",
-        sedeDestino: "",
         producto: "",
-        fechaDesde: "",
-        fechaHasta: "",
-        tipoTransferencia: "",
     });
 
-    // Estado para búsqueda de productos (separado de filtros)
-    const [productSearchTerm, setProductSearchTerm] = useState("");
-
-    // Estado para el historial de transferencias (ahora persistente)
-    const [transferencias, setTransferencias] = useState([]);
-    const [isLoadingTransfers, setIsLoadingTransfers] = useState(false);
-    const [transfersData, setTransfersData] = useState({
+    // Estado para el historial de movimientos de transferencias internas
+    const [allMovimientos, setAllMovimientos] = useState([]); // Todos los movimientos sin filtrar
+    const [movimientos, setMovimientos] = useState([]); // Movimientos filtrados y paginados
+    const [isLoadingMovements, setIsLoadingMovements] = useState(false);
+    const [movementsData, setMovementsData] = useState({
         totalCount: 0,
         totalPages: 0,
         currentPage: 1,
     });
-
-    // Estado para el modal de nueva transferencia
-    const [showModal, setShowModal] = useState(false);
-
-    // Estados para los nuevos modales especializados
-    const [showRequestModal, setShowRequestModal] = useState(false);
-    const [showSendModal, setShowSendModal] = useState(false);
-
-    // Estado para el formulario de nueva transferencia
-    const [formData, setFormData] = useState({
-        producto: "",
-        sedeOrigen: "",
-        sedeDestino: "",
-        cantidad: "",
-        motivo: "",
-        urgencia: "media",
-        tipoTransferencia: "pull",
-        fechaEntrega: "",
-    });
-
-    // Estado para el modal de detalles
-    const [showDetallesModal, setShowDetallesModal] = useState(false);
-    const [selectedTransferencia, setSelectedTransferencia] = useState(null);
 
     // Estado para notificaciones
     const [notification, setNotification] = useState({
@@ -69,25 +41,10 @@ const TransferenciasInternasPage = () => {
         message: "",
     });
     const [changingStates, setChangingStates] = useState(new Set()); // IDs de transferencias cuyo estado se está cambiando
+    const processingMovements = useRef(new Set()); // Ref para rastrear movimientos en proceso sin re-renders
 
-    // Estados para paginación (ahora usando transfersData)
-    const { currentPage, totalPages, totalCount } = transfersData;
-
-    // Datos simulados para los selects (para formulario de nueva transferencia)
-    const ubicaciones = [
-        { id: 1, name: "Sede Principal" },
-        { id: 2, name: "Sede Norte" },
-        { id: 3, name: "Sede Sur" },
-        { id: 4, name: "Almacén Central" },
-    ];
-
-    const productos = [
-        "Jeringa desechable 5ml",
-        "Guantes de látex talla M",
-        "Algodón hidrófilo 500g",
-        "Mascarilla quirúrgica",
-        "Alcohol isopropílico 1L",
-    ];
+    // Estados para paginación (ahora usando movementsData)
+    const { currentPage, totalPages, totalCount } = movementsData;
 
     const estados = [
         "Pendiente",
@@ -98,44 +55,90 @@ const TransferenciasInternasPage = () => {
         "Cancelada",
     ];
 
-    const nivelesUrgencia = [
-        { value: "baja", label: "Baja" },
-        { value: "media", label: "Media" },
-        { value: "alta", label: "Alta" },
-    ];
+    // Función para cargar movimientos de transferencias internas desde el servidor
+    const loadMovementsFromServer = useCallback(async () => {
+        setIsLoadingMovements(true);
+        try {
+            // Get more data to ensure we have enough internal transfer movements
+            const params = {
+                page: 1,
+                page_size: 100, // Get more records since we'll filter client-side
+            };
+            const result = await getInventoryMovements(params, authToken);
 
-    // Función para cargar transferencias
-    const loadTransfers = useCallback(
-        (page = 1) => {
-            setIsLoadingTransfers(true);
-            try {
-                const params = { page, pageSize: 25 };
-                const result = transfersService.getTransfers(params, filters);
+            // Filter movements to only show internal transfers (client-side filter since backend filter is not working)
+            const allInternalTransferMovements =
+                result.results?.filter(
+                    (movement) => movement.is_internal_transfer === true
+                ) || [];
 
-                setTransferencias(result.results);
-                setTransfersData({
-                    totalCount: result.count,
-                    totalPages: result.totalPages,
-                    currentPage: result.currentPage,
+            setAllMovimientos(allInternalTransferMovements);
+            // Aplicar filtros localmente después de cargar
+            applyLocalFilters(allInternalTransferMovements, 1);
+        } catch (error) {
+            console.error("Error al cargar movimientos:", error);
+            setNotification({
+                show: true,
+                type: "error",
+                message: "Error al cargar los movimientos de transferencias",
+            });
+        } finally {
+            setIsLoadingMovements(false);
+        }
+    }, [authToken]);
+
+    // Función para aplicar filtros localmente
+    const applyLocalFilters = useCallback(
+        (movements = allMovimientos, page = 1) => {
+            let filteredMovements = [...movements];
+
+            // Filtrar por producto (búsqueda local)
+            if (filters.producto && filters.producto.trim()) {
+                const searchTerm = filters.producto.toLowerCase().trim();
+                filteredMovements = filteredMovements.filter((movement) => {
+                    const productName =
+                        movement.product_name?.toLowerCase() || "";
+                    const productSku =
+                        movement.product_sku?.toLowerCase() || "";
+                    return (
+                        productName.includes(searchTerm) ||
+                        productSku.includes(searchTerm)
+                    );
                 });
-            } catch (error) {
-                console.error("Error al cargar transferencias:", error);
-                setNotification({
-                    show: true,
-                    type: "error",
-                    message: "Error al cargar las transferencias",
-                });
-            } finally {
-                setIsLoadingTransfers(false);
             }
+
+            // Aplicar paginación local
+            const itemsPerPage = 25;
+            const startIndex = (page - 1) * itemsPerPage;
+            const endIndex = startIndex + itemsPerPage;
+            const paginatedMovements = filteredMovements.slice(
+                startIndex,
+                endIndex
+            );
+
+            setMovimientos(paginatedMovements);
+            setMovementsData({
+                totalCount: filteredMovements.length,
+                totalPages: Math.ceil(filteredMovements.length / itemsPerPage),
+                currentPage: page,
+            });
         },
-        [filters]
+        [filters.producto, allMovimientos]
     );
 
-    // Cargar transferencias al montar el componente y cuando cambien los filtros
+    // Cargar movimientos al montar el componente
     useEffect(() => {
-        loadTransfers(1);
-    }, [loadTransfers]);
+        if (authToken) {
+            loadMovementsFromServer();
+        }
+    }, [authToken, loadMovementsFromServer]);
+
+    // Aplicar filtros cuando cambien los filtros locales
+    useEffect(() => {
+        if (allMovimientos.length > 0) {
+            applyLocalFilters(allMovimientos, 1);
+        }
+    }, [filters.producto, allMovimientos, applyLocalFilters]);
 
     // Funciones para manejar filtros
     const handleFilterChange = (e) => {
@@ -146,25 +149,8 @@ const TransferenciasInternasPage = () => {
         });
     };
 
-    // Función para manejar cambio en búsqueda de productos
-    const handleProductSearchChange = (searchTerm) => {
-        setProductSearchTerm(searchTerm);
-        // No actualizamos filtros inmediatamente - esperamos botón aplicar
-    };
-
     const applyFilters = () => {
-        // Crear filtros que incluyan el término de búsqueda actual
-        const filtersWithSearch = {
-            ...filters,
-            producto: productSearchTerm,
-        };
-
-        // Actualizar los filtros aplicados
-        setFilters(filtersWithSearch);
-
-        // Recargar transferencias con los filtros aplicados (incluyendo búsqueda)
-        loadTransfers(1);
-
+        // Los filtros se aplican automáticamente, solo mostrar notificación
         setNotification({
             show: true,
             type: "success",
@@ -178,22 +164,10 @@ const TransferenciasInternasPage = () => {
 
     const clearFilters = () => {
         const emptyFilters = {
-            estado: "",
-            sedeOrigen: "",
-            sedeDestino: "",
             producto: "",
-            fechaDesde: "",
-            fechaHasta: "",
-            tipoTransferencia: "",
         };
 
         setFilters(emptyFilters);
-
-        // También limpiar la búsqueda de productos
-        setProductSearchTerm("");
-
-        // Recargar sin filtros
-        setTimeout(() => loadTransfers(1), 100);
 
         setNotification({
             show: true,
@@ -206,261 +180,245 @@ const TransferenciasInternasPage = () => {
         }, 3000);
     };
 
-    // Funciones para el formulario de nueva transferencia
-    const handleInputChange = (e) => {
-        const { name, value } = e.target;
-        setFormData({
-            ...formData,
-            [name]: value,
-        });
+    // Función para manejar cambio de página
+    const handlePageChange = (page) => {
+        applyLocalFilters(allMovimientos, page);
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
+    // Función para manejar cuando se crea una nueva transferencia
+    const handleTransferCreated = (newTransfer) => {
+        // Recargar la lista de transferencias para mostrar la nueva
+        loadMovementsFromServer();
 
-        // Validación básica
-        if (
-            !formData.producto ||
-            !formData.sedeOrigen ||
-            !formData.sedeDestino ||
-            !formData.cantidad
-        ) {
-            setNotification({
-                show: true,
-                type: "error",
-                message: "Por favor complete todos los campos obligatorios",
-            });
+        setNotification({
+            show: true,
+            type: "success",
+            message: `Transferencia ${newTransfer.id} creada exitosamente`,
+        });
 
-            setTimeout(() => {
-                setNotification({ show: false, type: "", message: "" });
-            }, 5000);
+        setTimeout(() => {
+            setNotification({ show: false, type: "", message: "" });
+        }, 5000);
+    };
+
+    // Función para completar una transferencia
+    const handleCompletarTransferencia = async (movementId) => {
+        if (processingMovements.current.has(movementId)) {
+            console.log(`Movimiento ${movementId} ya está siendo procesado`);
             return;
         }
 
-        if (formData.sedeOrigen === formData.sedeDestino) {
-            setNotification({
-                show: true,
-                type: "error",
-                message: "La sede de origen y destino no pueden ser iguales",
-            });
-
-            setTimeout(() => {
-                setNotification({ show: false, type: "", message: "" });
-            }, 5000);
-            return;
-        }
+        processingMovements.current.add(movementId);
+        setChangingStates((prev) => new Set([...prev, movementId]));
 
         try {
-            // Crear transferencia usando el servicio
-            const transferData = {
-                producto: formData.producto,
-                cantidad: formData.cantidad,
-                sedeOrigen: formData.sedeOrigen,
-                sedeDestino: formData.sedeDestino,
-                motivo: formData.motivo,
-                urgencia: formData.urgencia,
-                tipoTransferencia: formData.tipoTransferencia,
-                fechaEntrega: formData.fechaEntrega,
-            };
+            console.log(`🔄 Completando transferencia: ${movementId}`);
 
-            await transfersService.createTransfer(transferData, authToken);
+            const result = await completeTransfer(movementId, authToken);
 
-            // Recargar transferencias
-            loadTransfers(1);
+            if (result.success) {
+                // Recargar la lista de movimientos para mostrar el cambio
+                loadMovementsFromServer();
 
-            // Actualizar cache de productos si hubo movimientos de stock
-            if (formData.tipoTransferencia === "push") {
-                setTimeout(() => refreshCache(), 500);
+                setNotification({
+                    show: true,
+                    type: "success",
+                    message: `Transferencia completada exitosamente.`,
+                });
+
+                setTimeout(() => {
+                    setNotification({ show: false, type: "", message: "" });
+                }, 5000);
             }
-
-            // Mostrar notificación
-            setNotification({
-                show: true,
-                type: "success",
-                message:
-                    formData.tipoTransferencia === "pull"
-                        ? "Solicitud de transferencia creada con éxito"
-                        : "Transferencia registrada con éxito",
-            });
-
-            // Cerrar modal y resetear formulario
-            setShowModal(false);
-            setFormData({
-                producto: "",
-                sedeOrigen: "",
-                sedeDestino: "",
-                cantidad: "",
-                motivo: "",
-                urgencia: "media",
-                tipoTransferencia: "pull",
-            });
-
-            setTimeout(() => {
-                setNotification({ show: false, type: "", message: "" });
-            }, 3000);
         } catch (error) {
-            console.error("Error al crear transferencia:", error);
+            console.error("❌ Error al completar transferencia:", error);
             setNotification({
                 show: true,
                 type: "error",
-                message: "Error al crear la transferencia: " + error.message,
+                message: `Error al completar transferencia: ${error.message}`,
             });
 
             setTimeout(() => {
                 setNotification({ show: false, type: "", message: "" });
             }, 5000);
+        } finally {
+            processingMovements.current.delete(movementId);
+            setChangingStates((prev) => {
+                const newSet = new Set(prev);
+                newSet.delete(movementId);
+                return newSet;
+            });
         }
     };
 
-    // Función para abrir modal de detalles
-    const openDetalles = (transferencia) => {
-        setSelectedTransferencia(transferencia);
-        setShowDetallesModal(true);
+    // Función para cancelar una transferencia
+    const handleCancelarTransferencia = async (movementId) => {
+        if (processingMovements.current.has(movementId)) {
+            console.log(`Movimiento ${movementId} ya está siendo procesado`);
+            return;
+        }
+
+        // Confirmar la cancelación
+        const confirmCancel = window.confirm(
+            "¿Estás seguro de que deseas cancelar esta transferencia? Esta acción no se puede deshacer."
+        );
+
+        if (!confirmCancel) {
+            return;
+        }
+
+        processingMovements.current.add(movementId);
+        setChangingStates((prev) => new Set([...prev, movementId]));
+
+        try {
+            console.log(`🔄 Cancelando transferencia: ${movementId}`);
+
+            const result = await cancelTransfer(movementId, authToken);
+
+            if (result.success) {
+                // Recargar la lista de movimientos para mostrar el cambio
+                loadMovementsFromServer();
+
+                setNotification({
+                    show: true,
+                    type: "success",
+                    message: `Transferencia cancelada exitosamente.`,
+                });
+
+                setTimeout(() => {
+                    setNotification({ show: false, type: "", message: "" });
+                }, 5000);
+            }
+        } catch (error) {
+            console.error("❌ Error al cancelar transferencia:", error);
+            setNotification({
+                show: true,
+                type: "error",
+                message: `Error al cancelar transferencia: ${error.message}`,
+            });
+
+            setTimeout(() => {
+                setNotification({ show: false, type: "", message: "" });
+            }, 5000);
+        } finally {
+            processingMovements.current.delete(movementId);
+            setChangingStates((prev) => {
+                const newSet = new Set(prev);
+                newSet.delete(movementId);
+                return newSet;
+            });
+        }
     };
 
-    // Función para cambiar estado de transferencia
-    const cambiarEstado = async (id, nuevoEstado) => {
-        // Verificar si ya se está cambiando el estado de esta transferencia
-        if (changingStates.has(id)) {
+    // Función para manejar cambio de estado del movimiento
+    const handleCambiarEstado = async (movementId, newStatus) => {
+        // Prevenir ejecuciones duplicadas usando tanto state como ref
+        if (
+            changingStates.has(movementId) ||
+            processingMovements.current.has(movementId)
+        ) {
             console.log(
-                `Estado de transferencia ${id} ya se está cambiando, ignorando...`
+                `⚠️ Operación ya en progreso para movimiento:`,
+                movementId
             );
             return;
         }
 
         try {
-            // Marcar como "cambiando estado"
-            setChangingStates((prev) => new Set(prev).add(id));
+            // Agregar a ambos: state para UI y ref para prevención inmediata
+            processingMovements.current.add(movementId);
+            setChangingStates((prev) => new Set(prev).add(movementId));
 
-            // Mostrar notificaciones de carga para cambios críticos
-            if (nuevoEstado === "Aprobada") {
-                setNotification({
-                    show: true,
-                    type: "info",
-                    message: "Aprobando transferencia y validando stock...",
-                });
-            } else if (nuevoEstado === "En Tránsito") {
-                setNotification({
-                    show: true,
-                    type: "info",
-                    message: "Marcando como enviada...",
-                });
-            } else if (nuevoEstado === "Completada") {
-                setNotification({
-                    show: true,
-                    type: "info",
-                    message:
-                        "Completando transferencia y registrando entrada en destino...",
-                });
-            }
-
-            // Actualizar en el servicio de transferencias (con token para "Aprobada" y "Completada")
-            const transferActualizada =
-                await transfersService.updateTransferStatus(
-                    id,
-                    nuevoEstado,
-                    nuevoEstado === "Completada" || nuevoEstado === "Aprobada"
-                        ? authToken
-                        : null
+            // Si el nuevo estado es "completed", necesitamos crear el movimiento de entrada primero
+            if (newStatus === "completed") {
+                // Buscar el movimiento original para obtener sus datos
+                const originalMovement = movimientos.find(
+                    (m) => m.id === movementId
                 );
 
-            if (transferActualizada) {
-                // Recargar transferencias para reflejar el cambio
-                loadTransfers(currentPage);
-
-                // Actualizar cache de productos si hubo movimientos de stock
-                if (
-                    nuevoEstado === "Aprobada" ||
-                    nuevoEstado === "Completada"
-                ) {
-                    setTimeout(() => refreshCache(), 500);
+                if (!originalMovement) {
+                    throw new Error(
+                        `No se encontró el movimiento con ID ${movementId}`
+                    );
                 }
 
-                // Actualizar también la transferencia seleccionada si existe
-                if (selectedTransferencia && selectedTransferencia.id === id) {
-                    setSelectedTransferencia(transferActualizada);
+                if (!originalMovement.destination_location) {
+                    throw new Error(
+                        "El movimiento no tiene una sede de destino definida"
+                    );
                 }
 
-                let message = `Estado cambiado a: ${nuevoEstado}`;
-                if (
-                    nuevoEstado === "Aprobada" &&
-                    transferActualizada.movementId
-                ) {
-                    message += ` - Stock descontado en origen (ID: ${transferActualizada.movementId})`;
-                } else if (nuevoEstado === "En Tránsito") {
-                    message += ` - Transferencia marcada como enviada`;
-                } else if (
-                    nuevoEstado === "Completada" &&
-                    transferActualizada.inboundMovementId
-                ) {
-                    message += ` - Entrada registrada en destino (ID: ${transferActualizada.inboundMovementId})`;
-                }
+                // Crear el movimiento de entrada en la sede destino
+                const entryMovementPayload = {
+                    product: originalMovement.product,
+                    location: originalMovement.destination_location,
+                    movement_type: "in",
+                    quantity: originalMovement.quantity,
+                    status: "completed",
+                    is_internal_transfer: true,
+                    expiry_date: originalMovement.expiry_date || "2025-08-24",
+                    notes: `Entrada por transferencia completada desde ${
+                        originalMovement.location_name || "sede origen"
+                    }`,
+                    // Incluir el lote si el movimiento original lo tiene
+                    ...(originalMovement.batch && {
+                        batch: originalMovement.batch,
+                    }),
+                };
 
-                setNotification({
-                    show: true,
-                    type: "success",
-                    message: message,
-                });
-            } else {
-                setNotification({
-                    show: true,
-                    type: "error",
-                    message: "Error al cambiar el estado de la transferencia",
-                });
+                // Crear el movimiento de entrada usando el servicio
+                const newEntryMovement = await createInventoryMovement(
+                    entryMovementPayload,
+                    authToken
+                );
             }
+
+            // Actualizar estado del movimiento original en la API
+            const updatedMovement = await updateMovementStatus(
+                movementId,
+                newStatus,
+                authToken
+            );
+
+            // Recargar la lista de movimientos para mostrar el cambio
+            loadMovementsFromServer();
+
+            setNotification({
+                show: true,
+                type: "success",
+                message:
+                    newStatus === "completed"
+                        ? `Transferencia completada exitosamente. Se creó el movimiento de entrada en la sede destino.`
+                        : `Estado del movimiento ${movementId} actualizado a ${updatedMovement.status_display}`,
+            });
+
+            setTimeout(() => {
+                setNotification({ show: false, type: "", message: "" });
+            }, 5000);
         } catch (error) {
-            console.error("Error al cambiar estado:", error);
+            console.error(
+                "❌ Error en handleCambiarEstado para movimiento:",
+                movementId,
+                error
+            );
             setNotification({
                 show: true,
                 type: "error",
-                message: `Error al cambiar el estado: ${error.message}`,
+                message: `Error al cambiar estado: ${error.message}`,
             });
+
+            setTimeout(() => {
+                setNotification({ show: false, type: "", message: "" });
+            }, 5000);
         } finally {
-            // Quitar del conjunto de estados cambiando
+            // Remover de ambos
+            processingMovements.current.delete(movementId);
             setChangingStates((prev) => {
                 const newSet = new Set(prev);
-                newSet.delete(id);
+                newSet.delete(movementId);
                 return newSet;
             });
         }
-
-        setTimeout(() => {
-            setNotification({ show: false, type: "", message: "" });
-        }, 5000); // Más tiempo para leer el mensaje completo
-    };
-
-    // Función para manejar nueva transferencia
-    const handleNewTransfer = (tipoTransferencia = "pull") => {
-        // Limpiar el formulario
-        setFormData({
-            producto: "",
-            sedeOrigen: "",
-            sedeDestino: "",
-            cantidad: "",
-            motivo: "",
-            urgencia: "media",
-            tipoTransferencia: tipoTransferencia,
-            fechaEntrega: "",
-        });
-
-        // Abrir el modal correspondiente
-        if (tipoTransferencia === "pull") {
-            setShowRequestModal(true);
-        } else {
-            setShowSendModal(true);
-        }
-    };
-
-    // Función para cerrar todos los modales
-    const closeAllModals = () => {
-        setShowModal(false);
-        setShowRequestModal(false);
-        setShowSendModal(false);
-    };
-
-    // Función para manejar cambio de página
-    const handlePageChange = (page) => {
-        loadTransfers(page);
     };
 
     return (
@@ -475,13 +433,10 @@ const TransferenciasInternasPage = () => {
             }}
         >
             {/* Encabezado */}
-            <TransferHeader totalCount={totalCount || transferencias.length} />
+            <TransferHeader totalCount={totalCount || movimientos.length} />
 
             {/* Notificación */}
             <TransferNotification notification={notification} />
-
-            {/* Información de Persistencia */}
-            <TransferPersistenceInfo />
 
             <div
                 style={{
@@ -490,112 +445,11 @@ const TransferenciasInternasPage = () => {
                     gap: "32px",
                 }}
             >
-                {/* Botones de acción adicionales */}
-                <div
-                    style={{
-                        backgroundColor: "#fff",
-                        borderRadius: "16px",
-                        padding: "24px",
-                        boxShadow:
-                            "0 4px 20px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.1)",
-                        border: "1px solid #e9ecef",
-                    }}
-                >
-                    <div
-                        style={{
-                            display: "flex",
-                            gap: "16px",
-                            flexWrap: "wrap",
-                            alignItems: "center",
-                        }}
-                    >
-                        <div>
-                            <h3
-                                style={{
-                                    fontSize: "18px",
-                                    fontWeight: "600",
-                                    margin: "0 0 8px 0",
-                                    color: "#2c3e50",
-                                }}
-                            >
-                                Acciones Rápidas
-                            </h3>
-                            <p
-                                style={{
-                                    color: "#6c757d",
-                                    fontSize: "14px",
-                                    margin: "0",
-                                }}
-                            >
-                                Crea solicitudes o registra envíos directos
-                            </p>
-                        </div>
-                        <div
-                            style={{
-                                marginLeft: "auto",
-                                display: "flex",
-                                gap: "12px",
-                            }}
-                        >
-                            <button
-                                onClick={() => handleNewTransfer("pull")}
-                                style={{
-                                    backgroundColor: "#2c3e50",
-                                    color: "white",
-                                    border: "none",
-                                    borderRadius: "8px",
-                                    padding: "10px 16px",
-                                    fontSize: "14px",
-                                    cursor: "pointer",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    fontWeight: "500",
-                                    transition: "all 0.2s ease",
-                                }}
-                                onMouseOver={(e) => {
-                                    e.target.style.backgroundColor = "#34495e";
-                                    e.target.style.transform =
-                                        "translateY(-1px)";
-                                }}
-                                onMouseOut={(e) => {
-                                    e.target.style.backgroundColor = "#2c3e50";
-                                    e.target.style.transform = "translateY(0)";
-                                }}
-                            >
-                                <span style={{ marginRight: "8px" }}>⬅️</span>
-                                Solicitar Transferencia
-                            </button>
-                            <button
-                                onClick={() => handleNewTransfer("push")}
-                                style={{
-                                    backgroundColor: "#34495e",
-                                    color: "white",
-                                    border: "none",
-                                    borderRadius: "8px",
-                                    padding: "10px 16px",
-                                    fontSize: "14px",
-                                    cursor: "pointer",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    fontWeight: "500",
-                                    transition: "all 0.2s ease",
-                                }}
-                                onMouseOver={(e) => {
-                                    e.target.style.backgroundColor = "#2c3e50";
-                                    e.target.style.transform =
-                                        "translateY(-1px)";
-                                }}
-                                onMouseOut={(e) => {
-                                    e.target.style.backgroundColor = "#34495e";
-                                    e.target.style.transform = "translateY(0)";
-                                }}
-                            >
-                                <span style={{ marginRight: "8px" }}>➡️</span>
-                                Registrar Envío
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                {/* Sección de Crear Transferencia */}
+                <SimpleTransferForm
+                    onTransferCreated={handleTransferCreated}
+                    onNotification={setNotification}
+                />
 
                 {/* Sección de Filtros */}
                 <TransferFilters
@@ -604,21 +458,21 @@ const TransferenciasInternasPage = () => {
                     estados={estados}
                     clearFilters={clearFilters}
                     applyFilters={applyFilters}
-                    onProductSearchChange={handleProductSearchChange}
                 />
 
-                {/* Tabla de Transferencias con Paginación */}
+                {/* Tabla de Movimientos de Transferencias con Paginación */}
                 <div style={{ width: "100%" }}>
                     <TransfersTable
-                        transferencias={transferencias}
-                        onVerDetalles={openDetalles}
-                        onCambiarEstado={cambiarEstado}
+                        transferencias={movimientos}
+                        onCambiarEstado={handleCambiarEstado}
+                        onCompletarTransferencia={handleCompletarTransferencia}
+                        onCancelarTransferencia={handleCancelarTransferencia}
                         changingStates={changingStates}
                     />
 
                     {/* Paginación */}
                     <TransfersPagination
-                        transferencias={transferencias}
+                        transferencias={movimientos}
                         currentPage={currentPage}
                         totalPages={totalPages}
                         totalCount={totalCount}
@@ -626,37 +480,6 @@ const TransferenciasInternasPage = () => {
                     />
                 </div>
             </div>
-
-            {/* Modal para Solicitar Transferencia (Pull) */}
-            <RequestTransferModalV2
-                isOpen={showRequestModal}
-                onClose={() => setShowRequestModal(false)}
-                formData={formData}
-                handleInputChange={handleInputChange}
-                handleSubmit={handleSubmit}
-                nivelesUrgencia={nivelesUrgencia}
-                onTransferCreated={() => loadTransfers(1)}
-            />
-
-            {/* Modal para Registrar Envío (Push) */}
-            <SendTransferModalV2
-                isOpen={showSendModal}
-                onClose={() => setShowSendModal(false)}
-                formData={formData}
-                handleInputChange={handleInputChange}
-                handleSubmit={handleSubmit}
-                nivelesUrgencia={nivelesUrgencia}
-                onTransferCreated={() => loadTransfers(1)}
-            />
-
-            {/* Modal de Detalles */}
-            <TransferDetailsModal
-                isOpen={showDetallesModal}
-                onClose={() => setShowDetallesModal(false)}
-                transferencia={selectedTransferencia}
-                onCambiarEstado={cambiarEstado}
-                changingStates={changingStates}
-            />
         </div>
     );
 };

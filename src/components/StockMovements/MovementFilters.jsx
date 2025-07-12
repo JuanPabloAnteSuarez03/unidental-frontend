@@ -1,5 +1,4 @@
 import React from "react";
-import ProductSearchSelector from "../Common/ProductSearchSelector";
 
 const MovementFilters = ({
     filters,
@@ -10,30 +9,6 @@ const MovementFilters = ({
     clearFilters,
     applyFilters,
 }) => {
-    // Manejar selección de producto para filtros
-    const handleProductSelected = (product) => {
-        // Crear un evento sintético para mantener la compatibilidad
-        const syntheticEvent = {
-            target: {
-                name: "searchQuery",
-                value: product.name,
-            },
-        };
-        handleFilterChange(syntheticEvent);
-    };
-
-    // Manejar limpieza de selección de producto
-    const handleProductSelectionCleared = () => {
-        // Crear un evento sintético para limpiar el filtro
-        const syntheticEvent = {
-            target: {
-                name: "searchQuery",
-                value: "",
-            },
-        };
-        handleFilterChange(syntheticEvent);
-    };
-
     return (
         <div
             style={{
@@ -75,6 +50,52 @@ const MovementFilters = ({
                 >
                     Filtros de Búsqueda
                 </h3>
+            </div>
+
+            {/* Búsqueda rápida local */}
+            <div style={{ marginBottom: "20px" }}>
+                <label
+                    htmlFor="searchQuery"
+                    style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        marginBottom: "8px",
+                        fontWeight: "600",
+                        fontSize: "16px",
+                        color: "#2c3e50",
+                    }}
+                >
+                    🚀 Buscar por Nombre de Producto
+                </label>
+                <input
+                    type="text"
+                    id="searchQuery"
+                    name="searchQuery"
+                    value={filters.searchQuery}
+                    onChange={handleFilterChange}
+                    placeholder="Buscar movimientos por nombre del producto (ej: paracetamol, ibuprofeno)..."
+                    style={{
+                        width: "100%",
+                        padding: "12px 16px",
+                        borderRadius: "8px",
+                        border: "2px solid #e9ecef",
+                        fontSize: "14px",
+                        fontWeight: "400",
+                        transition: "all 0.2s ease",
+                        outline: "none",
+                        boxSizing: "border-box",
+                    }}
+                    onFocus={(e) => {
+                        e.target.style.borderColor = "#28a745";
+                        e.target.style.boxShadow =
+                            "0 0 0 3px rgba(40, 167, 69, 0.1)";
+                    }}
+                    onBlur={(e) => {
+                        e.target.style.borderColor = "#e9ecef";
+                        e.target.style.boxShadow = "none";
+                    }}
+                />
             </div>
 
             {/* Filtros de fecha */}
@@ -311,72 +332,70 @@ const MovementFilters = ({
                 </div>
             </div>
 
-            {/* Búsqueda de productos usando el cache centralizado */}
-            <div style={{ marginBottom: "24px" }}>
-                <label
+            {/* Indicador de filtros activos */}
+            {(filters.searchQuery ||
+                filters.dateFrom ||
+                filters.dateTo ||
+                filters.locationFilter ||
+                filters.movementTypeFilter) && (
+                <div
                     style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        marginBottom: "6px",
-                        fontWeight: "500",
-                        fontSize: "14px",
-                        color: "#495057",
+                        backgroundColor: "#e8f4fd",
+                        border: "1px solid #b8daff",
+                        borderRadius: "8px",
+                        padding: "12px",
+                        marginBottom: "20px",
                     }}
                 >
-                    🔎 Buscar producto:
-                </label>
-                <div style={{ maxWidth: "100%" }}>
-                    <ProductSearchSelector
-                        onProductSelected={handleProductSelected}
-                        onSelectionCleared={handleProductSelectionCleared}
-                        placeholder="Buscar por nombre, SKU, código o descripción..."
-                        showSelectedProduct={false}
-                        allowClearSelection={true}
-                        maxResults={10}
-                        inputStyle={{
-                            width: "100%",
-                            maxWidth: "100%",
-                            boxSizing: "border-box",
-                            padding: "12px 16px",
-                            borderRadius: "8px",
-                            border: "2px solid #e9ecef",
-                            fontSize: "14px",
-                            fontWeight: "400",
-                            transition: "all 0.2s ease",
-                            outline: "none",
-                        }}
-                    />
-                </div>
-                {filters.searchQuery && (
                     <div
                         style={{
-                            marginTop: "8px",
-                            fontSize: "12px",
-                            color: "#6c757d",
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
+                            fontSize: "13px",
+                            color: "#004085",
+                            fontWeight: "600",
+                            marginBottom: "6px",
                         }}
                     >
-                        <span>Filtrando por: "{filters.searchQuery}"</span>
-                        <button
-                            type="button"
-                            onClick={handleProductSelectionCleared}
-                            style={{
-                                background: "none",
-                                border: "none",
-                                color: "#007bff",
-                                cursor: "pointer",
-                                fontSize: "12px",
-                                textDecoration: "underline",
-                            }}
-                        >
-                            Limpiar
-                        </button>
+                        🎯 Filtros activos:
                     </div>
-                )}
-            </div>
+                    <div
+                        style={{
+                            fontSize: "12px",
+                            color: "#6c757d",
+                            lineHeight: "1.4",
+                        }}
+                    >
+                        {filters.searchQuery && (
+                            <span>• Búsqueda: "{filters.searchQuery}" </span>
+                        )}
+                        {filters.dateFrom && (
+                            <span>• Desde: {filters.dateFrom} </span>
+                        )}
+                        {filters.dateTo && (
+                            <span>• Hasta: {filters.dateTo} </span>
+                        )}
+                        {filters.locationFilter && (
+                            <span>
+                                • Ubicación:{" "}
+                                {locations.find(
+                                    (l) =>
+                                        l.id?.toString() ===
+                                            filters.locationFilter ||
+                                        l.name === filters.locationFilter
+                                )?.name || filters.locationFilter}{" "}
+                            </span>
+                        )}
+                        {filters.movementTypeFilter && (
+                            <span>
+                                • Tipo:{" "}
+                                {movementTypes.find(
+                                    (t) =>
+                                        t.value === filters.movementTypeFilter
+                                )?.label || filters.movementTypeFilter}{" "}
+                            </span>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {/* Botones de acción para filtros */}
             <div
@@ -414,35 +433,6 @@ const MovementFilters = ({
                     }}
                 >
                     🗑️ Limpiar Filtros
-                </button>
-                <button
-                    onClick={applyFilters}
-                    style={{
-                        backgroundColor: "#2c3e50",
-                        color: "white",
-                        border: "2px solid #2c3e50",
-                        borderRadius: "8px",
-                        padding: "10px 20px",
-                        fontSize: "14px",
-                        cursor: "pointer",
-                        fontWeight: "500",
-                        transition: "all 0.2s ease",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                    }}
-                    onMouseEnter={(e) => {
-                        e.target.style.backgroundColor = "#34495e";
-                        e.target.style.borderColor = "#34495e";
-                        e.target.style.transform = "translateY(-1px)";
-                    }}
-                    onMouseLeave={(e) => {
-                        e.target.style.backgroundColor = "#2c3e50";
-                        e.target.style.borderColor = "#2c3e50";
-                        e.target.style.transform = "translateY(0)";
-                    }}
-                >
-                    ✅ Aplicar Filtros
                 </button>
             </div>
         </div>
