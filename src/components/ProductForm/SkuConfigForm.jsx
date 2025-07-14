@@ -1,15 +1,16 @@
 import React from "react";
 
-const SkuGenerationForm = ({
+const SkuConfigForm = ({
   formData,
   handleInputChange,
-  skuValidation,
-  handleGenerateNextSku,
-  isGeneratingSku,
-  getSkuRequirements,
-  handleValidateSku,
-  isValidatingSku,
-  skuInfo,
+  getAvailableSkuCategorias,
+  getAvailableSubcategorias,
+  getAvailableTipos,
+  isLoadingCategories,
+  isLoadingSkuData,
+  onCreateSkuCategory,
+  onCreateSkuSubcategory,
+  onCreateSkuType,
 }) => {
   return (
     <div
@@ -18,240 +19,217 @@ const SkuGenerationForm = ({
         padding: "20px",
         borderRadius: "8px",
         marginBottom: "20px",
-        border: "1px solid #e9ecef",
+        border: "1px solid #dee2e6",
       }}
     >
       <h3
         style={{
-          marginTop: "0",
-          marginBottom: "20px",
-          color: "#2c3e50",
+          margin: "0 0 20px 0",
+          color: "#495057",
           fontSize: "18px",
           fontWeight: "600",
-          display: "flex",
-          alignItems: "center",
-          gap: "8px",
         }}
       >
-        🏷️ Generación SKU
+        Configuración SKU
       </h3>
 
-      {/* SKU */}
-      <div>
-        <label
-          htmlFor="sku"
-          style={{
-            display: "block",
-            marginBottom: "8px",
-            fontWeight: "600",
-            color: "#2c3e50",
-            fontSize: "14px",
-            letterSpacing: "0.3px",
-            textTransform: "uppercase",
-            position: "relative",
-            paddingLeft: "12px",
-          }}
-        >
-          <span
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gap: "20px",
+        }}
+      >
+        {/* Categoría SKU */}
+        <div>
+          <label
             style={{
-              position: "absolute",
-              left: "0",
-              top: "50%",
-              transform: "translateY(-50%)",
-              width: "3px",
-              height: "14px",
-              backgroundColor: "#e74c3c",
-              borderRadius: "2px",
-            }}
-          ></span>
-          🏷️ SKU (Código del producto) *
-        </label>
-        <div
-          style={{
-            display: "flex",
-            gap: "8px",
-            alignItems: "stretch",
-          }}
-        >
-          <input
-            type="text"
-            id="sku"
-            name="sku"
-            value={formData.sku}
-            onChange={handleInputChange}
-            required
-            style={{
-              flex: "1",
-              padding: "10px",
-              borderRadius: "4px",
-              border: `1px solid ${
-                skuValidation?.valid === true
-                  ? "#28a745"
-                  : skuValidation?.valid === false
-                  ? "#dc3545"
-                  : "#ced4da"
-              }`,
-              fontSize: "16px",
-              boxSizing: "border-box",
-              fontFamily: "monospace",
-            }}
-            placeholder="Ej: LAB-ART-BIO-001"
-          />
-        </div>
-        
-        <div
-          style={{
-            display: "flex",
-            gap: "8px",
-            alignItems: "center",
-            marginTop: "10px",
-          }}
-        >
-          {/* Botón Generar Siguiente SKU */}
-          <button
-            type="button"
-            onClick={handleGenerateNextSku}
-            disabled={isGeneratingSku || !getSkuRequirements().canOperate}
-            style={{
-              padding: "10px 16px",
-              borderRadius: "4px",
-              border: "none",
-              backgroundColor: getSkuRequirements().canOperate
-                ? isGeneratingSku
-                  ? "#6c757d"
-                  : "#007bff"
-                : "#e9ecef",
-              color: getSkuRequirements().canOperate ? "white" : "#6c757d",
-              fontSize: "14px",
-              cursor: getSkuRequirements().canOperate
-                ? isGeneratingSku
-                  ? "not-allowed"
-                  : "pointer"
-                : "not-allowed",
-              opacity: getSkuRequirements().canOperate ? 1 : 0.6,
-              whiteSpace: "nowrap",
-              transition: "all 0.2s ease",
-            }}
-            title={
-              !getSkuRequirements().canOperate
-                ? getSkuRequirements().reason
-                : "Generar el siguiente SKU disponible"
-            }
-          >
-            {isGeneratingSku ? (
-              <span
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                }}
-              >
-                <span
-                  style={{
-                    display: "inline-block",
-                    width: "12px",
-                    height: "12px",
-                    borderRadius: "50%",
-                    borderTop: "2px solid white",
-                    borderRight: "2px solid transparent",
-                    animation: "spin 1s linear infinite",
-                  }}
-                ></span>
-                <span style={{ marginLeft: "5px" }}>Generando...</span>
-              </span>
-            ) : (
-              "Generar Siguiente"
-            )}
-          </button>
-
-          {/* Botón Validar SKU */}
-          <button
-            type="button"
-            onClick={handleValidateSku}
-            disabled={isValidatingSku || !formData.sku.trim()}
-            style={{
-              padding: "10px 16px",
-              borderRadius: "4px",
-              border: "none",
-              backgroundColor: formData.sku.trim()
-                ? isValidatingSku
-                  ? "#6c757d"
-                  : "#17a2b8"
-                : "#e9ecef",
-              color: formData.sku.trim() ? "white" : "#6c757d",
-              fontSize: "14px",
-              cursor: formData.sku.trim()
-                ? isValidatingSku
-                  ? "not-allowed"
-                  : "pointer"
-                : "not-allowed",
-              opacity: formData.sku.trim() ? 1 : 0.6,
-              whiteSpace: "nowrap",
-              transition: "all 0.2s ease",
+              display: "block",
+              marginBottom: "8px",
+              fontWeight: "500",
+              color: "#495057",
             }}
           >
-            {isValidatingSku ? (
-              <span
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                }}
-              >
-                <span
-                  style={{
-                    display: "inline-block",
-                    width: "12px",
-                    height: "12px",
-                    borderRadius: "50%",
-                    borderTop: "2px solid white",
-                    borderRight: "2px solid transparent",
-                    animation: "spin 1s linear infinite",
-                  }}
-                ></span>
-                <span style={{ marginLeft: "5px" }}>Buscando...</span>
-              </span>
-            ) : (
-              "Validar"
-            )}
-          </button>
-        </div>
-
-        {/* Mensaje de validación del SKU */}
-        {skuValidation && (
-          <div
-            style={{
-              marginTop: "5px",
-              fontSize: "14px",
-              color: skuValidation.valid ? "#28a745" : "#dc3545",
-            }}
-          >
-            {skuValidation.message ||
-              (skuValidation.valid ? "SKU válido" : "SKU no válido")}
+            Categoría SKU *
+          </label>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <select
+              name="sku_categoria"
+              value={formData.sku_categoria || ""}
+              onChange={handleInputChange}
+              required
+              disabled={isLoadingCategories}
+              style={{
+                flex: 1,
+                padding: "10px",
+                border: "1px solid #ced4da",
+                borderRadius: "4px",
+                fontSize: "14px",
+                backgroundColor: isLoadingCategories ? "#f8f9fa" : "white",
+              }}
+            >
+              <option value="">
+                {isLoadingCategories ? "Cargando..." : "Seleccionar categoría"}
+              </option>
+              {getAvailableSkuCategorias().map((categoria) => (
+                <option key={categoria.id} value={categoria.id}>
+                  {categoria.code} - {categoria.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={onCreateSkuCategory}
+              disabled={isLoadingCategories}
+              style={{
+                padding: "10px 12px",
+                border: "1px solid #007bff",
+                borderRadius: "4px",
+                backgroundColor: "#007bff",
+                color: "white",
+                cursor: "pointer",
+                fontSize: "14px",
+                fontWeight: "bold",
+              }}
+              title="Crear nueva categoría"
+            >
+              +
+            </button>
           </div>
-        )}
+        </div>
 
-        {skuInfo && (
-          <p
+        {/* Subcategoría SKU */}
+        <div>
+          <label
             style={{
-              color: "#6c757d",
-              fontSize: "14px",
-              marginTop: "5px",
+              display: "block",
+              marginBottom: "8px",
+              fontWeight: "500",
+              color: "#495057",
             }}
           >
-            Formato: {skuInfo.formato} (Ej: {skuInfo.ejemplo})
-          </p>
-        )}
-      </div>
+            Subcategoría SKU *
+          </label>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <select
+              name="sku_subcategoria"
+              value={formData.sku_subcategoria || ""}
+              onChange={handleInputChange}
+              required
+              disabled={isLoadingSkuData || !formData.sku_categoria}
+              style={{
+                flex: 1,
+                padding: "10px",
+                border: "1px solid #ced4da",
+                borderRadius: "4px",
+                fontSize: "14px",
+                backgroundColor:
+                  isLoadingSkuData || !formData.sku_categoria
+                    ? "#f8f9fa"
+                    : "white",
+              }}
+            >
+              <option value="">
+                {!formData.sku_categoria
+                  ? "Selecciona categoría primero"
+                  : isLoadingSkuData
+                  ? "Cargando..."
+                  : "Seleccionar subcategoría"}
+              </option>
+              {getAvailableSubcategorias().map((subcategoria) => (
+                <option key={subcategoria.id} value={subcategoria.id}>
+                  {subcategoria.code} - {subcategoria.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={onCreateSkuSubcategory}
+              disabled={isLoadingSkuData || !formData.sku_categoria}
+              style={{
+                padding: "10px 12px",
+                border: "1px solid #007bff",
+                borderRadius: "4px",
+                backgroundColor: formData.sku_categoria ? "#007bff" : "#6c757d",
+                color: "white",
+                cursor: formData.sku_categoria ? "pointer" : "not-allowed",
+                fontSize: "14px",
+                fontWeight: "bold",
+              }}
+              title="Crear nueva subcategoría"
+            >
+              +
+            </button>
+          </div>
+        </div>
 
-      <style>
-        {`
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-        `}
-      </style>
+        {/* Tipo SKU */}
+        <div>
+          <label
+            style={{
+              display: "block",
+              marginBottom: "8px",
+              fontWeight: "500",
+              color: "#495057",
+            }}
+          >
+            Tipo SKU *
+          </label>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <select
+              name="sku_tipo"
+              value={formData.sku_tipo || ""}
+              onChange={handleInputChange}
+              required
+              disabled={isLoadingSkuData || !formData.sku_subcategoria}
+              style={{
+                flex: 1,
+                padding: "10px",
+                border: "1px solid #ced4da",
+                borderRadius: "4px",
+                fontSize: "14px",
+                backgroundColor:
+                  isLoadingSkuData || !formData.sku_subcategoria
+                    ? "#f8f9fa"
+                    : "white",
+              }}
+            >
+              <option value="">
+                {!formData.sku_subcategoria
+                  ? "Selecciona subcategoría primero"
+                  : isLoadingSkuData
+                  ? "Cargando..."
+                  : "Seleccionar tipo"}
+              </option>
+              {getAvailableTipos().map((tipo) => (
+                <option key={tipo.id} value={tipo.id}>
+                  {tipo.code} - {tipo.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={onCreateSkuType}
+              disabled={isLoadingSkuData || !formData.sku_subcategoria}
+              style={{
+                padding: "10px 12px",
+                border: "1px solid #007bff",
+                borderRadius: "4px",
+                backgroundColor: formData.sku_subcategoria ? "#007bff" : "#6c757d",
+                color: "white",
+                cursor: formData.sku_subcategoria ? "pointer" : "not-allowed",
+                fontSize: "14px",
+                fontWeight: "bold",
+              }}
+              title="Crear nuevo tipo"
+            >
+              +
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
 
-export default SkuGenerationForm; 
+export default SkuConfigForm; 
