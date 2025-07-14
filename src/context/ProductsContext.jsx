@@ -26,8 +26,86 @@ export const ProductsProvider = ({ children }) => {
     const [lastFetch, setLastFetch] = useState(null);
     const [error, setError] = useState(null);
 
-    // Cache duration in milliseconds (10 minutes for products as they change less frequently)
-    const CACHE_DURATION = 10 * 60 * 1000;
+    // Cache duration in milliseconds (60 minutes for products as they change less frequently)
+    const CACHE_DURATION = 60 * 60 * 1000;
+
+    // 🚀 CACHE PERSISTENTE: Configuración para localStorage
+    const PRODUCTS_CACHE_STORAGE_KEY = "products_cache_data";
+    const PRODUCTS_CACHE_EXPIRY_TIME = 60 * 60 * 1000; // 60 minutos (1 hora)
+
+    // 🚀 FUNCIÓN: Cargar cache de productos desde localStorage
+    const cargarCacheProductosDesdeStorage = () => {
+        try {
+            const cacheGuardado = localStorage.getItem(PRODUCTS_CACHE_STORAGE_KEY);
+            if (cacheGuardado) {
+                const cache = JSON.parse(cacheGuardado);
+
+                // Verificar si el cache no ha expirado
+                const ahora = Date.now();
+                const tiempoTranscurrido = ahora - (cache.lastFetch || 0);
+
+                if (
+                    tiempoTranscurrido < PRODUCTS_CACHE_EXPIRY_TIME &&
+                    cache.products &&
+                    cache.products.length > 0
+                ) {
+                    console.log(
+                        "💾 Cache de productos cargado desde localStorage:",
+                        {
+                            productos: cache.products.length,
+                            ultimaActualizacion: new Date(
+                                cache.lastFetch
+                            ).toLocaleString("es-ES"),
+                        }
+                    );
+                    return {
+                        products: cache.products || [],
+                        lastFetch: cache.lastFetch,
+                        isValid: true,
+                    };
+                }
+            }
+        } catch (error) {
+            console.error("❌ Error al cargar cache de productos desde localStorage:", error);
+        }
+        return null;
+    };
+
+    // 🚀 FUNCIÓN: Guardar cache de productos en localStorage
+    const guardarCacheProductosEnStorage = (nuevoCache) => {
+        try {
+            const cacheParaGuardar = {
+                products: nuevoCache.products || [],
+                lastFetch: nuevoCache.lastFetch || Date.now(),
+                version: "1.0.0",
+            };
+
+            localStorage.setItem(
+                PRODUCTS_CACHE_STORAGE_KEY,
+                JSON.stringify(cacheParaGuardar)
+            );
+
+            console.log(
+                "💾 Cache de productos guardado en localStorage:",
+                {
+                    productos: cacheParaGuardar.products.length,
+                    timestamp: new Date(cacheParaGuardar.lastFetch).toLocaleString("es-ES"),
+                }
+            );
+        } catch (error) {
+            console.error("❌ Error al guardar cache de productos en localStorage:", error);
+        }
+    };
+
+    // 🚀 FUNCIÓN: Limpiar cache de productos
+    const limpiarCacheProductosStorage = () => {
+        try {
+            localStorage.removeItem(PRODUCTS_CACHE_STORAGE_KEY);
+            console.log("🗑️ Cache de productos eliminado de localStorage");
+        } catch (error) {
+            console.error("❌ Error al limpiar cache de productos:", error);
+        }
+    };
 
     // Check if cache is still valid
     const isCacheValid = useCallback(() => {
@@ -40,14 +118,28 @@ export const ProductsProvider = ({ children }) => {
         async (forceRefresh = false) => {
             if (!authToken) return;
 
-            // If cache is valid and not forcing refresh, return cached data
-            if (!forceRefresh && isCacheValid() && productsCache.length > 0) {
-                return productsCache;
+            // 🚀 Si no es refresh forzado, verificar cache persistente primero
+            if (!forceRefresh) {
+                const cacheFromStorage = cargarCacheProductosDesdeStorage();
+                if (cacheFromStorage && cacheFromStorage.isValid) {
+                    console.log("📦 Usando productos desde cache persistente");
+                    setProductsCache(cacheFromStorage.products);
+                    setLastFetch(cacheFromStorage.lastFetch);
+                    setIsInitialized(true);
+                    return cacheFromStorage.products;
+                }
+
+                // If memory cache is valid and not forcing refresh, return cached data
+                if (isCacheValid() && productsCache.length > 0) {
+                    return productsCache;
+                }
             }
 
             try {
                 setIsLoading(true);
                 setError(null);
+
+                console.log("🔄 Cargando productos frescos desde la API...");
 
                 // Load products and stock data in parallel
                 const [allProducts, stockMap] = await Promise.all([
@@ -55,9 +147,9 @@ export const ProductsProvider = ({ children }) => {
                     inventoryService.getStockMap(authToken).catch(() => ({})), // Fallback to empty object on error
                 ]);
 
-                console.log(`Loaded ${allProducts.length} products`);
+                console.log(`✅ Loaded ${allProducts.length} products from API`);
                 console.log(
-                    `Loaded stock data for ${
+                    `✅ Loaded stock data for ${
                         Object.keys(stockMap).length
                     } products`
                 );
@@ -71,20 +163,40 @@ export const ProductsProvider = ({ children }) => {
                     };
                 });
 
+                const currentTime = Date.now();
+
+                // Update state
                 setProductsCache(enrichedProducts);
-                setLastFetch(Date.now());
+                setLastFetch(currentTime);
                 setIsInitialized(true);
+
+                // 🚀 Guardar en localStorage
+                guardarCacheProductosEnStorage({
+                    products: enrichedProducts,
+                    lastFetch: currentTime,
+                });
 
                 return enrichedProducts;
             } catch (error) {
-                console.error("Error loading products:", error);
+                console.error("❌ Error loading products:", error);
                 setError(error.message || "Error al cargar productos");
-                return productsCache; // Return cached data on error
+                
+                // Try to return data from persistent cache on error
+                const cacheFromStorage = cargarCacheProductosDesdeStorage();
+                if (cacheFromStorage) {
+                    console.log("⚠️ Error en API, usando cache persistente como fallback");
+                    setProductsCache(cacheFromStorage.products);
+                    setLastFetch(cacheFromStorage.lastFetch);
+                    setIsInitialized(true);
+                    return cacheFromStorage.products;
+                }
+
+                return productsCache; // Return memory cached data on error
             } finally {
                 setIsLoading(false);
             }
         },
-        [authToken, productsCache, isCacheValid]
+        [authToken, productsCache, isCacheValid, cargarCacheProductosDesdeStorage, guardarCacheProductosEnStorage]
     );
 
     // Search products in cache
@@ -145,38 +257,63 @@ export const ProductsProvider = ({ children }) => {
         setProductsCache((prev) => {
             // Check if product already exists
             const exists = prev.some((product) => product.id === newProduct.id);
+            let updated;
             if (exists) {
                 // Update existing product
-                return prev.map((product) =>
+                updated = prev.map((product) =>
                     product.id === newProduct.id ? newProduct : product
                 );
             } else {
                 // Add new product and sort by name
-                const updated = [...prev, newProduct];
-                return updated.sort((a, b) =>
+                updated = [...prev, newProduct];
+                updated = updated.sort((a, b) =>
                     (a.name || "").localeCompare(b.name || "")
                 );
             }
+
+            // 🚀 Actualizar cache persistente
+            guardarCacheProductosEnStorage({
+                products: updated,
+                lastFetch: Date.now(),
+            });
+
+            return updated;
         });
-    }, []);
+    }, [guardarCacheProductosEnStorage]);
 
     // Update product in cache
     const updateProductInCache = useCallback((updatedProduct) => {
-        setProductsCache((prev) =>
-            prev
+        setProductsCache((prev) => {
+            const updated = prev
                 .map((product) =>
                     product.id === updatedProduct.id ? updatedProduct : product
                 )
-                .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
-        );
-    }, []);
+                .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+
+            // 🚀 Actualizar cache persistente
+            guardarCacheProductosEnStorage({
+                products: updated,
+                lastFetch: Date.now(),
+            });
+
+            return updated;
+        });
+    }, [guardarCacheProductosEnStorage]);
 
     // Remove product from cache
     const removeProductFromCache = useCallback((productId) => {
-        setProductsCache((prev) =>
-            prev.filter((product) => product.id !== productId)
-        );
-    }, []);
+        setProductsCache((prev) => {
+            const updated = prev.filter((product) => product.id !== productId);
+
+            // 🚀 Actualizar cache persistente
+            guardarCacheProductosEnStorage({
+                products: updated,
+                lastFetch: Date.now(),
+            });
+
+            return updated;
+        });
+    }, [guardarCacheProductosEnStorage]);
 
     // Get products by category from cache
     const getProductsByCategory = useCallback(
@@ -231,6 +368,19 @@ export const ProductsProvider = ({ children }) => {
             })
         );
     }, []);
+
+    // 🚀 Cargar cache persistente al inicializar
+    useEffect(() => {
+        if (!isInitialized) {
+            const cacheFromStorage = cargarCacheProductosDesdeStorage();
+            if (cacheFromStorage && cacheFromStorage.isValid) {
+                console.log("🚀 Inicializando con cache persistente de productos");
+                setProductsCache(cacheFromStorage.products);
+                setLastFetch(cacheFromStorage.lastFetch);
+                setIsInitialized(true);
+            }
+        }
+    }, [isInitialized, cargarCacheProductosDesdeStorage]);
 
     // Initialize cache when auth token is available
     useEffect(() => {
@@ -298,6 +448,11 @@ export const ProductsProvider = ({ children }) => {
         updateStockAfterSale,
         refreshCache,
         getCacheInfo,
+
+        // 🚀 Cache management functions
+        clearCache: limpiarCacheProductosStorage,
+        loadFromStorage: cargarCacheProductosDesdeStorage,
+        saveToStorage: guardarCacheProductosEnStorage,
 
         // Utils
         isCacheValid,
