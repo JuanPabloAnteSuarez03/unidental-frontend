@@ -1,15 +1,24 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
-import inventoryService from "../services/inventoryService";
+import inventoryService, { 
+  getSkuCategories, 
+  getSkuSubcategories, 
+  getSkuTypes,
+  createSkuCategory,
+  createSkuSubcategory,
+  createSkuType 
+} from "../services/inventoryService";
 import { createProductComponent } from "../services/compositeProductsService";
 import { useNavigate } from "react-router-dom";
 import ProductHeader from "../components/ProductForm/ProductHeader";
 import ProductNotification from "../components/ProductForm/ProductNotification";
 import BasicInfoForm from "../components/ProductForm/BasicInfoForm";
 import SkuConfigForm from "../components/ProductForm/SkuConfigForm";
+import SkuGenerationForm from "../components/ProductForm/SkuGenerationForm";
 import AdditionalInfoForm from "../components/ProductForm/AdditionalInfoForm";
 import FormActions from "../components/ProductForm/FormActions";
 import ComponentSearch from "../components/ProductForm/ComponentSearch";
+import CreateSkuEntityModal from "../components/Common/CreateSkuEntityModal";
 
 const NuevoProductoPage = () => {
   const { authToken } = useAuth();
@@ -53,13 +62,22 @@ const NuevoProductoPage = () => {
     message: "",
   });
 
-  // Estados para el sistema SKU
-  const [skuCategorias, setSkuCategorias] = useState({});
-  const [skuSubcategorias, setSkuSubcategorias] = useState({});
-  const [skuTipos, setSkuTipos] = useState({});
+  // Estados para el nuevo sistema SKU
+  const [skuCategories, setSkuCategories] = useState([]);
+  const [skuSubcategories, setSkuSubcategories] = useState([]);
+  const [skuTypes, setSkuTypes] = useState([]);
+  const [isLoadingSkuData, setIsLoadingSkuData] = useState(false);
 
   // Estado para errores de validación
   const [errors, setErrors] = useState({});
+
+  // Estados para el modal de creación de entidades SKU
+  const [createModal, setCreateModal] = useState({
+    isOpen: false,
+    entityType: null,
+    parentData: null,
+    isSubmitting: false,
+  });
 
   // Cargar categorías e información del sistema SKU al iniciar
   useEffect(() => {
@@ -68,43 +86,29 @@ const NuevoProductoPage = () => {
 
       setIsLoadingCategories(true);
       try {
-        // Cargar categorías primero
-        const categoriesData = await inventoryService.getCategories(authToken);
+        // Cargar ambas categorías en paralelo para mayor velocidad
+        const [categoriesData, skuCategoriesData] = await Promise.all([
+          inventoryService.getCategories(authToken),
+          getSkuCategories(authToken)
+        ]);
+
         setCategories(categoriesData || []);
-        console.log("Categorías del inventario cargadas:", categoriesData);
+        setSkuCategories(skuCategoriesData?.results || []);
+        
+        console.log("Categorías cargadas en paralelo:", {
+          inventory: categoriesData?.length || 0,
+          sku: skuCategoriesData?.results?.length || 0
+        });
 
-        // Intentar cargar información del sistema SKU para verificar requisitos
+        // Cargar información del sistema SKU para validaciones (opcional)
         try {
-          const skuSystemInfo = await inventoryService.getSkuSystemInfo(
-            authToken
-          );
+          const skuSystemInfo = await inventoryService.getSkuSystemInfo(authToken);
           setSkuInfo(skuSystemInfo);
-          console.log("SKU System Info completo:", skuSystemInfo);
-
-          // Extraer las opciones del sistema SKU
-          const extractedCategorias = skuSystemInfo.categorias || {};
-          const extractedSubcategorias = skuSystemInfo.subcategorias || {};
-          const extractedTipos = skuSystemInfo.tipos_materiales || {};
-
-          setSkuCategorias(extractedCategorias);
-          setSkuSubcategorias(extractedSubcategorias);
-          setSkuTipos(extractedTipos);
-
-          console.log("Datos SKU extraídos:", {
-            categorias: extractedCategorias,
-            subcategorias: extractedSubcategorias,
-            tipos: extractedTipos,
-          });
         } catch (skuError) {
-          console.error(
-            "Error al cargar información del sistema SKU:",
-            skuError
-          );
-          // No mostrar error aquí ya que puede ser que los endpoints no existan aún
+          console.warn("Sistema SKU legacy no disponible:", skuError.message);
           setSkuInfo({
-            error: "Sistema SKU no disponible",
-            message:
-              "Los endpoints de SKU pueden requerir configuración adicional",
+            error: "Sistema SKU legacy no disponible",
+            message: "Usando nuevos endpoints de categorías",
           });
         }
       } catch (error) {
@@ -125,8 +129,86 @@ const NuevoProductoPage = () => {
     loadInitialData();
   }, [authToken]);
 
+  // Cargar subcategorías cuando cambia la categoría SKU (con debounce implícito)
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadSubcategories = async () => {
+      if (!authToken || !formData.sku_categoria) {
+        setSkuSubcategories([]);
+        return;
+      }
+
+      setIsLoadingSkuData(true);
+      try {
+        const subcategoriesData = await getSkuSubcategories(formData.sku_categoria, authToken);
+        
+        // Evitar actualizar el estado si el componente se desmontó o la categoría cambió
+        if (!isCancelled) {
+          setSkuSubcategories(subcategoriesData?.results || []);
+          console.log("Subcategorías cargadas:", subcategoriesData?.results?.length || 0);
+        }
+      } catch (error) {
+        if (!isCancelled) {
+          console.error("Error al cargar subcategorías SKU:", error);
+          setSkuSubcategories([]);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingSkuData(false);
+        }
+      }
+    };
+
+    loadSubcategories();
+
+    // Cleanup function para cancelar la operación si cambia la dependencia
+    return () => {
+      isCancelled = true;
+    };
+  }, [authToken, formData.sku_categoria]);
+
+  // Cargar tipos cuando cambia la subcategoría SKU (con debounce implícito)
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadTypes = async () => {
+      if (!authToken || !formData.sku_subcategoria) {
+        setSkuTypes([]);
+        return;
+      }
+
+      setIsLoadingSkuData(true);
+      try {
+        const typesData = await getSkuTypes(formData.sku_subcategoria, authToken);
+        
+        // Evitar actualizar el estado si el componente se desmontó o la subcategoría cambió
+        if (!isCancelled) {
+          setSkuTypes(typesData?.results || []);
+          console.log("Tipos cargados:", typesData?.results?.length || 0);
+        }
+      } catch (error) {
+        if (!isCancelled) {
+          console.error("Error al cargar tipos SKU:", error);
+          setSkuTypes([]);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingSkuData(false);
+        }
+      }
+    };
+
+    loadTypes();
+
+    // Cleanup function para cancelar la operación si cambia la dependencia
+    return () => {
+      isCancelled = true;
+    };
+  }, [authToken, formData.sku_subcategoria]);
+
   // Verificar qué requisitos son necesarios para operaciones de SKU
-  const getSkuRequirements = () => {
+  const getSkuRequirements = useCallback(() => {
     // Primero verificar si el sistema SKU está disponible
     if (!skuInfo || skuInfo.error) {
       return {
@@ -136,16 +218,16 @@ const NuevoProductoPage = () => {
       };
     }
 
-    // Basado en las pruebas de la API, se requieren: categoria, subcategoria y tipo
+    // Basado en las pruebas de la API, se requieren: category_id, subcategory_id y type_id
     const potentialRequirements = [];
 
-    if (!formData.sku_categoria.trim()) {
+    if (!formData.sku_categoria || !String(formData.sku_categoria).trim()) {
       potentialRequirements.push("categoría SKU");
     }
-    if (!formData.sku_subcategoria.trim()) {
+    if (!formData.sku_subcategoria || !String(formData.sku_subcategoria).trim()) {
       potentialRequirements.push("subcategoría SKU");
     }
-    if (!formData.sku_tipo.trim()) {
+    if (!formData.sku_tipo || !String(formData.sku_tipo).trim()) {
       potentialRequirements.push("tipo/material SKU");
     }
 
@@ -157,27 +239,15 @@ const NuevoProductoPage = () => {
           ? `Faltan campos requeridos: ${potentialRequirements.join(", ")}`
           : "Todos los requisitos cumplidos",
     };
-  };
+  }, [formData.sku_categoria, formData.sku_subcategoria, formData.sku_tipo, skuInfo]);
 
   // Manejar cambios en los campos del formulario
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
 
-    // 🔍 DEBUG: Agregar logs para verificar el evento recibido
-    console.log("🔍 DEBUG - Evento recibido en handleInputChange:", {
-      name,
-      value,
-      type,
-      checked,
-    });
-
     // Manejar checkboxes y inputs normales
     const fieldValue = type === "checkbox" ? checked : value;
     let newFormData = { ...formData, [name]: fieldValue };
-
-    // 🔍 DEBUG: Agregar logs para verificar el valor asignado
-    console.log("🔍 DEBUG - Valor asignado para", name, ":", fieldValue);
-    console.log("🔍 DEBUG - Tipo del valor:", typeof fieldValue);
 
     // Calcular margen automáticamente si cambian los precios
     if (name === "purchase_price" || name === "sale_price") {
@@ -199,21 +269,17 @@ const NuevoProductoPage = () => {
       }
     }
 
-    // Limpiar subcategoría si cambia la categoría SKU
+    // Limpiar campos dependientes cuando cambian los campos padre
     if (name === "sku_categoria") {
       newFormData.sku_subcategoria = "";
       newFormData.sku_tipo = "";
     }
 
-    // Limpiar tipo si cambia la subcategoría SKU
     if (name === "sku_subcategoria") {
       newFormData.sku_tipo = "";
     }
 
     setFormData(newFormData);
-
-    // 🔍 DEBUG: Agregar logs para verificar el estado actualizado
-    console.log("🔍 DEBUG - Estado actualizado del formulario:", newFormData);
 
     // Limpiar error del campo modificado
     if (errors[name]) {
@@ -263,21 +329,18 @@ const NuevoProductoPage = () => {
 
     setIsGeneratingSku(true);
     try {
-      // Preparar datos para la generación si son necesarios
+      // Preparar datos para la generación usando el nuevo formato con IDs
       const generateData = {
-        categoria: formData.sku_categoria,
-        subcategoria: formData.sku_subcategoria,
-        tipo: formData.sku_tipo,
+        category_id: formData.sku_categoria,
+        subcategory_id: formData.sku_subcategoria,
+        type_id: formData.sku_tipo,
       };
 
-      const result = await inventoryService.generateNextSku(
-        authToken,
-        generateData
-      );
-      setFormData({
-        ...formData,
-        sku: result.sku_sugerido || "",
-      });
+      console.log("🔍 Generating SKU with data:", generateData);
+      const result = await inventoryService.generateNextSku(authToken, generateData);
+      
+      if (result.next_sku) {
+        setFormData(prev => ({ ...prev, sku: result.next_sku }));
       setSkuValidation({
         valid: true,
         message: "SKU generado automáticamente",
@@ -285,11 +348,18 @@ const NuevoProductoPage = () => {
       setNotification({
         show: true,
         type: "success",
-        message: "SKU generado correctamente",
+          message: `SKU generado: ${result.next_sku}`,
       });
       setTimeout(() => {
         setNotification({ show: false, type: "", message: "" });
-      }, 3000);
+        }, 4000);
+      } else {
+        setNotification({
+          show: true,
+          type: "error",
+          message: result.error || "No se pudo generar el SKU",
+        });
+      }
     } catch (error) {
       console.error("Error al generar SKU:", error);
       let errorMessage = "Error al generar SKU";
@@ -693,90 +763,218 @@ const NuevoProductoPage = () => {
 
   // Obtener subcategorías disponibles para la categoría seleccionada
   const getAvailableSubcategorias = () => {
-    // Debug: mostrar los datos disponibles
-    console.log("Datos SKU disponibles:", {
-      formData_sku_categoria: formData.sku_categoria,
-      skuSubcategorias: skuSubcategorias,
-      skuSubcategorias_keys: Object.keys(skuSubcategorias),
-    });
-
-    if (!formData.sku_categoria || !skuSubcategorias) {
-      console.log(
-        "No hay categoría seleccionada o no hay datos de subcategorías"
-      );
-      return {};
-    }
-
-    // Buscar subcategorías por la clave de la categoría seleccionada
-    const selectedCategorySubcategorias =
-      skuSubcategorias[formData.sku_categoria];
-
-    if (!selectedCategorySubcategorias) {
-      console.log(
-        `No se encontraron subcategorías para la categoría: ${formData.sku_categoria}`
-      );
-      // Si no encontramos por clave exacta, intentar buscar en todas las subcategorías
-      // por si la estructura es diferente
-      const allSubcategorias = {};
-      Object.values(skuSubcategorias).forEach((subcatGroup) => {
-        if (typeof subcatGroup === "object") {
-          Object.assign(allSubcategorias, subcatGroup);
-        }
-      });
-
-      if (Object.keys(allSubcategorias).length > 0) {
-        console.log(
-          "Usando todas las subcategorías disponibles como fallback:",
-          allSubcategorias
-        );
-        return allSubcategorias;
-      }
-
-      return {};
-    }
-
-    console.log("Subcategorías encontradas:", selectedCategorySubcategorias);
-    return selectedCategorySubcategorias;
+    return skuSubcategories || [];
   };
 
   // Obtener tipos/materiales disponibles para la subcategoría seleccionada
   const getAvailableTipos = () => {
-    console.log("Datos de tipos disponibles:", {
-      formData_sku_subcategoria: formData.sku_subcategoria,
-      skuTipos: skuTipos,
-      skuTipos_keys: Object.keys(skuTipos),
-    });
-
-    // Para tipos, mostramos todos los disponibles ya que pueden ser independientes de la subcategoría
-    // O pueden estar filtrados por subcategoría si la API los devuelve así
-    return skuTipos || {};
+    return skuTypes || [];
   };
 
   // Obtener categorías SKU disponibles
   const getAvailableSkuCategorias = () => {
-    console.log("Datos de categorías SKU disponibles:", {
-      skuCategorias: skuCategorias,
-      skuCategorias_keys: Object.keys(skuCategorias),
-      categories_from_inventory: categories,
-    });
+    return skuCategories || [];
+  };
 
-    // Si tenemos categorías del sistema SKU, las usamos
-    if (skuCategorias && Object.keys(skuCategorias).length > 0) {
-      return skuCategorias;
+  // Función para abrir el modal de creación de categoría SKU
+  const handleCreateSkuCategory = () => {
+    setCreateModal({
+      isOpen: true,
+      entityType: "category",
+      parentData: null,
+      isSubmitting: false,
+    });
+  };
+
+  // Función para abrir el modal de creación de subcategoría SKU
+  const handleCreateSkuSubcategory = () => {
+    if (!formData.sku_categoria) {
+      setNotification({
+        show: true,
+        type: "warning",
+        message: "Primero debe seleccionar una categoría para crear una subcategoría",
+      });
+      setTimeout(() => {
+        setNotification({ show: false, type: "", message: "" });
+      }, 5000);
+      return;
     }
 
-    // Si no tenemos categorías SKU, usamos las categorías regulares del inventario
-    // Pero las convertimos al formato esperado (objeto con id como clave)
-    const categoriesAsObject = {};
-    categories.forEach((category) => {
-      categoriesAsObject[category.id] = category.name;
+    const selectedCategory = skuCategories.find(cat => cat.id == formData.sku_categoria); // Usar == para comparar sin tipo
+    console.log("🔍 Creating subcategory for category:", selectedCategory);
+    console.log("🔍 formData.sku_categoria:", formData.sku_categoria);
+    console.log("🔍 Available categories:", skuCategories);
+    
+    if (!selectedCategory) {
+      setNotification({
+        show: true,
+        type: "error",
+        message: "No se pudo encontrar la categoría seleccionada",
+      });
+      setTimeout(() => {
+        setNotification({ show: false, type: "", message: "" });
+      }, 5000);
+      return;
+    }
+    
+    setCreateModal({
+      isOpen: true,
+      entityType: "subcategory",
+      parentData: selectedCategory,
+      isSubmitting: false,
     });
+  };
 
-    console.log(
-      "Usando categorías del inventario convertidas:",
-      categoriesAsObject
-    );
-    return categoriesAsObject;
+  // Función para abrir el modal de creación de tipo SKU
+  const handleCreateSkuType = () => {
+    if (!formData.sku_subcategoria) {
+      setNotification({
+        show: true,
+        type: "warning",
+        message: "Primero debe seleccionar una subcategoría para crear un tipo",
+      });
+      setTimeout(() => {
+        setNotification({ show: false, type: "", message: "" });
+      }, 5000);
+      return;
+    }
+
+    const selectedSubcategory = skuSubcategories.find(sub => sub.id == formData.sku_subcategoria); // Usar == para comparar sin tipo
+    console.log("🔍 Creating type for subcategory:", selectedSubcategory);
+    console.log("🔍 formData.sku_subcategoria:", formData.sku_subcategoria);
+    console.log("🔍 Available subcategories:", skuSubcategories);
+    
+    if (!selectedSubcategory) {
+      setNotification({
+        show: true,
+        type: "error",
+        message: "No se pudo encontrar la subcategoría seleccionada",
+      });
+      setTimeout(() => {
+        setNotification({ show: false, type: "", message: "" });
+      }, 5000);
+      return;
+    }
+    
+    setCreateModal({
+      isOpen: true,
+      entityType: "type",
+      parentData: selectedSubcategory,
+      isSubmitting: false,
+    });
+  };
+
+  // Función para cerrar el modal de creación
+  const handleCloseCreateModal = () => {
+    setCreateModal({
+      isOpen: false,
+      entityType: null,
+      parentData: null,
+      isSubmitting: false,
+    });
+  };
+
+  // Función para manejar la creación de una nueva entidad SKU
+  const handleCreateSkuEntity = async (entityData) => {
+    console.log("🔍 Creating entity with data:", entityData);
+    console.log("🔍 Modal state:", createModal);
+    
+    setCreateModal(prev => ({ ...prev, isSubmitting: true }));
+
+    try {
+      let newEntity;
+      let successMessage;
+
+      switch (createModal.entityType) {
+        case "category":
+          console.log("🔍 Creating category with data:", entityData);
+          newEntity = await createSkuCategory(entityData, authToken);
+          successMessage = `Categoría "${newEntity.code} - ${newEntity.name}" creada exitosamente`;
+          
+          // Actualizar la lista de categorías y seleccionar la nueva
+          setSkuCategories(prev => [...prev, newEntity]);
+          setFormData(prev => ({ ...prev, sku_categoria: newEntity.id }));
+          break;
+
+        case "subcategory":
+          console.log("🔍 Creating subcategory with data:", entityData);
+          newEntity = await createSkuSubcategory(entityData, authToken);
+          successMessage = `Subcategoría "${newEntity.code} - ${newEntity.name}" creada exitosamente`;
+          
+          // Actualizar la lista de subcategorías y seleccionar la nueva
+          setSkuSubcategories(prev => [...prev, newEntity]);
+          setFormData(prev => ({ ...prev, sku_subcategoria: newEntity.id }));
+          break;
+
+        case "type":
+          console.log("🔍 Creating type with data:", entityData);
+          newEntity = await createSkuType(entityData, authToken);
+          successMessage = `Tipo "${newEntity.code} - ${newEntity.name}" creado exitosamente`;
+          
+          // Actualizar la lista de tipos y seleccionar el nuevo
+          setSkuTypes(prev => [...prev, newEntity]);
+          setFormData(prev => ({ ...prev, sku_tipo: newEntity.id }));
+          break;
+
+        default:
+          throw new Error("Tipo de entidad no válido");
+      }
+
+      // Mostrar notificación de éxito
+      console.log("🟢 Setting success notification:", successMessage);
+      setNotification({
+        show: true,
+        type: "success",
+        message: successMessage,
+      });
+
+      setTimeout(() => {
+        setNotification({ show: false, type: "", message: "" });
+      }, 4000);
+
+      // Cerrar el modal
+      handleCloseCreateModal();
+
+    } catch (error) {
+      console.error("Error al crear entidad SKU:", error);
+      
+      let errorMessage = `Error al crear ${createModal.entityType}`;
+      
+      // Manejar errores específicos del backend
+      if (error.message.includes("already exists")) {
+        errorMessage = `El código ya existe. Por favor, use un código diferente.`;
+      } else if (error.message.includes("400")) {
+        // Extraer el mensaje específico del error 400
+        const match = error.message.match(/Error: (.+)/);
+        if (match) {
+          errorMessage = match[1];
+        } else {
+          errorMessage = "Datos inválidos. Verifique los campos ingresados.";
+        }
+      } else if (error.message.includes("500")) {
+        errorMessage = "Error interno del servidor. Intente nuevamente más tarde.";
+      } else if (error.message.includes("404")) {
+        errorMessage = "Endpoint no encontrado. Contacte al administrador.";
+      } else if (error.message.includes("403")) {
+        errorMessage = "No tiene permisos para realizar esta acción.";
+      } else {
+        errorMessage = error.message || "Error desconocido";
+      }
+      
+
+      
+      setNotification({
+        show: true,
+        type: "error",
+        message: errorMessage,
+      });
+
+      setTimeout(() => {
+        setNotification({ show: false, type: "", message: "" });
+      }, 8000);
+
+      setCreateModal(prev => ({ ...prev, isSubmitting: false }));
+    }
   };
 
   return (
@@ -1022,11 +1220,19 @@ const NuevoProductoPage = () => {
               <SkuConfigForm
                 formData={formData}
                 handleInputChange={handleInputChange}
-                categories={categories}
-                isLoadingCategories={isLoadingCategories}
+                getAvailableSkuCategorias={getAvailableSkuCategorias}
                 getAvailableSubcategorias={getAvailableSubcategorias}
                 getAvailableTipos={getAvailableTipos}
-                getAvailableSkuCategorias={getAvailableSkuCategorias}
+                isLoadingCategories={isLoadingCategories}
+                isLoadingSkuData={isLoadingSkuData}
+                onCreateSkuCategory={handleCreateSkuCategory}
+                onCreateSkuSubcategory={handleCreateSkuSubcategory}
+                onCreateSkuType={handleCreateSkuType}
+              />
+              
+              <SkuGenerationForm
+                formData={formData}
+                handleInputChange={handleInputChange}
                 skuValidation={skuValidation}
                 handleGenerateNextSku={handleGenerateNextSku}
                 isGeneratingSku={isGeneratingSku}
@@ -1058,6 +1264,16 @@ const NuevoProductoPage = () => {
           </form>
         </div>
       </div>
+
+      {/* Modal de creación de entidades SKU */}
+      <CreateSkuEntityModal
+        isOpen={createModal.isOpen}
+        onClose={handleCloseCreateModal}
+        onSubmit={handleCreateSkuEntity}
+        entityType={createModal.entityType}
+        parentData={createModal.parentData}
+        isSubmitting={createModal.isSubmitting}
+      />
     </>
   );
 };

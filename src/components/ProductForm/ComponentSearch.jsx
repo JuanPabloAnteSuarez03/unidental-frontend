@@ -6,6 +6,8 @@ const ComponentSearch = ({
     selectedComponents,
     onRemoveComponent,
 }) => {
+    const [isSearchActive, setIsSearchActive] = useState(false);
+
     const handleProductSelected = (product) => {
         // Verificar si el producto ya está seleccionado
         const isAlreadySelected = selectedComponents.find(
@@ -35,6 +37,10 @@ const ComponentSearch = ({
                 onSelectComponent(comp);
             }
         });
+    };
+
+    const handleSearchFocus = () => {
+        setIsSearchActive(true);
     };
 
     return (
@@ -69,18 +75,48 @@ const ComponentSearch = ({
                     🔍 Buscar Componentes
                 </label>
 
-                <ProductSearchSelector
-                    onProductSelected={handleProductSelected}
-                    placeholder="Buscar productos por nombre, SKU o código..."
-                    showSelectedProduct={false}
-                    allowClearSelection={true}
-                    maxResults={10}
-                    minSearchLength={2}
-                    debounceMs={300}
-                    style={{
-                        marginBottom: "15px",
-                    }}
-                />
+                {!isSearchActive ? (
+                    <div
+                        onClick={handleSearchFocus}
+                        style={{
+                            padding: "12px 15px",
+                            border: "2px solid #e9ecef",
+                            borderRadius: "8px",
+                            backgroundColor: "#f8f9fa",
+                            cursor: "pointer",
+                            color: "#6c757d",
+                            fontSize: "16px",
+                            transition: "all 0.2s ease",
+                        }}
+                        onMouseEnter={(e) => {
+                            e.target.style.borderColor = "#9b59b6";
+                            e.target.style.backgroundColor = "#ffffff";
+                        }}
+                        onMouseLeave={(e) => {
+                            e.target.style.borderColor = "#e9ecef";
+                            e.target.style.backgroundColor = "#f8f9fa";
+                        }}
+                    >
+                        Haz clic aquí para buscar productos...
+                    </div>
+                ) : (
+                    <ProductSearchSelector
+                        onProductSelected={handleProductSelected}
+                        placeholder="Buscar producto por nombre, SKU o código..."
+                        showSelectedProduct={false}
+                        allowClearSelection={false}
+                        maxResults={15}
+                        minSearchLength={2}
+                        debounceMs={300}
+                        style={{
+                            border: "2px solid #9b59b6",
+                            borderRadius: "8px",
+                            padding: "12px 15px",
+                            fontSize: "16px",
+                            transition: "all 0.2s ease",
+                        }}
+                    />
+                )}
             </div>
 
             {/* Componentes seleccionados */}
