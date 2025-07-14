@@ -94,11 +94,6 @@ const NuevoProductoPage = () => {
         setCategories(categoriesData || []);
         setSkuCategories(skuCategoriesData?.results || []);
         
-        console.log("Categorías cargadas en paralelo:", {
-          inventory: categoriesData?.length || 0,
-          sku: skuCategoriesData?.results?.length || 0
-        });
-
         // Cargar información del sistema SKU para validaciones (opcional)
         try {
           const skuSystemInfo = await inventoryService.getSkuSystemInfo(authToken);
@@ -145,7 +140,6 @@ const NuevoProductoPage = () => {
         // Evitar actualizar el estado si el componente se desmontó o la categoría cambió
         if (!isCancelled) {
           setSkuSubcategories(subcategoriesData?.results || []);
-          console.log("Subcategorías cargadas:", subcategoriesData?.results?.length || 0);
         }
       } catch (error) {
         if (!isCancelled) {
@@ -184,7 +178,6 @@ const NuevoProductoPage = () => {
         // Evitar actualizar el estado si el componente se desmontó o la subcategoría cambió
         if (!isCancelled) {
           setSkuTypes(typesData?.results || []);
-          console.log("Tipos cargados:", typesData?.results?.length || 0);
         }
       } catch (error) {
         if (!isCancelled) {
@@ -335,7 +328,6 @@ const NuevoProductoPage = () => {
         type_id: formData.sku_tipo,
       };
 
-      console.log("🔍 Generating SKU with data:", generateData);
       const result = await inventoryService.generateNextSku(authToken, generateData);
       
       if (result.next_sku) {
@@ -606,26 +598,6 @@ const NuevoProductoPage = () => {
         description: formData.description ? formData.description.trim() : "",
       };
 
-      // 🔍 DEBUG: Agregar logs para verificar el campo requires_batch_control
-      console.log("🔍 DEBUG - Estado actual del formulario:", formData);
-      console.log(
-        "🔍 DEBUG - Campo requires_batch_control en formData:",
-        formData.requires_batch_control
-      );
-      console.log(
-        "🔍 DEBUG - Tipo de requires_batch_control:",
-        typeof formData.requires_batch_control
-      );
-      console.log("🔍 DEBUG - Datos del producto a enviar:", productData);
-      console.log(
-        "🔍 DEBUG - Campo requires_batch_control en productData:",
-        productData.requires_batch_control
-      );
-      console.log(
-        "🔍 DEBUG - Tipo de requires_batch_control en productData:",
-        typeof productData.requires_batch_control
-      );
-
       // Validar que category sea un número válido
       if (isNaN(productData.category) || productData.category <= 0) {
         setNotification({
@@ -639,15 +611,11 @@ const NuevoProductoPage = () => {
         return;
       }
 
-      console.log("Datos del producto a enviar:", productData);
-
       // Crear el producto
       const productId = await inventoryService.createProduct(
         productData,
         authToken
       );
-
-      console.log("Producto creado exitosamente:", productId);
 
       // Si es un producto compuesto, agregar los componentes
       if (
@@ -655,8 +623,6 @@ const NuevoProductoPage = () => {
         selectedComponents.length > 0
       ) {
         try {
-          console.log("Agregando componentes al producto compuesto...");
-
           // Crear cada componente individualmente según la documentación de la API
           for (const component of selectedComponents) {
             const componentData = {
@@ -665,13 +631,9 @@ const NuevoProductoPage = () => {
               quantity: component.quantity, // Cantidad del componente
             };
 
-            console.log("Creando componente:", componentData);
-
             await createProductComponent(componentData, authToken);
-            console.log(`Componente ${component.name} agregado exitosamente`);
           }
 
-          console.log("Todos los componentes agregados exitosamente");
         } catch (componentError) {
           console.error("Error al agregar componentes:", componentError);
           // No fallar la creación del producto si falla la adición de componentes
@@ -789,9 +751,6 @@ const NuevoProductoPage = () => {
     }
 
     const selectedCategory = skuCategories.find(cat => cat.id == formData.sku_categoria); // Usar == para comparar sin tipo
-    console.log("🔍 Creating subcategory for category:", selectedCategory);
-    console.log("🔍 formData.sku_categoria:", formData.sku_categoria);
-    console.log("🔍 Available categories:", skuCategories);
     
     if (!selectedCategory) {
       setNotification({
@@ -828,9 +787,6 @@ const NuevoProductoPage = () => {
     }
 
     const selectedSubcategory = skuSubcategories.find(sub => sub.id == formData.sku_subcategoria); // Usar == para comparar sin tipo
-    console.log("🔍 Creating type for subcategory:", selectedSubcategory);
-    console.log("🔍 formData.sku_subcategoria:", formData.sku_subcategoria);
-    console.log("🔍 Available subcategories:", skuSubcategories);
     
     if (!selectedSubcategory) {
       setNotification({
@@ -864,8 +820,6 @@ const NuevoProductoPage = () => {
 
   // Función para manejar la creación de una nueva entidad SKU
   const handleCreateSkuEntity = async (entityData) => {
-    console.log("🔍 Creating entity with data:", entityData);
-    console.log("🔍 Modal state:", createModal);
     
     setCreateModal(prev => ({ ...prev, isSubmitting: true }));
 
@@ -875,7 +829,6 @@ const NuevoProductoPage = () => {
 
       switch (createModal.entityType) {
         case "category":
-          console.log("🔍 Creating category with data:", entityData);
           newEntity = await createSkuCategory(entityData, authToken);
           successMessage = `Categoría "${newEntity.code} - ${newEntity.name}" creada exitosamente`;
           
@@ -885,7 +838,6 @@ const NuevoProductoPage = () => {
           break;
 
         case "subcategory":
-          console.log("🔍 Creating subcategory with data:", entityData);
           newEntity = await createSkuSubcategory(entityData, authToken);
           successMessage = `Subcategoría "${newEntity.code} - ${newEntity.name}" creada exitosamente`;
           
@@ -895,7 +847,6 @@ const NuevoProductoPage = () => {
           break;
 
         case "type":
-          console.log("🔍 Creating type with data:", entityData);
           newEntity = await createSkuType(entityData, authToken);
           successMessage = `Tipo "${newEntity.code} - ${newEntity.name}" creado exitosamente`;
           
@@ -909,7 +860,6 @@ const NuevoProductoPage = () => {
       }
 
       // Mostrar notificación de éxito
-      console.log("🟢 Setting success notification:", successMessage);
       setNotification({
         show: true,
         type: "success",
