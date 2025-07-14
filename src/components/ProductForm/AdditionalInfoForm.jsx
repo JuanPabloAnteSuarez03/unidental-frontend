@@ -3,7 +3,6 @@ import React from "react";
 const AdditionalInfoForm = ({
     formData,
     handleInputChange,
-    calculateMargin,
 }) => {
     return (
         <div style={{ marginBottom: "40px" }}>
@@ -100,62 +99,11 @@ const AdditionalInfoForm = ({
                     <div
                         style={{
                             display: "grid",
-                            gridTemplateColumns: "1fr 1fr 150px",
+                            gridTemplateColumns: "1fr",
                             gap: "20px",
-                            alignItems: "end",
+                            maxWidth: "400px",
                         }}
                     >
-                        {/* Precio de Compra */}
-                        <div>
-                            <label
-                                htmlFor="purchase_price"
-                                style={{
-                                    display: "block",
-                                    marginBottom: "8px",
-                                    fontWeight: "600",
-                                    color: "#2c3e50",
-                                    fontSize: "14px",
-                                    letterSpacing: "0.3px",
-                                    textTransform: "uppercase",
-                                    position: "relative",
-                                    paddingLeft: "12px",
-                                }}
-                            >
-                                <span
-                                    style={{
-                                        position: "absolute",
-                                        left: "0",
-                                        top: "50%",
-                                        transform: "translateY(-50%)",
-                                        width: "3px",
-                                        height: "14px",
-                                        backgroundColor: "#10b981",
-                                        borderRadius: "2px",
-                                    }}
-                                ></span>
-                                💰 Precio de Compra *
-                            </label>
-                            <input
-                                type="number"
-                                id="purchase_price"
-                                name="purchase_price"
-                                value={formData.purchase_price}
-                                onChange={handleInputChange}
-                                required
-                                step="0.01"
-                                min="0"
-                                style={{
-                                    width: "100%",
-                                    padding: "10px",
-                                    borderRadius: "4px",
-                                    border: "1px solid #ced4da",
-                                    fontSize: "16px",
-                                    boxSizing: "border-box",
-                                }}
-                                placeholder="0.00"
-                            />
-                        </div>
-
                         {/* Precio de Venta */}
                         <div>
                             <label
@@ -205,78 +153,21 @@ const AdditionalInfoForm = ({
                                 }}
                                 placeholder="0.00"
                             />
-                        </div>
-
-                        {/* Margen */}
-                        <div>
-                            <label
+                            <div
                                 style={{
-                                    display: "block",
-                                    marginBottom: "8px",
-                                    fontWeight: "600",
-                                    color: "#2c3e50",
+                                    marginTop: "8px",
+                                    padding: "8px 12px",
+                                    backgroundColor: "#e8f4f8",
+                                    borderRadius: "4px",
                                     fontSize: "14px",
-                                    letterSpacing: "0.3px",
-                                    textTransform: "uppercase",
-                                    position: "relative",
-                                    paddingLeft: "12px",
+                                    color: "#1f5582",
+                                    border: "1px solid #bee5eb",
                                 }}
                             >
-                                <span
-                                    style={{
-                                        position: "absolute",
-                                        left: "0",
-                                        top: "50%",
-                                        transform: "translateY(-50%)",
-                                        width: "3px",
-                                        height: "14px",
-                                        backgroundColor: "#10b981",
-                                        borderRadius: "2px",
-                                    }}
-                                ></span>
-                                📈 Margen %
-                            </label>
-                            <input
-                                type="text"
-                                value={
-                                    formData.margin ? `${formData.margin}%` : ""
-                                }
-                                readOnly
-                                style={{
-                                    width: "100%",
-                                    padding: "10px",
-                                    borderRadius: "4px",
-                                    border: "1px solid #e9ecef",
-                                    fontSize: "16px",
-                                    boxSizing: "border-box",
-                                    backgroundColor: "#f8f9fa",
-                                    color: formData.margin
-                                        ? "#28a745"
-                                        : "#6c757d",
-                                    fontWeight: "600",
-                                    textAlign: "center",
-                                }}
-                                placeholder="Auto"
-                            />
+                                💡 <strong>Nota:</strong> El precio de compra se maneja automáticamente en las órdenes de compra
+                            </div>
                         </div>
                     </div>
-
-                    {/* Información del margen */}
-                    {formData.purchase_price && formData.sale_price && (
-                        <div
-                            style={{
-                                marginTop: "10px",
-                                padding: "8px 12px",
-                                backgroundColor: "#e8f5e9",
-                                borderRadius: "4px",
-                                fontSize: "14px",
-                                color: "#2e7d32",
-                            }}
-                        >
-                            💡 Margen calculado automáticamente:{" "}
-                            {calculateMargin()}%
-                        </div>
-                    )}
                 </div>
 
                 {/* Descripción */}
