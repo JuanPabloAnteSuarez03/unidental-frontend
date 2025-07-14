@@ -93,7 +93,7 @@ const NuevoProductoPage = () => {
 
         setCategories(categoriesData || []);
         setSkuCategories(skuCategoriesData?.results || []);
-        
+
         // Cargar información del sistema SKU para validaciones (opcional)
         try {
           const skuSystemInfo = await inventoryService.getSkuSystemInfo(authToken);
@@ -751,7 +751,7 @@ const NuevoProductoPage = () => {
     }
 
     const selectedCategory = skuCategories.find(cat => cat.id == formData.sku_categoria); // Usar == para comparar sin tipo
-    
+
     if (!selectedCategory) {
       setNotification({
         show: true,
@@ -840,7 +840,7 @@ const NuevoProductoPage = () => {
         case "subcategory":
           newEntity = await createSkuSubcategory(entityData, authToken);
           successMessage = `Subcategoría "${newEntity.code} - ${newEntity.name}" creada exitosamente`;
-          
+
           // Actualizar la lista de subcategorías y seleccionar la nueva
           setSkuSubcategories(prev => [...prev, newEntity]);
           setFormData(prev => ({ ...prev, sku_subcategoria: newEntity.id }));
@@ -877,7 +877,7 @@ const NuevoProductoPage = () => {
       console.error("Error al crear entidad SKU:", error);
       
       let errorMessage = `Error al crear ${createModal.entityType}`;
-      
+
       // Manejar errores específicos del backend
       if (error.message.includes("already exists")) {
         errorMessage = `El código ya existe. Por favor, use un código diferente.`;
