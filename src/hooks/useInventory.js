@@ -1009,7 +1009,7 @@ const useInventory = () => {
 
                     // 🚀 NUEVO: Guardar productos en cache persistente
                     const nuevoCacheProductos = {
-                        products: enrichedProducts,
+                        products: products,
                         count:
                             typeof data.count === "number"
                                 ? data.count
