@@ -19,6 +19,10 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos en milisegundos
 const INVENTORY_CACHE_STORAGE_KEY = "inventory_cache_data";
 const INVENTORY_CACHE_EXPIRY_TIME = 60 * 60 * 1000; // 60 minutos (1 hora)
 
+// 🚀 NUEVO: Cache persistente para productos
+const PRODUCTS_CACHE_STORAGE_KEY = "inventory_products_cache_data";
+const PRODUCTS_CACHE_EXPIRY_TIME = 60 * 60 * 1000; // 60 minutos (1 hora)
+
 // Número de productos por página (debe coincidir con el backend)
 const ITEMS_PER_PAGE = 25; // Según nuestras pruebas, el backend muestra 25 productos por página
 
@@ -107,6 +111,95 @@ const limpiarCacheInventarioStorage = () => {
     }
 };
 
+// 🚀 NUEVA FUNCIÓN: Cargar cache de productos desde localStorage
+const cargarCacheProductosDesdeStorage = () => {
+    try {
+        const cacheGuardado = localStorage.getItem(PRODUCTS_CACHE_STORAGE_KEY);
+        if (cacheGuardado) {
+            const cache = JSON.parse(cacheGuardado);
+
+            // Verificar si el cache no ha expirado
+            const ahora = Date.now();
+            const tiempoTranscurrido = ahora - (cache.lastFetch || 0);
+
+            if (
+                tiempoTranscurrido < PRODUCTS_CACHE_EXPIRY_TIME &&
+                cache.products &&
+                Array.isArray(cache.products) &&
+                cache.products.length > 0
+            ) {
+                console.log(
+                    "💾 Cache de productos cargado desde localStorage:",
+                    {
+                        productos: cache.products.length,
+                        ultimaActualizacion: new Date(
+                            cache.lastFetch
+                        ).toLocaleString("es-ES"),
+                    }
+                );
+                return {
+                    products: cache.products || [],
+                    count: cache.count || 0,
+                    isLoaded: true,
+                    lastFetch: cache.lastFetch,
+                };
+            } else {
+                console.log(
+                    "⏰ Cache de productos expirado o vacío, se eliminará"
+                );
+                localStorage.removeItem(PRODUCTS_CACHE_STORAGE_KEY);
+            }
+        }
+    } catch (error) {
+        console.error(
+            "❌ Error al cargar cache de productos desde localStorage:",
+            error
+        );
+        localStorage.removeItem(PRODUCTS_CACHE_STORAGE_KEY);
+    }
+
+    return {
+        products: [],
+        count: 0,
+        isLoaded: false,
+        lastFetch: null,
+    };
+};
+
+// 🚀 NUEVA FUNCIÓN: Guardar cache de productos en localStorage
+const guardarCacheProductosEnStorage = (nuevoCache) => {
+    try {
+        const cacheParaGuardar = {
+            products: nuevoCache.products,
+            count: nuevoCache.count,
+            lastFetch: nuevoCache.lastFetch,
+        };
+        localStorage.setItem(
+            PRODUCTS_CACHE_STORAGE_KEY,
+            JSON.stringify(cacheParaGuardar)
+        );
+        console.log("💾 Cache de productos guardado en localStorage:", {
+            productos: nuevoCache.products.length,
+            timestamp: new Date(nuevoCache.lastFetch).toLocaleString("es-ES"),
+        });
+    } catch (error) {
+        console.error(
+            "❌ Error al guardar cache de productos en localStorage:",
+            error
+        );
+    }
+};
+
+// 🚀 NUEVA FUNCIÓN: Limpiar cache de productos del localStorage
+const limpiarCacheProductosStorage = () => {
+    try {
+        localStorage.removeItem(PRODUCTS_CACHE_STORAGE_KEY);
+        console.log("🗑️ Cache de productos eliminado del localStorage");
+    } catch (error) {
+        console.error("❌ Error al limpiar cache de productos:", error);
+    }
+};
+
 // Función para calcular un número realista de páginas basado en el conteo de productos
 const calculateRealisticPageCount = (count) => {
     // Si no hay productos, no hay páginas
@@ -171,6 +264,11 @@ const useInventory = () => {
     // 🚀 NUEVO: Estado para cache persistente de inventario
     const [cacheInventarioData, setCacheInventarioData] = useState(() => {
         return cargarCacheInventarioDesdeStorage();
+    });
+
+    // 🚀 NUEVO: Estado para cache persistente de productos
+    const [cacheProductosData, setCacheProductosData] = useState(() => {
+        return cargarCacheProductosDesdeStorage();
     });
 
     // Caché para evitar llamadas repetidas a la API
@@ -274,6 +372,9 @@ const useInventory = () => {
             cacheInventarioData.isLoaded,
             cacheInventarioData.stockData,
             isStockFullyLoaded,
+            cacheProductosData.isLoaded,
+            cacheProductosData.products.length,
+            cacheProductosData.count,
         ]
     );
 
@@ -329,13 +430,41 @@ const useInventory = () => {
 
     // Función para obtener productos de la API con soporte para caché y cancelación
     const fetchProducts = useCallback(
-        async (url = null, params = {}) => {
+        async (url = null, params = {}, forceRefresh = false) => {
             if (!authToken) {
                 setError(
                     "No hay token de autenticación. Inicie sesión nuevamente."
                 );
                 setProducts([]);
                 setIsLoadingProducts(false);
+                return;
+            }
+
+            // 🚀 NUEVO: Verificar cache persistente de productos si no es refresh forzado
+            if (
+                !forceRefresh &&
+                cacheProductosData.isLoaded &&
+                cacheProductosData.products.length > 0
+            ) {
+                console.log(
+                    "💾 Usando cache persistente de productos, no es necesario cargar desde API"
+                );
+
+                // Usar productos del cache persistente
+                const cachedProducts = cacheProductosData.products;
+                setProducts(cachedProducts);
+                setCount(cacheProductosData.count);
+                setTotalCount(cacheProductosData.count);
+
+                // Crear productos con placeholder inmediatamente
+                setProductsWithPlaceholder(cachedProducts);
+
+                // Actualizar el estado de paginación
+                const pageCount = calculateRealisticPageCount(
+                    cacheProductosData.count
+                );
+                pagination.updatePaginationState(1, pageCount, null, null);
+
                 return;
             }
 
@@ -908,6 +1037,18 @@ const useInventory = () => {
                         lastTotalFetch.current = Date.now();
                     }
 
+                    // 🚀 NUEVO: Guardar productos en cache persistente
+                    const nuevoCacheProductos = {
+                        products: enrichedProducts,
+                        count:
+                            typeof data.count === "number"
+                                ? data.count
+                                : parseInt(data.count, 10) || 0,
+                        lastFetch: Date.now(),
+                    };
+                    setCacheProductosData(nuevoCacheProductos);
+                    guardarCacheProductosEnStorage(nuevoCacheProductos);
+
                     // ✨ Ya no necesitamos cargar stock aquí - se carga por separado
                 } catch (err) {
                     if (signal.aborted) {
@@ -1017,17 +1158,37 @@ const useInventory = () => {
                 console.error("Error al procesar parámetros de URL:", error);
             }
 
-            // Solo cargar productos inicialmente - el stock se carga por separado
-            fetchProducts();
+            // 🚀 MODIFICADO: Solo cargar productos si no hay cache persistente
+            if (
+                !cacheProductosData.isLoaded ||
+                cacheProductosData.products.length === 0
+            ) {
+                console.log(
+                    "🔄 No hay cache de productos, cargando desde API..."
+                );
+                fetchProducts();
+            } else {
+                console.log(
+                    "✅ Cache de productos encontrado, usando datos en cache"
+                );
+                // Los productos ya están cargados desde el localStorage en el estado inicial
+            }
         }
-    }, [authToken, fetchProducts]);
+    }, [
+        authToken,
+        fetchProducts,
+        cacheProductosData.isLoaded,
+        cacheProductosData.products.length,
+    ]);
 
     // 🚀 NUEVA FUNCIÓN: Refrescar cache de inventario manualmente
     const refrescarCacheInventario = useCallback(() => {
         console.log("🔄 Refrescando cache de inventario manualmente...");
         limpiarCacheInventarioStorage(); // Limpiar cache del localStorage
-        loadAllStock(true); // Forzar recarga
-    }, [loadAllStock]);
+        limpiarCacheProductosStorage(); // Limpiar cache de productos
+        loadAllStock(true); // Forzar recarga de stock
+        fetchProducts(null, {}, true); // Forzar recarga de productos
+    }, [loadAllStock, fetchProducts]);
 
     // 🚀 NUEVA FUNCIÓN: Obtener información del cache de inventario
     const obtenerInfoCacheInventario = useCallback(() => {
