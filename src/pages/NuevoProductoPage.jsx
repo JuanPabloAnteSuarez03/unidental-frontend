@@ -35,7 +35,6 @@ const NuevoProductoPage = () => {
     unit: "",
     product_type: "", // Tipo de producto: simple o composite
     requires_batch_control: false, // Manejo por lotes
-    purchase_price: "",
     sale_price: "",
     description: "",
     margin: "",
@@ -530,16 +529,8 @@ const NuevoProductoPage = () => {
     }
   };
 
-  // Calcular margen automáticamente cuando cambien los precios
-  const calculateMargin = () => {
-    const purchasePrice = parseFloat(formData.purchase_price) || 0;
-    const salePrice = parseFloat(formData.sale_price) || 0;
-
-    if (purchasePrice > 0 && salePrice > 0) {
-      return (((salePrice - purchasePrice) / purchasePrice) * 100).toFixed(1);
-    }
-    return "0.0";
-  };
+  // El margen se calculará automáticamente en el backend basado en los costos promedio
+  // o se puede establecer manualmente como porcentaje de ganancia deseado
 
   // Manejar envío del formulario
   const handleSubmit = async (e) => {
@@ -562,7 +553,6 @@ const NuevoProductoPage = () => {
       { field: "sku_categoria", label: "Categoría del producto" },
       { field: "product_type", label: "Tipo de producto" },
       { field: "unit", label: "Unidad de medida" },
-      { field: "purchase_price", label: "Precio de compra" },
       { field: "sale_price", label: "Precio de venta" },
     ];
 
@@ -612,7 +602,6 @@ const NuevoProductoPage = () => {
         unit: formData.unit,
         product_type: formData.product_type,
         requires_batch_control: formData.requires_batch_control, // Manejo por lotes
-        purchase_price: parseFloat(formData.purchase_price),
         sale_price: parseFloat(formData.sale_price),
         description: formData.description ? formData.description.trim() : "",
       };
@@ -713,7 +702,6 @@ const NuevoProductoPage = () => {
         unit: "",
         product_type: "",
         requires_batch_control: false,
-        purchase_price: "",
         sale_price: "",
         description: "",
         margin: "",
@@ -1248,7 +1236,6 @@ const NuevoProductoPage = () => {
               <AdditionalInfoForm
                 formData={formData}
                 handleInputChange={handleInputChange}
-                calculateMargin={calculateMargin}
               />
             </div>
 

@@ -6,10 +6,86 @@ import Pagination from "../components/Common/Pagination";
 
 const PAGE_SIZE = 25;
 
+// Constantes para cache persistente
+const TOTAL_VENTAS_CACHE_STORAGE_KEY = "totalVentas_cache_data";
+const TOTAL_VENTAS_CACHE_EXPIRY_TIME = 60 * 60 * 1000; // 60 minutos (1 hora) en milisegundos
+
 const TotalVentasPage = () => {
     const { authToken } = useAuth();
+
+    // Funciones de gestión de cache para localStorage
+    const cargarCacheTotalVentasDesdeStorage = () => {
+        try {
+            const cacheData = localStorage.getItem(
+                TOTAL_VENTAS_CACHE_STORAGE_KEY
+            );
+            if (cacheData) {
+                const parsedData = JSON.parse(cacheData);
+                const now = new Date().getTime();
+                if (
+                    parsedData.timestamp &&
+                    now - parsedData.timestamp < TOTAL_VENTAS_CACHE_EXPIRY_TIME
+                ) {
+                    return parsedData;
+                } else {
+                    // Cache expirado, limpiar
+                    localStorage.removeItem(TOTAL_VENTAS_CACHE_STORAGE_KEY);
+                }
+            }
+        } catch (error) {
+            console.error("Error cargando cache de total ventas:", error);
+            localStorage.removeItem(TOTAL_VENTAS_CACHE_STORAGE_KEY);
+        }
+        return null;
+    };
+
+    const guardarCacheTotalVentasEnStorage = (allSales, locations) => {
+        try {
+            const cacheData = {
+                allSales,
+                locations,
+                timestamp: new Date().getTime(),
+            };
+            localStorage.setItem(
+                TOTAL_VENTAS_CACHE_STORAGE_KEY,
+                JSON.stringify(cacheData)
+            );
+        } catch (error) {
+            console.error("Error guardando cache de total ventas:", error);
+        }
+    };
+
+    const limpiarCacheTotalVentasStorage = () => {
+        try {
+            localStorage.removeItem(TOTAL_VENTAS_CACHE_STORAGE_KEY);
+        } catch (error) {
+            console.error("Error limpiando cache de total ventas:", error);
+        }
+    };
+
+    const obtenerInfoCacheTotalVentas = () => {
+        const cacheData = cargarCacheTotalVentasDesdeStorage();
+        if (cacheData) {
+            const tiempoRestante =
+                TOTAL_VENTAS_CACHE_EXPIRY_TIME -
+                (new Date().getTime() - cacheData.timestamp);
+            const minutosRestantes = Math.ceil(tiempoRestante / (60 * 1000));
+            return {
+                tieneCache: true,
+                minutosRestantes: minutosRestantes > 0 ? minutosRestantes : 0,
+                fechaCache: new Date(cacheData.timestamp),
+            };
+        }
+        return { tieneCache: false };
+    };
+
+    // Estados principales con inicialización desde cache
+    const cacheInicial = cargarCacheTotalVentasDesdeStorage();
+    const [allSalesData, setAllSalesData] = useState(
+        cacheInicial?.allSales || []
+    );
     const [sales, setSales] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(!cacheInicial);
     const [error, setError] = useState(null);
 
     const [totalAmount, setTotalAmount] = useState(0);
@@ -25,80 +101,128 @@ const TotalVentasPage = () => {
     const dateFromRef = useRef();
     const dateToRef = useRef();
 
-    const [locationList, setLocationList] = useState([]);
+    const [locationList, setLocationList] = useState(
+        cacheInicial?.locations || []
+    );
     const [selectedLocation, setSelectedLocation] = useState("");
 
-    // Cargar sedes al montar
-    useEffect(() => {
+    // Función para cargar todos los datos desde API
+    const cargarTodosLosDatosTotalVentas = async (forceRefresh = false) => {
         if (!authToken) return;
-        getLocations(authToken)
-            .then((locs) => setLocationList(locs))
-            .catch(() => setLocationList([]));
+
+        // Si no es refresh forzado y tenemos cache válido, usar cache
+        if (!forceRefresh) {
+            const cacheData = cargarCacheTotalVentasDesdeStorage();
+            if (cacheData) {
+                setAllSalesData(cacheData.allSales);
+                setLocationList(cacheData.locations);
+                return;
+            }
+        }
+
+        setLoading(true);
+        setError(null);
+
+        try {
+            // Cargar sedes
+            const locations = await getLocations(authToken);
+            setLocationList(locations);
+
+            // Cargar ventas (muchas páginas para tener datos suficientes)
+            const allPages = [];
+            let page = 1;
+            let keepGoing = true;
+
+            while (keepGoing && page <= 20) {
+                // hasta 2000 ventas máx
+                const salesData = await getSales(
+                    { page, page_size: 100 },
+                    authToken
+                );
+                const salesList = salesData.results || [];
+                allPages.push(...salesList);
+                if (!salesData.next || salesList.length === 0)
+                    keepGoing = false;
+                page++;
+            }
+
+            setAllSalesData(allPages);
+            guardarCacheTotalVentasEnStorage(allPages, locations);
+        } catch (err) {
+            setError("Error al cargar las ventas");
+            console.error("Error cargando datos total ventas:", err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Función para filtrar y paginar datos desde cache
+    const filtrarYPaginarDatos = () => {
+        let filtered = [...allSalesData];
+
+        // Filtrar por fechas si hay filtros de fecha específicos
+        if (dateFrom || dateTo) {
+            filtered = filtered.filter((sale) => {
+                if (!sale.sale_date) return false;
+                const saleDate = new Date(sale.sale_date)
+                    .toISOString()
+                    .split("T")[0];
+
+                if (dateFrom && saleDate < dateFrom) return false;
+                if (dateTo && saleDate > dateTo) return false;
+                return true;
+            });
+        }
+
+        // Filtrar por sede
+        if (selectedLocation) {
+            filtered = filtered.filter(
+                (sale) =>
+                    sale.location_details &&
+                    String(sale.location_details.id) ===
+                        String(selectedLocation)
+            );
+        }
+
+        // Configurar paginación
+        setTotalCount(filtered.length);
+        setTotalPages(Math.ceil(filtered.length / PAGE_SIZE) || 1);
+
+        const start = (currentPage - 1) * PAGE_SIZE;
+        const end = start + PAGE_SIZE;
+        const pageSales = filtered.slice(start, end);
+
+        setSales(pageSales);
+
+        // Calcular totales de la página actual
+        const total = pageSales.reduce(
+            (sum, sale) => sum + (parseFloat(sale.total_net) || 0),
+            0
+        );
+        setTotalAmount(total);
+        setTotalSales(pageSales.length);
+    };
+
+    // Función para actualizar manualmente
+    const actualizarDatosTotalVentas = () => {
+        limpiarCacheTotalVentasStorage();
+        setAllSalesData([]);
+        cargarTodosLosDatosTotalVentas(true);
+    };
+
+    // Cargar datos al montar (solo si no hay cache)
+    useEffect(() => {
+        if (!cacheInicial) {
+            cargarTodosLosDatosTotalVentas();
+        }
     }, [authToken]);
 
+    // Filtrar y paginar cuando cambien los filtros o la página
     useEffect(() => {
-        const fetchData = async () => {
-            setLoading(true);
-            setError(null);
-            try {
-                let allFiltered = [];
-                if (dateFrom || dateTo) {
-                    // Si hay filtro de fecha, traer todas y filtrar localmente
-                    allFiltered = await getSalesInDateRange(
-                        dateFrom,
-                        dateTo,
-                        authToken
-                    );
-                } else {
-                    // Sin filtro de fecha, traer todas y filtrar localmente
-                    // Traer muchas ventas para que el filtro sea útil
-                    const allPages = [];
-                    let page = 1;
-                    let keepGoing = true;
-                    while (keepGoing && page <= 20) {
-                        // hasta 2000 ventas máx
-                        const salesData = await getSales(
-                            { page, page_size: 100 },
-                            authToken
-                        );
-                        const salesList = salesData.results || [];
-                        allPages.push(...salesList);
-                        if (!salesData.next || salesList.length === 0)
-                            keepGoing = false;
-                        page++;
-                    }
-                    allFiltered = allPages;
-                }
-                // Filtrar por sede si corresponde
-                if (selectedLocation) {
-                    allFiltered = allFiltered.filter(
-                        (sale) =>
-                            sale.location_details &&
-                            String(sale.location_details.id) ===
-                                String(selectedLocation)
-                    );
-                }
-                setTotalCount(allFiltered.length);
-                setTotalPages(Math.ceil(allFiltered.length / PAGE_SIZE) || 1);
-                const start = (currentPage - 1) * PAGE_SIZE;
-                const end = start + PAGE_SIZE;
-                const pageSales = allFiltered.slice(start, end);
-                setSales(pageSales);
-                // Calcular totales SOLO de la página actual
-                const total = pageSales.reduce(
-                    (sum, sale) => sum + (parseFloat(sale.total_net) || 0),
-                    0
-                );
-                setTotalAmount(total);
-                setTotalSales(pageSales.length);
-            } catch (err) {
-                setError("Error al cargar las ventas");
-            } finally {
-                setLoading(false);
-            }
-        };
-        if (authToken) fetchData();
-    }, [authToken, currentPage, dateFrom, dateTo, selectedLocation]);
+        if (allSalesData.length > 0) {
+            filtrarYPaginarDatos();
+        }
+    }, [allSalesData, currentPage, dateFrom, dateTo, selectedLocation]);
 
     const formatCOP = (value) => {
         return new Intl.NumberFormat("es-CO", {
@@ -584,23 +708,6 @@ const TotalVentasPage = () => {
                                     Limpiar filtro
                                 </button>
                             )}
-                        </div>
-
-                        {/* Mensaje informativo */}
-                        <div
-                            style={{
-                                background: "#e3f2fd",
-                                color: "#1976d2",
-                                padding: "16px",
-                                borderRadius: "8px",
-                                border: "1px solid #bbdefb",
-                                textAlign: "center",
-                                fontSize: "14px",
-                                marginBottom: "24px",
-                            }}
-                        >
-                            📊 Esta sección muestra el resumen general de todas
-                            las ventas registradas en el sistema.
                         </div>
 
                         {/* Tabla de ventas */}
