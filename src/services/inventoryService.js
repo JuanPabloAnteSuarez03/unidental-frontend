@@ -9,7 +9,6 @@ const API_STOCK_SUMMARY_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.STOC
 const API_CATEGORIES_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.CATEGORIES}`;
 const API_INVENTORY_MOVEMENTS_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.INVENTORY_MOVEMENTS}`;
 const API_LOCATIONS_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.LOCATIONS}`;
-const API_PURCHASE_ITEMS_URL = `${API_CONFIG.BASE_URL}/purchases/items/`; // Corregido
 const API_SKU_GENERATE_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.SKU_GENERATE}`;
 const API_SKU_VALIDATE_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.SKU_VALIDATE}`;
 const API_SKU_SYSTEM_INFO_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.SKU_SYSTEM_INFO}`;
@@ -976,7 +975,7 @@ export const getStockMap = async (authToken, signal) => {
 /**
  * Generate next SKU
  * @param {string} authToken - Authentication token
- * @param {Object} generateData - Optional data for SKU generation (category, name, brand, etc.)
+ * @param {Object} generateData - Data for SKU generation with IDs (category_id, subcategory_id, type_id)
  * @returns {Promise<Object>} - Generated SKU data
  */
 export const generateNextSku = async (authToken, generateData = {}) => {
@@ -985,8 +984,18 @@ export const generateNextSku = async (authToken, generateData = {}) => {
     }
 
     try {
-        const requestBody =
-            Object.keys(generateData).length > 0 ? generateData : undefined;
+        // Validar que se proporcionen los IDs requeridos
+        if (!generateData.category_id || !generateData.subcategory_id || !generateData.type_id) {
+            throw new Error("Se requieren category_id, subcategory_id y type_id para generar el SKU");
+        }
+
+        const requestBody = {
+            category_id: parseInt(generateData.category_id),
+            subcategory_id: parseInt(generateData.subcategory_id),
+            type_id: parseInt(generateData.type_id)
+        };
+
+        console.log("🔍 Generating SKU with payload:", requestBody);
 
         const response = await fetch(API_SKU_GENERATE_URL, {
             method: "POST",
@@ -994,14 +1003,35 @@ export const generateNextSku = async (authToken, generateData = {}) => {
                 Authorization: `Token ${authToken}`,
                 "Content-Type": "application/json",
             },
-            ...(requestBody && { body: JSON.stringify(requestBody) }),
+            body: JSON.stringify(requestBody),
         });
 
         if (!response.ok) {
-            throw new Error(`Error ${response.status}: ${response.statusText}`);
+            let errorMessage = `Error ${response.status}: ${response.statusText}`;
+            try {
+                const errorData = await response.json();
+                if (errorData.error) {
+                    errorMessage = errorData.error;
+                } else if (errorData.detail) {
+                    errorMessage = errorData.detail;
+                }
+            } catch (parseError) {
+                // Keep the original error message if we can't parse the response
+            }
+            throw new Error(errorMessage);
         }
 
-        return await response.json();
+        const result = await response.json();
+        console.log("🟢 SKU generation result:", result);
+        
+        // Adaptar la respuesta al formato esperado por el frontend
+        return {
+            next_sku: result.sku_sugerido || result.next_sku,
+            categoria_nombre: result.categoria_nombre,
+            subcategoria_nombre: result.subcategoria_nombre,
+            tipo_nombre: result.tipo_nombre,
+            ...result
+        };
     } catch (error) {
         console.error("Error generating SKU:", error);
         throw error;
@@ -1294,9 +1324,9 @@ export const getIntelligentPrice = async (productId, authToken) => {
             productId,
             authToken
         );
-        if (lastPurchasePrice > 0) {
+        if (lastPurchasePrice.price > 0) {
             return {
-                price: lastPurchasePrice,
+                price: lastPurchasePrice.price,
                 source: "purchase",
                 source_label: "Último precio de compra",
             };
@@ -1351,21 +1381,17 @@ const getLastSalePrice = async (productId, authToken) => {
 };
 
 /**
- * Obtiene el precio de la última compra registrada para un producto.
- * @param {number} productId - ID del producto.
- * @param {string} authToken - Token de autenticación.
- * @returns {Promise<number|null>} - El precio unitario de la última compra o null si no hay registros.
+ * Get last purchase price for a product
+ * @param {number} productId - Product ID
+ * @param {string} authToken - Authentication token
+ * @returns {Promise<Object>} - Price information
  */
-export const getLastPurchasePrice = async (productId, authToken) => {
-    if (!productId || !authToken) {
-        return null;
-    }
-
-    // Endpoint para obtener los items de compra, filtrados por producto y ordenados por fecha descendente
-    const url = `${API_PURCHASE_ITEMS_URL}?product=${productId}&ordering=-order__order_date`; // Corregido
-
+const getLastPurchasePrice = async (productId, authToken) => {
     try {
-        const response = await fetch(url, {
+        // Primero obtenemos purchase items por producto
+        const purchasesUrl = `${API_CONFIG.BASE_URL}/purchases/items/?purchase_option__product=${productId}&ordering=-id&limit=1`;
+
+        const response = await fetch(purchasesUrl, {
             headers: {
                 Authorization: `Token ${authToken}`,
                 "Content-Type": "application/json",
@@ -1373,62 +1399,84 @@ export const getLastPurchasePrice = async (productId, authToken) => {
         });
 
         if (!response.ok) {
-            console.warn(
-                `Could not fetch last purchase price for product ${productId}. Status: ${response.status}`
-            );
-            return null;
+            return { price: 0, source: "none" };
         }
 
-        const purchaseItems = await response.json();
+        const data = await response.json();
 
-        // Si hay resultados, el primero es el más reciente
-        if (purchaseItems.results && purchaseItems.results.length > 0) {
-            return parseFloat(purchaseItems.results[0].unit_price);
+        if (data.results && data.results.length > 0) {
+            const lastPurchase = data.results[0];
+            return {
+                price: parseFloat(lastPurchase.unit_price) || 0,
+                source: "purchase",
+                item_id: lastPurchase.id,
+                date: lastPurchase.created_at || null,
+            };
         }
 
-        return null;
+        return { price: 0, source: "none" };
     } catch (error) {
-        console.error(
-            `Error fetching last purchase price for product ${productId}:`,
-            error
-        );
-        return null;
+        console.error("Error fetching last purchase price:", error);
+        return { price: 0, source: "none" };
     }
 };
 
 /**
- * Fallback to get a product's price using a series of fallbacks.
- * This is useful when the primary price source might be missing.
+ * Fallback function to get intelligent price from existing product data
  * @param {number} productId - Product ID
  * @param {string} authToken - Authentication token
- * @returns {Promise<Object>} - Price information
+ * @returns {Promise<Object>} - Price information with source
  */
 const getProductIntelligentPriceFallback = async (productId, authToken) => {
-    // 1. Try last purchase price first
-    const lastPurchasePrice = await getLastPurchasePrice(productId, authToken);
-    if (lastPurchasePrice && lastPurchasePrice.price > 0) {
+    try {
+        // Obtener el producto individual para usar selling_price o cost_price
+        const productUrl = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.INVENTORY}${productId}/`;
+
+        const response = await fetch(productUrl, {
+            headers: {
+                Authorization: `Token ${authToken}`,
+                "Content-Type": "application/json",
+            },
+        });
+
+        if (!response.ok) {
+            return {
+                price: 0,
+                source: "none",
+                source_label: "Sin precio disponible",
+            };
+        }
+
+        const product = await response.json();
+
+        // Lógica de fallback: selling_price > cost_price > 0
+        if (product.selling_price && product.selling_price > 0) {
+            return {
+                price: product.selling_price,
+                source: "suggested",
+                source_label: "Precio de venta sugerido",
+            };
+        } else if (product.cost_price && product.cost_price > 0) {
+            return {
+                price: product.cost_price,
+                source: "cost",
+                source_label: "Precio de costo",
+            };
+        } else {
+            return {
+                price: 0,
+                source: "none",
+                source_label: "Sin precio disponible",
+            };
+        }
+    } catch (error) {
+        console.error("Error in price fallback:", error);
         return {
-            price: lastPurchasePrice.price,
-            source: "purchase",
-            source_label: "Último precio de compra",
+            price: 0,
+            source: "none",
+            source_label: "Sin precio disponible",
         };
     }
-
-    // 2. Fallback to last sale price
-    const lastSalePrice = await getLastSalePrice(productId, authToken);
-    if (lastSalePrice.price > 0) {
-        return {
-            price: lastSalePrice.price,
-            source: "sale",
-            source_label: "Último precio de venta",
-        };
-    }
-
-    return {
-        price: 0,
-        source: "none",
-        source_label: "No disponible",
-    };
 };
 
 /**
@@ -1639,6 +1687,280 @@ export const getBatchesWithStockAtLocation = async (
     }
 };
 
+/**
+ * Get SKU categories
+ * @param {string} authToken - Authentication token
+ * @returns {Promise<Array>} - Array of SKU categories
+ */
+export const getSkuCategories = async (authToken) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    try {
+        const response = await fetch(`${API_CONFIG.BASE_URL}/catalogs/sku-categories/`, {
+            headers: {
+                Authorization: `Token ${authToken}`,
+                "Content-Type": "application/json",
+            },
+        });
+
+        if (!response.ok) {
+            throw new Error(`Error ${response.status}: ${response.statusText}`);
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error("Error fetching SKU categories:", error);
+        throw error;
+    }
+};
+
+/**
+ * Get SKU subcategories filtered by category
+ * @param {string} categoryId - Category ID to filter by
+ * @param {string} authToken - Authentication token
+ * @returns {Promise<Array>} - Array of SKU subcategories
+ */
+export const getSkuSubcategories = async (categoryId, authToken) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    try {
+        const url = `${API_CONFIG.BASE_URL}/catalogs/sku-subcategories/${categoryId ? `?category=${categoryId}` : ''}`;
+        const response = await fetch(url, {
+            headers: {
+                Authorization: `Token ${authToken}`,
+                "Content-Type": "application/json",
+            },
+        });
+
+        if (!response.ok) {
+            throw new Error(`Error ${response.status}: ${response.statusText}`);
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error("Error fetching SKU subcategories:", error);
+        throw error;
+    }
+};
+
+/**
+ * Get SKU types filtered by subcategory
+ * @param {string} subcategoryId - Subcategory ID to filter by
+ * @param {string} authToken - Authentication token
+ * @returns {Promise<Array>} - Array of SKU types
+ */
+export const getSkuTypes = async (subcategoryId, authToken) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    try {
+        const url = `${API_CONFIG.BASE_URL}/catalogs/sku-types/${subcategoryId ? `?subcategory=${subcategoryId}` : ''}`;
+        const response = await fetch(url, {
+            headers: {
+                Authorization: `Token ${authToken}`,
+                "Content-Type": "application/json",
+            },
+        });
+
+        if (!response.ok) {
+            throw new Error(`Error ${response.status}: ${response.statusText}`);
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error("Error fetching SKU types:", error);
+        throw error;
+    }
+};
+
+/**
+ * Create a new SKU category
+ * @param {Object} categoryData - Category data to create
+ * @param {string} authToken - Authentication token
+ * @returns {Promise<Object>} - Created category data
+ */
+export const createSkuCategory = async (categoryData, authToken) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    try {
+        const response = await fetch(`${API_CONFIG.BASE_URL}/catalogs/sku-categories/`, {
+            method: "POST",
+            headers: {
+                Authorization: `Token ${authToken}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(categoryData),
+        });
+
+        if (!response.ok) {
+            let errorMessage = `Error ${response.status}: ${response.statusText}`;
+            try {
+                const errorData = await response.json();
+                if (errorData.detail) {
+                    errorMessage = errorData.detail;
+                } else if (errorData.error) {
+                    errorMessage = errorData.error;
+                } else if (typeof errorData === "object") {
+                    const fieldErrors = Object.entries(errorData)
+                        .map(([field, errors]) => {
+                            const errorText = Array.isArray(errors) ? errors.join(", ") : errors;
+                            // Traducir errores comunes para categorías SKU
+                            if (errorText.includes("already exists")) {
+                                return `El código "${categoryData.code}" ya existe`;
+                            } else if (errorText.includes("required")) {
+                                return `${field} es requerido`;
+                            } else if (errorText.includes("invalid")) {
+                                return `${field} no es válido`;
+                            }
+                            return `${field}: ${errorText}`;
+                        })
+                        .join("; ");
+                    if (fieldErrors) {
+                        errorMessage = fieldErrors;
+                    }
+                }
+            } catch (parseError) {
+                // Keep the original error message if we can't parse the response
+            }
+            throw new Error(errorMessage);
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error("Error creating SKU category:", error);
+        throw error;
+    }
+};
+
+/**
+ * Create a new SKU subcategory
+ * @param {Object} subcategoryData - Subcategory data to create
+ * @param {string} authToken - Authentication token
+ * @returns {Promise<Object>} - Created subcategory data
+ */
+export const createSkuSubcategory = async (subcategoryData, authToken) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    try {
+        const response = await fetch(`${API_CONFIG.BASE_URL}/catalogs/sku-subcategories/`, {
+            method: "POST",
+            headers: {
+                Authorization: `Token ${authToken}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(subcategoryData),
+        });
+
+        if (!response.ok) {
+            let errorMessage = `Error ${response.status}: ${response.statusText}`;
+            try {
+                const errorData = await response.json();
+                if (errorData.detail) {
+                    errorMessage = errorData.detail;
+                } else if (errorData.error) {
+                    errorMessage = errorData.error;
+                } else if (typeof errorData === "object") {
+                    const fieldErrors = Object.entries(errorData)
+                        .map(([field, errors]) => {
+                            const errorText = Array.isArray(errors) ? errors.join(", ") : errors;
+                            // Traducir errores comunes para subcategorías SKU
+                            if (errorText.includes("already exists")) {
+                                return `El código "${subcategoryData.code}" ya existe`;
+                            } else if (errorText.includes("required")) {
+                                return `${field} es requerido`;
+                            } else if (errorText.includes("invalid")) {
+                                return `${field} no es válido`;
+                            }
+                            return `${field}: ${errorText}`;
+                        })
+                        .join("; ");
+                    if (fieldErrors) {
+                        errorMessage = fieldErrors;
+                    }
+                }
+            } catch (parseError) {
+                // Keep the original error message if we can't parse the response
+            }
+            throw new Error(errorMessage);
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error("Error creating SKU subcategory:", error);
+        throw error;
+    }
+};
+
+/**
+ * Create a new SKU type
+ * @param {Object} typeData - Type data to create
+ * @param {string} authToken - Authentication token
+ * @returns {Promise<Object>} - Created type data
+ */
+export const createSkuType = async (typeData, authToken) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    try {
+        const response = await fetch(`${API_CONFIG.BASE_URL}/catalogs/sku-types/`, {
+            method: "POST",
+            headers: {
+                Authorization: `Token ${authToken}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(typeData),
+        });
+
+        if (!response.ok) {
+            let errorMessage = `Error ${response.status}: ${response.statusText}`;
+            try {
+                const errorData = await response.json();
+                if (errorData.detail) {
+                    errorMessage = errorData.detail;
+                } else if (errorData.error) {
+                    errorMessage = errorData.error;
+                } else if (typeof errorData === "object") {
+                    const fieldErrors = Object.entries(errorData)
+                        .map(([field, errors]) => {
+                            const errorText = Array.isArray(errors) ? errors.join(", ") : errors;
+                            // Traducir errores comunes para tipos SKU
+                            if (errorText.includes("already exists")) {
+                                return `El código "${typeData.code}" ya existe`;
+                            } else if (errorText.includes("required")) {
+                                return `${field} es requerido`;
+                            } else if (errorText.includes("invalid")) {
+                                return `${field} no es válido`;
+                            }
+                            return `${field}: ${errorText}`;
+                        })
+                        .join("; ");
+                    if (fieldErrors) {
+                        errorMessage = fieldErrors;
+                    }
+                }
+            } catch (parseError) {
+                // Keep the original error message if we can't parse the response
+            }
+            throw new Error(errorMessage);
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error("Error creating SKU type:", error);
+        throw error;
+    }
+};
+
 // Export as default
 const inventoryService = {
     getProducts,
@@ -1667,6 +1989,7 @@ const inventoryService = {
     getBatchesWithStockAtLocation,
 };
 
+// Export default service
 export default inventoryService;
 export { inventoryService };
 
