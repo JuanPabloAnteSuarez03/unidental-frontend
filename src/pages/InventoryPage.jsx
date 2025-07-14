@@ -41,6 +41,11 @@ const InventoryPage = () => {
 
         // Reseteo de filtros
         resetAllFilters,
+
+        // 🚀 NUEVO: Funciones de cache persistente
+        refrescarCacheInventario,
+        obtenerInfoCacheInventario,
+        cacheInventarioData,
     } = useInventory(); // [cite: src/hooks/useInventory.js]
 
     // Manejador para la búsqueda global
@@ -73,7 +78,13 @@ const InventoryPage = () => {
                 }}
             >
                 {/* Título de la página */}
-                <InventoryHeader totalGeneralProducts={totalGeneralProducts} />
+                <InventoryHeader
+                    totalGeneralProducts={totalGeneralProducts}
+                    refrescarCacheInventario={refrescarCacheInventario}
+                    obtenerInfoCacheInventario={obtenerInfoCacheInventario}
+                    cacheInventarioData={cacheInventarioData}
+                    isLoading={isLoading}
+                />
 
                 {/* Estado de Error */}
                 <ErrorMessage error={error} />

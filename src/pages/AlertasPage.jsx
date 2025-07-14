@@ -6,10 +6,15 @@ import { useAuth } from "../context/AuthContext";
 import API_CONFIG from "../config/api.js";
 import { FaCog, FaPlus } from "react-icons/fa";
 
+// 🚀 CONSTANTES PARA CACHE PERSISTENTE
+const CACHE_STORAGE_KEY = "alertas_cache_data";
+const CACHE_EXPIRY_TIME = 12 * 60 * 60 * 1000; // 12 horas
+
 const AlertasPage = () => {
     // Estados principales
     const [lotesConStock, setLotesConStock] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [loadingMessage, setLoadingMessage] = useState(""); // Mensaje específico de carga
     const [rangoActivo, setRangoActivo] = useState("vencidos"); // Rango por defecto
     const [estadisticas, setEstadisticas] = useState({
         total: 0,
@@ -18,6 +23,12 @@ const AlertasPage = () => {
         seisMetres: 0,
         unAno: 0,
         masDeUnAno: 0,
+    });
+
+    // 🚀 OPTIMIZADO: Estados para cache duradero con localStorage
+    const [cacheData, setCacheData] = useState(() => {
+        // Intentar cargar cache desde localStorage al inicializar
+        return cargarCacheDesdeStorage();
     });
 
     // Estado para el modal de configuración de umbrales
@@ -95,11 +106,22 @@ const AlertasPage = () => {
         return diasEfectivos;
     };
 
-    // Función para obtener información de productos con umbrales
-    const obtenerProductosConUmbrales = async () => {
-        try {
-            console.log("📦 Obteniendo productos con umbrales...");
+    // 🚀 OPTIMIZADO: Función para obtener información de productos con umbrales (con cache)
+    const obtenerProductosConUmbrales = async (forceRefresh = false) => {
+        // Si ya tenemos datos en cache y no es un refresh forzado, usar cache
+        if (
+            !forceRefresh &&
+            cacheData.mapaUmbrales &&
+            Object.keys(cacheData.mapaUmbrales).length > 0
+        ) {
+            console.log("🎯 Usando mapa de umbrales desde cache");
+            return cacheData.mapaUmbrales;
+        }
 
+        try {
+            console.log("📦 Obteniendo productos con umbrales desde API...");
+
+            // Optimización: solo obtener campos necesarios
             const response = await fetch(
                 `${API_CONFIG.BASE_URL}/catalogs/products/all/`,
                 {
@@ -129,25 +151,61 @@ const AlertasPage = () => {
             );
             console.log("🎯 Mapa de umbrales:", mapaUmbrales);
 
+            // Actualizar cache en memoria
+            setCacheData((prev) => {
+                const nuevoCache = {
+                    ...prev,
+                    mapaUmbrales: mapaUmbrales,
+                };
+                // Guardar en localStorage solo si ya tenemos datos completos
+                if (prev.isLoaded && prev.todosLosLotes.length > 0) {
+                    guardarCacheEnStorage(nuevoCache);
+                }
+                return nuevoCache;
+            });
+
             return mapaUmbrales;
         } catch (error) {
             console.error("❌ Error al obtener productos con umbrales:", error);
-            return {};
+            return cacheData.mapaUmbrales || {};
         }
     };
 
-    // Función para obtener lotes de un rango específico
-    const fetchLotesPorRango = async (rangoKey) => {
+    // 🚀 NUEVA FUNCIÓN: Cargar todos los datos una sola vez
+    const cargarTodosLosDatos = async (forceRefresh = false) => {
         if (!authToken) return;
 
+        // Si ya tenemos datos en cache y no es un refresh forzado, no recargar
+        if (
+            !forceRefresh &&
+            cacheData.isLoaded &&
+            cacheData.todosLosLotes.length > 0
+        ) {
+            console.log(
+                "💾 Usando datos desde cache, no es necesario recargar"
+            );
+            return;
+        }
+
         setIsLoading(true);
+        setLoadingMessage("Iniciando carga de datos...");
         try {
-            console.log(`🔍 Cargando lotes para rango: ${rangoKey}`);
+            console.log(
+                `🔄 ${
+                    forceRefresh
+                        ? "Refrescando datos forzosamente"
+                        : "Cargando datos por primera vez"
+                }`
+            );
 
             // STEP 1: Obtener umbrales de productos
-            const mapaUmbrales = await obtenerProductosConUmbrales();
+            setLoadingMessage("Cargando configuración de productos...");
+            const mapaUmbrales = await obtenerProductosConUmbrales(
+                forceRefresh
+            );
 
             // STEP 2: Obtener TODOS los lotes
+            setLoadingMessage("Descargando inventario completo...");
             const allUrl = new URL(
                 `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.STOCK_ALL}`,
                 window.location.origin
@@ -176,123 +234,160 @@ const AlertasPage = () => {
 
             console.log(`✅ Total de lotes obtenidos: ${todosLosLotes.length}`);
 
-            // STEP 3: Procesar y filtrar lotes por rango con lógica de umbrales
-            const lotesExpandidos = [];
-            const statsTemp = {
-                total: 0,
-                vencidos: 0,
-                proximosAVencer: 0,
-                seisMetres: 0,
-                unAno: 0,
-                masDeUnAno: 0,
-            };
-
-            todosLosLotes.forEach((lote) => {
+            // STEP 3: Procesar lotes con información adicional
+            setLoadingMessage(`Procesando ${todosLosLotes.length} lotes...`);
+            const lotesExpandidos = todosLosLotes.map((lote) => {
                 const fechaVencimiento =
                     lote.batch_expiry_date || lote.expiry_date || null;
+                let diasRestantes = null;
+                let diasEfectivos = null;
+                let umbralProducto = 0;
 
                 if (fechaVencimiento) {
-                    const diasRestantes =
-                        calcularDiasRestantes(fechaVencimiento);
-
-                    // Obtener umbral del producto
-                    const umbralProducto = mapaUmbrales[lote.product] || 0;
-
-                    // Calcular días efectivos considerando umbral
-                    const diasEfectivos = calcularDiasEfectivos(
+                    diasRestantes = calcularDiasRestantes(fechaVencimiento);
+                    umbralProducto = mapaUmbrales[lote.product] || 0;
+                    diasEfectivos = calcularDiasEfectivos(
                         diasRestantes,
                         umbralProducto
                     );
-
-                    // Clasificar en estadísticas usando días efectivos
-                    if (diasEfectivos < 0) {
-                        statsTemp.vencidos++;
-                    } else if (diasEfectivos <= 90) {
-                        statsTemp.proximosAVencer++;
-                    } else if (diasEfectivos <= 180) {
-                        statsTemp.seisMetres++;
-                    } else if (diasEfectivos <= 365) {
-                        statsTemp.unAno++;
-                    } else {
-                        statsTemp.masDeUnAno++;
-                    }
-
-                    // Solo agregar lotes que pertenecen al rango activo usando días efectivos
-                    const rango = rangosVencimiento[rangoKey];
-                    if (rango && rango.filtro(diasEfectivos)) {
-                        lotesExpandidos.push({
-                            ...lote,
-                            id: `${lote.id}_${lote.batch_number || "no-batch"}`,
-                            producto_nombre: lote.product_name,
-                            producto_sku: lote.product_sku,
-                            numero_lote: lote.batch_number || "N/A",
-                            ubicacion_nombre: lote.location_name,
-                            cantidad: lote.quantity || 0,
-                            fecha_vencimiento: fechaVencimiento,
-                            producto_id: lote.product,
-                            ubicacion_id: lote.location,
-                            batch_id: lote.batch,
-                            dias_restantes: diasRestantes,
-                            dias_efectivos: diasEfectivos,
-                            umbral_producto: umbralProducto,
-                        });
-                    }
                 }
+
+                return {
+                    ...lote,
+                    id: `${lote.id}_${lote.batch_number || "no-batch"}`,
+                    producto_nombre: lote.product_name,
+                    producto_sku: lote.product_sku,
+                    numero_lote: lote.batch_number || "N/A",
+                    ubicacion_nombre: lote.location_name,
+                    cantidad: lote.quantity || 0,
+                    fecha_vencimiento: fechaVencimiento,
+                    producto_id: lote.product,
+                    ubicacion_id: lote.location,
+                    batch_id: lote.batch,
+                    dias_restantes: diasRestantes,
+                    dias_efectivos: diasEfectivos,
+                    umbral_producto: umbralProducto,
+                };
             });
 
-            // Calcular total
-            statsTemp.total =
-                statsTemp.vencidos +
-                statsTemp.proximosAVencer +
-                statsTemp.seisMetres +
-                statsTemp.unAno +
-                statsTemp.masDeUnAno;
-
-            // STEP 3: Ordenar por fecha de vencimiento (más próximos primero)
+            // Ordenar por fecha de vencimiento (más próximos primero)
+            setLoadingMessage("Organizando datos por fecha de vencimiento...");
             lotesExpandidos.sort((a, b) => {
+                if (!a.fecha_vencimiento) return 1;
+                if (!b.fecha_vencimiento) return -1;
                 const fechaA = new Date(a.fecha_vencimiento);
                 const fechaB = new Date(b.fecha_vencimiento);
                 return fechaA - fechaB;
             });
 
-            setLotesConStock(lotesExpandidos);
-            setEstadisticas(statsTemp);
+            // 🚀 Actualizar cache con todos los datos
+            setLoadingMessage("Finalizando carga de datos...");
+            const nuevoCache = {
+                todosLosLotes: lotesExpandidos,
+                mapaUmbrales: mapaUmbrales,
+                isLoaded: true,
+                lastFetch: Date.now(),
+            };
+
+            setCacheData(nuevoCache);
+
+            // Guardar en localStorage
+            guardarCacheEnStorage(nuevoCache);
 
             console.log(
-                `📊 Lotes del rango "${rangoKey}":`,
-                lotesExpandidos.length
+                "💾 Datos guardados en cache de memoria y localStorage exitosamente"
             );
-            console.log("📈 Estadísticas actualizadas:", statsTemp);
         } catch (error) {
-            console.error("❌ Error al obtener lotes por rango:", error);
+            console.error("❌ Error al cargar datos:", error);
 
             // FALLBACK: Intentar con paginación manual
             console.log("🔄 Intentando fallback...");
             try {
-                await fetchLotesPorRangoFallback(rangoKey);
+                await cargarDatosFallback(forceRefresh);
             } catch (fallbackError) {
                 console.error("❌ Error en fallback:", fallbackError);
-                setLotesConStock([]);
-                setEstadisticas({
-                    total: 0,
-                    vencidos: 0,
-                    proximosAVencer: 0,
-                    seisMetres: 0,
-                    unAno: 0,
-                    masDeUnAno: 0,
-                });
             }
         } finally {
             setIsLoading(false);
+            setLoadingMessage("");
         }
     };
 
+    // 🚀 NUEVA FUNCIÓN: Filtrar lotes desde cache por rango
+    const filtrarLotesPorRango = (rangoKey) => {
+        if (!cacheData.isLoaded || cacheData.todosLosLotes.length === 0) {
+            console.log("⚠️ No hay datos en cache para filtrar");
+            return;
+        }
+
+        console.log(`🔍 Filtrando lotes para rango: ${rangoKey} desde cache`);
+
+        const rango = rangosVencimiento[rangoKey];
+        if (!rango) {
+            console.error(`❌ Rango no encontrado: ${rangoKey}`);
+            return;
+        }
+
+        // Filtrar lotes por el rango seleccionado
+        const lotesFiltrados = cacheData.todosLosLotes.filter((lote) => {
+            if (!lote.fecha_vencimiento || lote.dias_efectivos === null) {
+                return false;
+            }
+            return rango.filtro(lote.dias_efectivos);
+        });
+
+        // Calcular estadísticas de todos los lotes en cache
+        const statsTemp = {
+            total: 0,
+            vencidos: 0,
+            proximosAVencer: 0,
+            seisMetres: 0,
+            unAno: 0,
+            masDeUnAno: 0,
+        };
+
+        cacheData.todosLosLotes.forEach((lote) => {
+            if (lote.fecha_vencimiento && lote.dias_efectivos !== null) {
+                if (lote.dias_efectivos < 0) {
+                    statsTemp.vencidos++;
+                } else if (lote.dias_efectivos <= 90) {
+                    statsTemp.proximosAVencer++;
+                } else if (lote.dias_efectivos <= 180) {
+                    statsTemp.seisMetres++;
+                } else if (lote.dias_efectivos <= 365) {
+                    statsTemp.unAno++;
+                } else {
+                    statsTemp.masDeUnAno++;
+                }
+            }
+        });
+
+        statsTemp.total =
+            statsTemp.vencidos +
+            statsTemp.proximosAVencer +
+            statsTemp.seisMetres +
+            statsTemp.unAno +
+            statsTemp.masDeUnAno;
+
+        setLotesConStock(lotesFiltrados);
+        setEstadisticas(statsTemp);
+
+        console.log(
+            `📊 Lotes filtrados para "${rangoKey}": ${lotesFiltrados.length}`
+        );
+        console.log("📈 Estadísticas actualizadas:", statsTemp);
+    };
+
     // Función de fallback con paginación manual
-    const fetchLotesPorRangoFallback = async (rangoKey) => {
-        console.log(`🔄 Fallback para rango: ${rangoKey}`);
+    const cargarDatosFallback = async (forceRefresh = false) => {
+        console.log(`🔄 Fallback para carga de datos`);
+        setLoadingMessage("Carga alternativa: obteniendo configuración...");
 
         // Obtener umbrales de productos
-        const mapaUmbrales = await obtenerProductosConUmbrales();
+        const mapaUmbrales = await obtenerProductosConUmbrales(forceRefresh);
+        setLoadingMessage(
+            "Carga alternativa: descargando lotes por páginas..."
+        );
 
         const baseUrl = new URL(
             `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.STOCK}`,
@@ -312,6 +407,10 @@ const AlertasPage = () => {
         while (hasNextPage) {
             const url = new URL(baseUrl);
             url.searchParams.append("page", pagina);
+
+            setLoadingMessage(
+                `Carga alternativa: página ${pagina}... (${todosLosLotes.length} lotes)`
+            );
 
             const response = await fetch(url.toString(), {
                 headers: {
@@ -334,91 +433,79 @@ const AlertasPage = () => {
             if (pagina > 100) break;
         }
 
-        // Procesar igual que en la función principal con lógica de umbrales
-        const lotesExpandidos = [];
-        const statsTemp = {
-            total: 0,
-            vencidos: 0,
-            proximosAVencer: 0,
-            seisMetres: 0,
-            unAno: 0,
-            masDeUnAno: 0,
-        };
-
-        todosLosLotes.forEach((lote) => {
+        // Procesar lotes con información adicional
+        const lotesExpandidos = todosLosLotes.map((lote) => {
             const fechaVencimiento =
                 lote.batch_expiry_date || lote.expiry_date || null;
+            let diasRestantes = null;
+            let diasEfectivos = null;
+            let umbralProducto = 0;
 
             if (fechaVencimiento) {
-                const diasRestantes = calcularDiasRestantes(fechaVencimiento);
-
-                // Obtener umbral del producto
-                const umbralProducto = mapaUmbrales[lote.product] || 0;
-
-                // Calcular días efectivos considerando umbral
-                const diasEfectivos = calcularDiasEfectivos(
+                diasRestantes = calcularDiasRestantes(fechaVencimiento);
+                umbralProducto = mapaUmbrales[lote.product] || 0;
+                diasEfectivos = calcularDiasEfectivos(
                     diasRestantes,
                     umbralProducto
                 );
-
-                // Clasificar en estadísticas usando días efectivos
-                if (diasEfectivos < 0) {
-                    statsTemp.vencidos++;
-                } else if (diasEfectivos <= 90) {
-                    statsTemp.proximosAVencer++;
-                } else if (diasEfectivos <= 180) {
-                    statsTemp.seisMetres++;
-                } else if (diasEfectivos <= 365) {
-                    statsTemp.unAno++;
-                } else {
-                    statsTemp.masDeUnAno++;
-                }
-
-                // Solo agregar lotes del rango activo usando días efectivos
-                const rango = rangosVencimiento[rangoKey];
-                if (rango && rango.filtro(diasEfectivos)) {
-                    lotesExpandidos.push({
-                        ...lote,
-                        id: `${lote.id}_${lote.batch_number || "no-batch"}`,
-                        producto_nombre: lote.product_name,
-                        producto_sku: lote.product_sku,
-                        numero_lote: lote.batch_number || "N/A",
-                        ubicacion_nombre: lote.location_name,
-                        cantidad: lote.quantity || 0,
-                        fecha_vencimiento: fechaVencimiento,
-                        producto_id: lote.product,
-                        ubicacion_id: lote.location,
-                        batch_id: lote.batch,
-                        dias_restantes: diasRestantes,
-                        dias_efectivos: diasEfectivos,
-                        umbral_producto: umbralProducto,
-                    });
-                }
             }
+
+            return {
+                ...lote,
+                id: `${lote.id}_${lote.batch_number || "no-batch"}`,
+                producto_nombre: lote.product_name,
+                producto_sku: lote.product_sku,
+                numero_lote: lote.batch_number || "N/A",
+                ubicacion_nombre: lote.location_name,
+                cantidad: lote.quantity || 0,
+                fecha_vencimiento: fechaVencimiento,
+                producto_id: lote.product,
+                ubicacion_id: lote.location,
+                batch_id: lote.batch,
+                dias_restantes: diasRestantes,
+                dias_efectivos: diasEfectivos,
+                umbral_producto: umbralProducto,
+            };
         });
 
-        statsTemp.total =
-            statsTemp.vencidos +
-            statsTemp.proximosAVencer +
-            statsTemp.seisMetres +
-            statsTemp.unAno +
-            statsTemp.masDeUnAno;
-
+        // Ordenar por fecha de vencimiento
         lotesExpandidos.sort((a, b) => {
+            if (!a.fecha_vencimiento) return 1;
+            if (!b.fecha_vencimiento) return -1;
             const fechaA = new Date(a.fecha_vencimiento);
             const fechaB = new Date(b.fecha_vencimiento);
             return fechaA - fechaB;
         });
 
-        setLotesConStock(lotesExpandidos);
-        setEstadisticas(statsTemp);
+        // Actualizar cache con datos del fallback
+        const nuevoCache = {
+            todosLosLotes: lotesExpandidos,
+            mapaUmbrales: mapaUmbrales,
+            isLoaded: true,
+            lastFetch: Date.now(),
+        };
+
+        setCacheData(nuevoCache);
+
+        // Guardar en localStorage
+        guardarCacheEnStorage(nuevoCache);
+
+        console.log(
+            "💾 Datos del fallback guardados en cache de memoria y localStorage exitosamente"
+        );
     };
 
-    // Función para cambiar de rango
+    // 🚀 OPTIMIZADO: Función para cambiar de rango (solo filtra desde cache)
     const cambiarRango = (nuevoRango) => {
         if (nuevoRango !== rangoActivo) {
             setRangoActivo(nuevoRango);
-            fetchLotesPorRango(nuevoRango);
+            // Si ya tenemos datos en cache, solo filtrar
+            if (cacheData.isLoaded && cacheData.todosLosLotes.length > 0) {
+                filtrarLotesPorRango(nuevoRango);
+            } else {
+                // Si no hay datos en cache, cargar datos
+                cargarTodosLosDatos();
+            }
         }
     };
 
@@ -541,13 +628,151 @@ const AlertasPage = () => {
     const onUmbralGuardado = (productoActualizado) => {
         console.log("✅ Umbral guardado para producto:", productoActualizado);
         // Recargar los lotes para aplicar los nuevos umbrales
-        fetchLotesPorRango(rangoActivo);
+        cargarTodosLosDatos(true);
     };
+
+    // 🚀 NUEVA FUNCIÓN: Refrescar cache manualmente
+    const refrescarCache = () => {
+        console.log("🔄 Refrescando cache manualmente...");
+        limpiarCacheStorage(); // Limpiar cache del localStorage
+        cargarTodosLosDatos(true);
+    };
+
+    // 🚀 NUEVA FUNCIÓN: Obtener información del cache
+    const obtenerInfoCache = () => {
+        if (!cacheData.isLoaded) {
+            return {
+                estado: "No cargado",
+                cantidad: 0,
+                ultimaActualizacion: "Nunca",
+                tiempoRestante: "N/A",
+                expiraSoon: false,
+            };
+        }
+
+        const ahora = Date.now();
+        const tiempoTranscurrido = ahora - (cacheData.lastFetch || 0);
+        const tiempoRestante = CACHE_EXPIRY_TIME - tiempoTranscurrido;
+        const minutosRestantes = Math.max(
+            0,
+            Math.floor(tiempoRestante / (1000 * 60))
+        );
+        const expiraSoon = minutosRestantes < 5; // Alerta si faltan menos de 5 minutos
+
+        return {
+            estado: "Cargado (Persistente)",
+            cantidad: cacheData.todosLosLotes.length,
+            ultimaActualizacion: cacheData.lastFetch
+                ? new Date(cacheData.lastFetch).toLocaleString("es-ES")
+                : "Desconocida",
+            tiempoRestante: `${minutosRestantes} min`,
+            expiraSoon: expiraSoon,
+        };
+    };
+
+    // 🚀 NUEVA FUNCIÓN: Cargar cache desde localStorage
+    function cargarCacheDesdeStorage() {
+        try {
+            const cacheGuardado = localStorage.getItem(CACHE_STORAGE_KEY);
+            if (cacheGuardado) {
+                const cache = JSON.parse(cacheGuardado);
+
+                // Verificar si el cache no ha expirado
+                const ahora = Date.now();
+                const tiempoTranscurrido = ahora - (cache.lastFetch || 0);
+
+                if (
+                    tiempoTranscurrido < CACHE_EXPIRY_TIME &&
+                    cache.todosLosLotes &&
+                    cache.todosLosLotes.length > 0
+                ) {
+                    console.log("💾 Cache cargado desde localStorage:", {
+                        lotes: cache.todosLosLotes.length,
+                        ultimaActualizacion: new Date(
+                            cache.lastFetch
+                        ).toLocaleString("es-ES"),
+                    });
+                    return {
+                        todosLosLotes: cache.todosLosLotes || [],
+                        mapaUmbrales: cache.mapaUmbrales || {},
+                        isLoaded: true,
+                        lastFetch: cache.lastFetch,
+                    };
+                } else {
+                    console.log("⏰ Cache expirado o vacío, se eliminará");
+                    localStorage.removeItem(CACHE_STORAGE_KEY);
+                }
+            }
+        } catch (error) {
+            console.error(
+                "❌ Error al cargar cache desde localStorage:",
+                error
+            );
+            localStorage.removeItem(CACHE_STORAGE_KEY);
+        }
+
+        return {
+            todosLosLotes: [],
+            mapaUmbrales: {},
+            isLoaded: false,
+            lastFetch: null,
+        };
+    }
+
+    // 🚀 NUEVA FUNCIÓN: Guardar cache en localStorage
+    function guardarCacheEnStorage(nuevoCache) {
+        try {
+            const cacheParaGuardar = {
+                todosLosLotes: nuevoCache.todosLosLotes,
+                mapaUmbrales: nuevoCache.mapaUmbrales,
+                lastFetch: nuevoCache.lastFetch,
+            };
+            localStorage.setItem(
+                CACHE_STORAGE_KEY,
+                JSON.stringify(cacheParaGuardar)
+            );
+            console.log("💾 Cache guardado en localStorage:", {
+                lotes: nuevoCache.todosLosLotes.length,
+                timestamp: new Date(nuevoCache.lastFetch).toLocaleString(
+                    "es-ES"
+                ),
+            });
+        } catch (error) {
+            console.error("❌ Error al guardar cache en localStorage:", error);
+        }
+    }
+
+    // 🚀 NUEVA FUNCIÓN: Limpiar cache del localStorage
+    function limpiarCacheStorage() {
+        try {
+            localStorage.removeItem(CACHE_STORAGE_KEY);
+            console.log("🗑️ Cache eliminado del localStorage");
+        } catch (error) {
+            console.error("❌ Error al limpiar cache:", error);
+        }
+    }
 
     // Cargar datos al montar el componente
     useEffect(() => {
-        fetchLotesPorRango(rangoActivo);
+        if (authToken) {
+            // Si no hay datos en cache, cargarlos
+            if (!cacheData.isLoaded || cacheData.todosLosLotes.length === 0) {
+                console.log("🚀 No hay datos en cache, cargando desde API...");
+                cargarTodosLosDatos();
+            } else {
+                console.log(
+                    "✅ Datos encontrados en cache persistente, no es necesario cargar desde API"
+                );
+            }
+        }
     }, [authToken]);
+
+    // 🚀 NUEVO: Filtrar automáticamente cuando los datos del cache estén listos
+    useEffect(() => {
+        if (cacheData.isLoaded && cacheData.todosLosLotes.length > 0) {
+            filtrarLotesPorRango(rangoActivo);
+        }
+    }, [cacheData.isLoaded, cacheData.todosLosLotes.length, rangoActivo]);
 
     return (
         <div className="alertas-page">
@@ -1105,8 +1330,72 @@ const AlertasPage = () => {
                         <FaCog style={{ fontSize: "14px" }} />
                         Configurar Umbrales
                     </button>
+
+                    {/* 🚀 NUEVO: Información del cache */}
+                    <div
+                        style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "12px",
+                            padding: "8px 12px",
+                            backgroundColor: cacheData.isLoaded
+                                ? "#e8f5e9"
+                                : "#fff3e0",
+                            border: `1px solid ${
+                                cacheData.isLoaded ? "#4caf50" : "#ff9800"
+                            }`,
+                            borderRadius: "6px",
+                            fontSize: "12px",
+                            color: cacheData.isLoaded ? "#2e7d32" : "#f57c00",
+                        }}
+                    >
+                        <span style={{ fontSize: "14px" }}>
+                            {cacheData.isLoaded ? "💾" : "⏳"}
+                        </span>
+                        <div
+                            style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: "2px",
+                            }}
+                        >
+                            <span style={{ fontWeight: "600" }}>
+                                Cache: {obtenerInfoCache().estado}
+                            </span>
+                            {cacheData.isLoaded && (
+                                <>
+                                    <span
+                                        style={{
+                                            fontSize: "11px",
+                                            opacity: 0.8,
+                                        }}
+                                    >
+                                        {obtenerInfoCache().cantidad} lotes |
+                                        Última actualización:{" "}
+                                        {obtenerInfoCache().ultimaActualizacion}
+                                    </span>
+                                    <span
+                                        style={{
+                                            fontSize: "10px",
+                                            opacity: 0.7,
+                                            color: obtenerInfoCache().expiraSoon
+                                                ? "#f57c00"
+                                                : "inherit",
+                                        }}
+                                    >
+                                        {obtenerInfoCache().expiraSoon
+                                            ? "⚠️ "
+                                            : "⏱️ "}
+                                        Expira en:{" "}
+                                        {obtenerInfoCache().tiempoRestante}
+                                    </span>
+                                </>
+                            )}
+                        </div>
+                    </div>
+
                     <button
-                        onClick={() => fetchLotesPorRango(rangoActivo)}
+                        onClick={() => refrescarCache()}
                         disabled={isLoading}
                         style={{
                             padding: "10px 20px",
@@ -1118,14 +1407,16 @@ const AlertasPage = () => {
                             display: "flex",
                             alignItems: "center",
                             gap: "8px",
+                            opacity: isLoading ? 0.6 : 1,
                         }}
+                        title="Actualizar datos desde el servidor"
                     >
                         <i
                             className={`fas ${
                                 isLoading ? "fa-spinner fa-spin" : "fa-sync-alt"
                             }`}
                         ></i>
-                        {isLoading ? "Cargando..." : "Actualizar"}
+                        {isLoading ? "Actualizando..." : "Actualizar"}
                     </button>
                 </div>
             </div>
@@ -1140,14 +1431,35 @@ const AlertasPage = () => {
                 }}
             >
                 {isLoading ? (
-                    <div style={{ padding: "40px", textAlign: "center" }}>
+                    <div
+                        style={{
+                            padding: "40px",
+                            textAlign: "center",
+                            background:
+                                "linear-gradient(135deg, #e3f2fd 0%, #f8f9fa 100%)",
+                            border: "1px solid #bbdefb",
+                        }}
+                    >
                         <i
                             className="fas fa-spinner fa-spin"
-                            style={{ fontSize: "24px", color: "#1976d2" }}
+                            style={{
+                                fontSize: "28px",
+                                color: "#1976d2",
+                                marginBottom: "16px",
+                            }}
                         ></i>
+                        <div
+                            style={{
+                                fontSize: "16px",
+                                fontWeight: "600",
+                                color: "#1976d2",
+                                marginBottom: "8px",
+                            }}
+                        >
+                            {loadingMessage || "Cargando datos..."}
+                        </div>
                         <p style={{ marginTop: "10px", color: "#666" }}>
-                            Cargando lotes del rango "
-                            {rangosVencimiento[rangoActivo]?.nombre}"...
+                            Cargando datos...
                         </p>
                     </div>
                 ) : lotesConStock.length === 0 ? (
