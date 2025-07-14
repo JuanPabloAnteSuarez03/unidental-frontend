@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext";
-import { getSalesByLocation } from "../../services/salesService";
+import { getLocations } from "../../services/inventoryService";
 
 const ReportesFilters = ({ filters, setFilters, activeView, children }) => {
     const { authToken } = useAuth();
@@ -13,19 +13,17 @@ const ReportesFilters = ({ filters, setFilters, activeView, children }) => {
 
         setIsLoadingLocations(true);
         try {
-            // Usar un período largo para obtener todas las ubicaciones que han tenido ventas
-            const locationData = await getSalesByLocation(365, authToken);
+            // Usar el servicio de inventario para obtener todas las ubicaciones
+            const locationData = await getLocations(authToken);
 
-            // Extraer nombres únicos de ubicaciones
-            const uniqueLocations = locationData
-                .map((item) => item.location_name)
-                .filter((name, index, arr) => arr.indexOf(name) === index) // Remover duplicados
-                .sort(); // Ordenar alfabéticamente
+            // Filtrar solo las sedes (type: "sede") y extraer nombres
+            const sedes = locationData.filter((location) => location.type === "sede");
+            const sedeNames = sedes.map((sede) => sede.name).sort(); // Ordenar alfabéticamente
 
-            setLocations(uniqueLocations);
-            console.log("✅ Ubicaciones cargadas:", uniqueLocations);
+            setLocations(sedeNames);
+            console.log("✅ Sedes cargadas:", sedeNames);
         } catch (error) {
-            console.error("❌ Error cargando ubicaciones:", error);
+            console.error("❌ Error cargando sedes:", error);
             // Fallback a ubicaciones básicas si falla la carga
             setLocations(["Principal", "Sucursal Norte", "Sucursal Sur"]);
         } finally {
