@@ -26,8 +26,10 @@ import ConfigurarRangosModal from "../components/Alertas/ConfigurarRangosModal";
 // URL base para las peticiones a la API
 const API_URL = API_CONFIG.BASE_URL;
 
-// Clave para localStorage
+// Claves para localStorage
 const RANGOS_STORAGE_KEY = "alertas_stock_rangos";
+const CACHE_STORAGE_KEY = "alertas_stock_cache_data";
+const CACHE_EXPIRY_TIME = 12 * 60 * 60 * 1000; // 12 horas
 
 // Definición de rangos predeterminados (fallback)
 const RANGOS_FACTORY_DEFAULT = {
@@ -76,6 +78,86 @@ const guardarRangosEnStorage = (rangosConfig) => {
     }
 };
 
+// 🚀 NUEVA FUNCIÓN: Cargar cache de stock desde localStorage
+const cargarCacheStockDesdeStorage = () => {
+    try {
+        const cacheGuardado = localStorage.getItem(CACHE_STORAGE_KEY);
+        if (cacheGuardado) {
+            const cache = JSON.parse(cacheGuardado);
+
+            // Verificar si el cache no ha expirado
+            const ahora = Date.now();
+            const tiempoTranscurrido = ahora - (cache.lastFetch || 0);
+
+            if (
+                tiempoTranscurrido < CACHE_EXPIRY_TIME &&
+                cache.productosCompletos &&
+                cache.productosCompletos.length > 0
+            ) {
+                console.log("💾 Cache de stock cargado desde localStorage:", {
+                    productos: cache.productosCompletos.length,
+                    ultimaActualizacion: new Date(
+                        cache.lastFetch
+                    ).toLocaleString("es-ES"),
+                });
+                return {
+                    productosCompletos: cache.productosCompletos || [],
+                    isLoaded: true,
+                    lastFetch: cache.lastFetch,
+                };
+            } else {
+                console.log("⏰ Cache de stock expirado o vacío, se eliminará");
+                localStorage.removeItem(CACHE_STORAGE_KEY);
+            }
+        }
+    } catch (error) {
+        console.error(
+            "❌ Error al cargar cache de stock desde localStorage:",
+            error
+        );
+        localStorage.removeItem(CACHE_STORAGE_KEY);
+    }
+
+    return {
+        productosCompletos: [],
+        isLoaded: false,
+        lastFetch: null,
+    };
+};
+
+// 🚀 NUEVA FUNCIÓN: Guardar cache de stock en localStorage
+const guardarCacheStockEnStorage = (nuevoCache) => {
+    try {
+        const cacheParaGuardar = {
+            productosCompletos: nuevoCache.productosCompletos,
+            lastFetch: nuevoCache.lastFetch,
+        };
+        localStorage.setItem(
+            CACHE_STORAGE_KEY,
+            JSON.stringify(cacheParaGuardar)
+        );
+        console.log("💾 Cache de stock guardado en localStorage:", {
+            productos: nuevoCache.productosCompletos.length,
+            timestamp: new Date(nuevoCache.lastFetch).toLocaleString("es-ES"),
+        });
+    } catch (error) {
+        console.error(
+            "❌ Error al guardar cache de stock en localStorage:",
+            error
+        );
+    }
+};
+
+// 🚀 NUEVA FUNCIÓN: Limpiar cache de stock del localStorage
+const limpiarCacheStockStorage = () => {
+    try {
+        localStorage.removeItem(CACHE_STORAGE_KEY);
+        console.log("🗑️ Cache de stock eliminado del localStorage");
+    } catch (error) {
+        console.error("❌ Error al limpiar cache de stock:", error);
+    }
+};
+
 const AlertasStockPage = () => {
     // Obtener el token de autenticación del contexto
     const { authToken } = useAuth();
@@ -114,6 +196,12 @@ const AlertasStockPage = () => {
 
     // Estado para almacenar todos los productos (sin filtrar)
     const [allProductos, setAllProductos] = useState([]);
+
+    // 🚀 NUEVO: Estado para cache persistente de stock
+    const [cacheData, setCacheData] = useState(() => {
+        // Intentar cargar cache desde localStorage al inicializar
+        return cargarCacheStockDesdeStorage();
+    });
 
     // Referencia para evitar bucles infinitos en el filtrado
     const isFilteringRef = useRef(false);
@@ -184,119 +272,228 @@ const AlertasStockPage = () => {
         }
     }, [rangosCalculados, rangoSeleccionado]); // Eliminé allProductos de las dependencias para evitar bucles
 
-    // Efecto para cargar productos al montar el componente
-    useEffect(() => {
-        cargarProductos();
-    }, []);
+    // 🚀 NUEVA FUNCIÓN: Cargar todos los datos de stock con cache persistente
+    const cargarTodosLosDatosStock = async (forceRefresh = false) => {
+        if (!authToken) return;
 
-    // 🚀 OPTIMIZACIÓN: Función optimizada para cargar productos usando endpoint sin paginación
-    const cargarProductos = async () => {
+        // Si ya tenemos datos en cache y no es un refresh forzado, no recargar
+        if (
+            !forceRefresh &&
+            cacheData.isLoaded &&
+            cacheData.productosCompletos.length > 0
+        ) {
+            console.log(
+                "💾 Usando datos de stock desde cache persistente, no es necesario recargar"
+            );
+            // Procesar datos desde cache
+            procesarDatosDesdeCache();
+            return;
+        }
+
         setIsLoadingProductos(true);
         setError(null);
-        console.log("⚡ Iniciando carga optimizada de productos...");
+        console.log(
+            `🔄 ${
+                forceRefresh
+                    ? "Refrescando datos de stock forzosamente"
+                    : "Cargando datos de stock por primera vez"
+            }`
+        );
 
         try {
-            // 🚀 CAMBIO CRÍTICO: Primero obtener todos los productos con información completa
-            const productosResponse = await axios.get(
-                `${API_URL}/catalogs/products/all/`,
-                {
-                    headers: {
-                        Authorization: `Token ${authToken}`,
-                    },
-                }
-            );
+            // Cargar productos y stock desde API
+            const productosCompletos = await cargarProductosDesdeAPI();
 
-            let productosCompletos = [];
-            if (Array.isArray(productosResponse.data)) {
-                productosCompletos = productosResponse.data;
-            } else if (
-                productosResponse.data &&
-                Array.isArray(productosResponse.data.results)
-            ) {
-                productosCompletos = productosResponse.data.results;
-            }
+            // Guardar en cache
+            const nuevoCache = {
+                productosCompletos: productosCompletos,
+                isLoaded: true,
+                lastFetch: Date.now(),
+            };
+
+            setCacheData(nuevoCache);
+            guardarCacheStockEnStorage(nuevoCache);
+
+            // Procesar datos
+            procesarDatosStock(productosCompletos);
 
             console.log(
-                `📦 Productos completos obtenidos: ${productosCompletos.length}`
+                "💾 Datos de stock guardados en cache de memoria y localStorage exitosamente"
             );
-
-            // 🚀 CAMBIO CRÍTICO: Luego obtener el stock
-            const stockResponse = await axios.get(
-                `${API_URL}${API_CONFIG.ENDPOINTS.STOCK_ALL}`,
-                {
-                    headers: {
-                        Authorization: `Token ${authToken}`,
-                    },
-                }
-            );
-
-            const responseData = stockResponse.data;
-            let allData = [];
-
-            if (Array.isArray(responseData)) {
-                allData = responseData;
-            } else if (responseData && Array.isArray(responseData.results)) {
-                allData = responseData.results;
-            } else {
-                throw new Error("Formato de datos inesperado del servidor");
-            }
-
-            console.log(
-                `⚡ Total de registros de stock cargados: ${allData.length}`
-            );
-
-            // 🚀 NUEVA LÓGICA: Combinar información de productos con stock
-            const productosConInfoCompleta = allData.map((stockItem) => {
-                const productoCompleto = productosCompletos.find(
-                    (p) => p.id === stockItem.product
-                );
-                return {
-                    ...stockItem,
-                    min_stock_threshold: productoCompleto
-                        ? productoCompleto.min_stock_threshold
-                        : null,
-                    product_name:
-                        stockItem.product_name ||
-                        (productoCompleto
-                            ? productoCompleto.name
-                            : "Producto sin nombre"),
-                    sku:
-                        stockItem.product_sku ||
-                        (productoCompleto ? productoCompleto.sku : "N/A"),
-                };
-            });
-
-            console.log(
-                `📊 Productos con información completa: ${productosConInfoCompleta.length}`
-            );
-
-            // Almacenar todos los productos
-            setAllProductos(productosConInfoCompleta);
-
-            // 🚀 OPTIMIZACIÓN: Calcular totales y filtrar usando rangos actuales
-            if (productosConInfoCompleta.length > 0) {
-                calcularTotalesPorRango(
-                    productosConInfoCompleta,
-                    rangosCalculados
-                );
-                filtrarProductosDelRango(
-                    rangoSeleccionado,
-                    productosConInfoCompleta,
-                    rangosCalculados
-                );
-            }
         } catch (error) {
-            console.error("Error al cargar datos de stock:", error);
+            console.error("❌ Error al cargar datos de stock:", error);
             setError(
                 "Error al cargar los datos de stock. Por favor, intente nuevamente."
             );
-
-            // Limpiar productos en caso de error
             setAllProductos([]);
         } finally {
             setIsLoadingProductos(false);
         }
     };
+
+    // 🚀 NUEVA FUNCIÓN: Procesar datos desde cache
+    const procesarDatosDesdeCache = () => {
+        if (cacheData.productosCompletos.length > 0) {
+            procesarDatosStock(cacheData.productosCompletos);
+        }
+    };
+
+    // 🚀 NUEVA FUNCIÓN: Cargar productos desde API
+    const cargarProductosDesdeAPI = async () => {
+        console.log("⚡ Iniciando carga optimizada de productos desde API...");
+
+        // 🚀 CAMBIO CRÍTICO: Primero obtener todos los productos con información completa
+        const productosResponse = await axios.get(
+            `${API_URL}/catalogs/products/all/`,
+            {
+                headers: {
+                    Authorization: `Token ${authToken}`,
+                },
+            }
+        );
+
+        let productosCompletos = [];
+        if (Array.isArray(productosResponse.data)) {
+            productosCompletos = productosResponse.data;
+        } else if (
+            productosResponse.data &&
+            Array.isArray(productosResponse.data.results)
+        ) {
+            productosCompletos = productosResponse.data.results;
+        }
+
+        console.log(
+            `📦 Productos completos obtenidos: ${productosCompletos.length}`
+        );
+
+        // 🚀 CAMBIO CRÍTICO: Luego obtener el stock
+        const stockResponse = await axios.get(
+            `${API_URL}${API_CONFIG.ENDPOINTS.STOCK_ALL}`,
+            {
+                headers: {
+                    Authorization: `Token ${authToken}`,
+                },
+            }
+        );
+
+        const responseData = stockResponse.data;
+        let allData = [];
+
+        if (Array.isArray(responseData)) {
+            allData = responseData;
+        } else if (responseData && Array.isArray(responseData.results)) {
+            allData = responseData.results;
+        } else {
+            throw new Error("Formato de datos inesperado del servidor");
+        }
+
+        console.log(
+            `⚡ Total de registros de stock cargados: ${allData.length}`
+        );
+
+        // 🚀 NUEVA LÓGICA: Combinar información de productos con stock
+        const productosConInfoCompleta = allData.map((stockItem) => {
+            const productoCompleto = productosCompletos.find(
+                (p) => p.id === stockItem.product
+            );
+            return {
+                ...stockItem,
+                min_stock_threshold: productoCompleto
+                    ? productoCompleto.min_stock_threshold
+                    : null,
+                product_name:
+                    stockItem.product_name ||
+                    (productoCompleto
+                        ? productoCompleto.name
+                        : "Producto sin nombre"),
+                sku:
+                    stockItem.product_sku ||
+                    (productoCompleto ? productoCompleto.sku : "N/A"),
+            };
+        });
+
+        console.log(
+            `📊 Productos con información completa: ${productosConInfoCompleta.length}`
+        );
+
+        return productosConInfoCompleta;
+    };
+
+    // 🚀 NUEVA FUNCIÓN: Procesar datos de stock (desde API o cache)
+    const procesarDatosStock = (productosConInfoCompleta) => {
+        // Almacenar todos los productos
+        setAllProductos(productosConInfoCompleta);
+
+        // 🚀 OPTIMIZACIÓN: Calcular totales y filtrar usando rangos actuales
+        if (productosConInfoCompleta.length > 0) {
+            calcularTotalesPorRango(productosConInfoCompleta, rangosCalculados);
+            filtrarProductosDelRango(
+                rangoSeleccionado,
+                productosConInfoCompleta,
+                rangosCalculados
+            );
+        }
+    };
+
+    // 🚀 NUEVA FUNCIÓN: Refrescar cache manualmente
+    const refrescarCacheStock = () => {
+        console.log("🔄 Refrescando cache de stock manualmente...");
+        limpiarCacheStockStorage(); // Limpiar cache del localStorage
+        cargarTodosLosDatosStock(true);
+    };
+
+    // 🚀 NUEVA FUNCIÓN: Obtener información del cache de stock
+    const obtenerInfoCacheStock = () => {
+        if (!cacheData.isLoaded) {
+            return {
+                estado: "No cargado",
+                cantidad: 0,
+                ultimaActualizacion: "Nunca",
+                tiempoRestante: "N/A",
+                expiraSoon: false,
+            };
+        }
+
+        const ahora = Date.now();
+        const tiempoTranscurrido = ahora - (cacheData.lastFetch || 0);
+        const tiempoRestante = CACHE_EXPIRY_TIME - tiempoTranscurrido;
+        const minutosRestantes = Math.max(
+            0,
+            Math.floor(tiempoRestante / (1000 * 60))
+        );
+        const expiraSoon = minutosRestantes < 5; // Alerta si faltan menos de 5 minutos
+
+        return {
+            estado: "Cargado (Persistente)",
+            cantidad: cacheData.productosCompletos.length,
+            ultimaActualizacion: cacheData.lastFetch
+                ? new Date(cacheData.lastFetch).toLocaleString("es-ES")
+                : "Desconocida",
+            tiempoRestante: `${minutosRestantes} min`,
+            expiraSoon: expiraSoon,
+        };
+    };
+
+    // Efecto para cargar datos al montar el componente
+    useEffect(() => {
+        if (authToken) {
+            // Si no hay datos en cache, cargarlos
+            if (
+                !cacheData.isLoaded ||
+                cacheData.productosCompletos.length === 0
+            ) {
+                console.log(
+                    "🚀 No hay datos de stock en cache, cargando desde API..."
+                );
+                cargarTodosLosDatosStock();
+            } else {
+                console.log(
+                    "✅ Datos de stock encontrados en cache persistente, no es necesario cargar desde API"
+                );
+                procesarDatosDesdeCache();
+            }
+        }
+    }, [authToken]);
 
     // 🚀 OPTIMIZACIÓN: Función memoizada para calcular totales (misma lógica, mejor rendimiento)
     const calcularTotalesPorRango = useCallback(
@@ -1937,7 +2134,7 @@ const AlertasStockPage = () => {
                     </button>
 
                     <button
-                        onClick={cargarProductos}
+                        onClick={() => refrescarCacheStock()}
                         disabled={isLoadingProductos}
                         style={{
                             display: "flex",
@@ -1985,7 +2182,7 @@ const AlertasStockPage = () => {
                         ) : (
                             <FaSync style={{ fontSize: "16px" }} />
                         )}
-                        {isLoadingProductos ? "Cargando..." : "Actualizar"}
+                        {isLoadingProductos ? "Actualizando..." : "Actualizar"}
                     </button>
 
                     <button
@@ -2061,6 +2258,8 @@ const AlertasStockPage = () => {
                     </button>
                 </div>
             </div>
+
+            {/* 🚀 NUEVO: Mensaje informativo sobre el cache de stock */}
 
             {/* Sección de productos por nivel de stock - Agrupados por lotes */}
             <div className="lotes-section" style={{ marginTop: "30px" }}>
