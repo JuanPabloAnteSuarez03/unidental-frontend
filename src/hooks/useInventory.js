@@ -1515,7 +1515,6 @@ const useInventory = () => {
         }
     }, [
         authToken,
-        fetchProducts,
         cacheProductosData.isLoaded,
         cacheProductosData.products.length,
     ]);
