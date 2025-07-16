@@ -90,6 +90,8 @@ const TotalVentasPage = () => {
 
     const [totalAmount, setTotalAmount] = useState(0);
     const [totalSales, setTotalSales] = useState(0);
+    const [totalDevuelto, setTotalDevuelto] = useState(0);
+    const [netTotal, setNetTotal] = useState(0);
 
     // Estados para paginación
     const [currentPage, setCurrentPage] = useState(1);
@@ -156,8 +158,23 @@ const TotalVentasPage = () => {
         }
     };
 
-    // Función para filtrar y paginar datos desde cache
-    const filtrarYPaginarDatos = () => {
+    // Nueva función para obtener devoluciones del día
+    const fetchDevolucionesDelDia = async () => {
+        try {
+            const resp = await fetch("https://unidental-backend.onrender.com/api/sales/returns/today/");
+            if (!resp.ok) throw new Error("Error consultando devoluciones");
+            const data = await resp.json();
+            const total = (Array.isArray(data) ? data : data.results || []).reduce((sum, d) => sum + parseFloat(d.total_amount || 0), 0);
+            setTotalDevuelto(total);
+            return total;
+        } catch (e) {
+            setTotalDevuelto(0);
+            return 0;
+        }
+    };
+
+    // Modifica filtrarYPaginarDatos para calcular neto
+    const filtrarYPaginarDatos = async () => {
         let filtered = [...allSalesData];
 
         // Filtrar por fechas si hay filtros de fecha específicos
@@ -201,6 +218,9 @@ const TotalVentasPage = () => {
         );
         setTotalAmount(total);
         setTotalSales(pageSales.length);
+        // Obtener devoluciones y calcular neto
+        const devuelto = await fetchDevolucionesDelDia();
+        setNetTotal(total - devuelto);
     };
 
     // Función para actualizar manualmente
@@ -217,7 +237,7 @@ const TotalVentasPage = () => {
         }
     }, [authToken]);
 
-    // Filtrar y paginar cuando cambien los filtros o la página
+    // Cambia useEffect para usar la versión async
     useEffect(() => {
         if (allSalesData.length > 0) {
             filtrarYPaginarDatos();
@@ -370,123 +390,30 @@ const TotalVentasPage = () => {
                                 marginBottom: "32px",
                             }}
                         >
-                            <div
-                                style={{
-                                    background:
-                                        "linear-gradient(135deg, #28a745 0%, #20c997 100%)",
-                                    color: "white",
-                                    padding: "24px",
-                                    borderRadius: "12px",
-                                    boxShadow:
-                                        "0 4px 12px rgba(40, 167, 69, 0.3)",
-                                }}
-                            >
-                                <div
-                                    style={{
-                                        fontSize: "14px",
-                                        opacity: 0.9,
-                                        marginBottom: "8px",
-                                    }}
-                                >
-                                    Total de Ventas
-                                </div>
-                                <div
-                                    style={{
-                                        fontSize: "32px",
-                                        fontWeight: "700",
-                                    }}
-                                >
-                                    {totalSales.toLocaleString()}
-                                </div>
-                                <div
-                                    style={{
-                                        fontSize: "12px",
-                                        opacity: 0.8,
-                                        marginTop: "4px",
-                                    }}
-                                >
-                                    ventas realizadas
-                                </div>
+                            <div style={{ background: "linear-gradient(135deg, #28a745 0%, #20c997 100%)", color: "white", padding: "24px", borderRadius: "12px", boxShadow: "0 4px 12px rgba(40, 167, 69, 0.3)" }}>
+                                <div style={{ fontSize: "14px", opacity: 0.9, marginBottom: "8px" }}>Total de Ventas (Bruto)</div>
+                                <div style={{ fontSize: "32px", fontWeight: "700" }}>{totalSales.toLocaleString()}</div>
+                                <div style={{ fontSize: "12px", opacity: 0.8, marginTop: "4px" }}>ventas realizadas</div>
                             </div>
-
-                            <div
-                                style={{
-                                    background:
-                                        "linear-gradient(135deg, #007bff 0%, #0056b3 100%)",
-                                    color: "white",
-                                    padding: "24px",
-                                    borderRadius: "12px",
-                                    boxShadow:
-                                        "0 4px 12px rgba(0, 123, 255, 0.3)",
-                                }}
-                            >
-                                <div
-                                    style={{
-                                        fontSize: "14px",
-                                        opacity: 0.9,
-                                        marginBottom: "8px",
-                                    }}
-                                >
-                                    Monto Total
-                                </div>
-                                <div
-                                    style={{
-                                        fontSize: "32px",
-                                        fontWeight: "700",
-                                    }}
-                                >
-                                    {formatCOP(totalAmount)}
-                                </div>
-                                <div
-                                    style={{
-                                        fontSize: "12px",
-                                        opacity: 0.8,
-                                        marginTop: "4px",
-                                    }}
-                                >
-                                    valor total vendido
-                                </div>
+                            <div style={{ background: "linear-gradient(135deg, #007bff 0%, #0056b3 100%)", color: "white", padding: "24px", borderRadius: "12px", boxShadow: "0 4px 12px rgba(0, 123, 255, 0.3)" }}>
+                                <div style={{ fontSize: "14px", opacity: 0.9, marginBottom: "8px" }}>Monto Total (Bruto)</div>
+                                <div style={{ fontSize: "32px", fontWeight: "700" }}>{formatCOP(totalAmount)}</div>
+                                <div style={{ fontSize: "12px", opacity: 0.8, marginTop: "4px" }}>valor total vendido</div>
                             </div>
-
-                            <div
-                                style={{
-                                    background:
-                                        "linear-gradient(135deg, #ffc107 0%, #e0a800 100%)",
-                                    color: "white",
-                                    padding: "24px",
-                                    borderRadius: "12px",
-                                    boxShadow:
-                                        "0 4px 12px rgba(255, 193, 7, 0.3)",
-                                }}
-                            >
-                                <div
-                                    style={{
-                                        fontSize: "14px",
-                                        opacity: 0.9,
-                                        marginBottom: "8px",
-                                    }}
-                                >
-                                    Promedio por Venta
-                                </div>
-                                <div
-                                    style={{
-                                        fontSize: "32px",
-                                        fontWeight: "700",
-                                    }}
-                                >
-                                    {totalSales > 0
-                                        ? formatCOP(totalAmount / totalSales)
-                                        : formatCOP(0)}
-                                </div>
-                                <div
-                                    style={{
-                                        fontSize: "12px",
-                                        opacity: 0.8,
-                                        marginTop: "4px",
-                                    }}
-                                >
-                                    promedio por transacción
-                                </div>
+                            <div style={{ background: "linear-gradient(135deg, #dc3545 0%, #ff7675 100%)", color: "white", padding: "24px", borderRadius: "12px", boxShadow: "0 4px 12px rgba(220, 53, 69, 0.3)" }}>
+                                <div style={{ fontSize: "14px", opacity: 0.9, marginBottom: "8px" }}>Total Devuelto</div>
+                                <div style={{ fontSize: "32px", fontWeight: "700" }}>{formatCOP(totalDevuelto)}</div>
+                                <div style={{ fontSize: "12px", opacity: 0.8, marginTop: "4px" }}>devoluciones del día</div>
+                            </div>
+                            <div style={{ background: "linear-gradient(135deg, #17a2b8 0%, #00b894 100%)", color: "white", padding: "24px", borderRadius: "12px", boxShadow: "0 4px 12px rgba(23, 162, 184, 0.3)" }}>
+                                <div style={{ fontSize: "14px", opacity: 0.9, marginBottom: "8px" }}>Total Neto (Ventas - Devoluciones)</div>
+                                <div style={{ fontSize: "32px", fontWeight: "700" }}>{formatCOP(netTotal)}</div>
+                                <div style={{ fontSize: "12px", opacity: 0.8, marginTop: "4px" }}>cuadre de caja real</div>
+                            </div>
+                            <div style={{ background: "linear-gradient(135deg, #ffc107 0%, #e0a800 100%)", color: "white", padding: "24px", borderRadius: "12px", boxShadow: "0 4px 12px rgba(255, 193, 7, 0.3)" }}>
+                                <div style={{ fontSize: "14px", opacity: 0.9, marginBottom: "8px" }}>Promedio por Venta (Neto)</div>
+                                <div style={{ fontSize: "32px", fontWeight: "700" }}>{totalSales > 0 ? formatCOP(netTotal / totalSales) : formatCOP(0)}</div>
+                                <div style={{ fontSize: "12px", opacity: 0.8, marginTop: "4px" }}>promedio por transacción</div>
                             </div>
                         </div>
 

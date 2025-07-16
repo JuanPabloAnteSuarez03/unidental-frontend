@@ -43,6 +43,8 @@ export default defineConfig(({ mode }) => {
             ],
         },
         server: {
+            port: 3000,
+            host: true,
             proxy: {
                 // Redirigir todas las peticiones que empiecen con /api
                 "/api": {

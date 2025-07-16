@@ -1,0 +1,1208 @@
+{
+  "config": {
+    "configFile": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\playwright.config.js",
+    "rootDir": "C:/Users/jpant/OneDrive/Desktop/Universidad/UNIDENTAL/unidental-frontend/tests/e2e",
+    "forbidOnly": false,
+    "fullyParallel": true,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 3600000,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 3
+    },
+    "preserveOutput": "always",
+    "reporter": [
+      [
+        "html",
+        {
+          "outputFolder": "playwright-report"
+        }
+      ],
+      [
+        "json",
+        {
+          "outputFile": "test-results/results.json"
+        }
+      ],
+      [
+        "junit",
+        {
+          "outputFile": "test-results/junit.xml"
+        }
+      ],
+      [
+        "list",
+        null
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "quiet": false,
+    "projects": [
+      {
+        "outputDir": "C:/Users/jpant/OneDrive/Desktop/Universidad/UNIDENTAL/unidental-frontend/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 3
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "C:/Users/jpant/OneDrive/Desktop/Universidad/UNIDENTAL/unidental-frontend/tests/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "shard": null,
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.54.1",
+    "workers": 3,
+    "webServer": {
+      "command": "npm run dev",
+      "url": "http://localhost:3000",
+      "reuseExistingServer": true,
+      "timeout": 120000
+    }
+  },
+  "suites": [
+    {
+      "title": "compras-flow.spec.js",
+      "file": "compras-flow.spec.js",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Flujo de Compras - Crítico",
+          "file": "compras-flow.spec.js",
+          "line": 3,
+          "column": 6,
+          "specs": [
+            {
+              "title": "Debe crear orden de compra completa",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 7191,
+                      "error": {
+                        "message": "Error: expect.toContainText: Error: strict mode violation: locator('h1, h2') resolved to 2 elements:\n    1) <h1>Sistema de Gestión</h1> aka getByRole('heading', { name: 'Sistema de Gestión' })\n    2) <h2>Panel Principal</h2> aka getByRole('heading', { name: 'Panel Principal' })\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1, h2')\u001b[22m\n",
+                        "stack": "Error: expect.toContainText: Error: strict mode violation: locator('h1, h2') resolved to 2 elements:\n    1) <h1>Sistema de Gestión</h1> aka getByRole('heading', { name: 'Sistema de Gestión' })\n    2) <h2>Panel Principal</h2> aka getByRole('heading', { name: 'Panel Principal' })\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1, h2')\u001b[22m\n\n    at C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\compras-flow.spec.js:18:42",
+                        "location": {
+                          "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\compras-flow.spec.js",
+                          "column": 42,
+                          "line": 18
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 16 |\u001b[39m   test(\u001b[32m'Debe crear orden de compra completa'\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\n \u001b[90m 17 |\u001b[39m     \u001b[90m// Verificar página de órdenes\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 18 |\u001b[39m     \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mlocator(\u001b[32m'h1, h2'\u001b[39m))\u001b[33m.\u001b[39mtoContainText(\u001b[35m/orden.*compra|compras/i\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                          \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 19 |\u001b[39m\n \u001b[90m 20 |\u001b[39m     \u001b[90m// Crear nueva orden\u001b[39m\n \u001b[90m 21 |\u001b[39m     \u001b[36mconst\u001b[39m nuevaOrdenBtn \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'button:has-text(\"Nueva Orden\"), button:has-text(\"Crear\"), button:has-text(\"Agregar\")'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\compras-flow.spec.js",
+                            "column": 42,
+                            "line": 18
+                          },
+                          "message": "Error: expect.toContainText: Error: strict mode violation: locator('h1, h2') resolved to 2 elements:\n    1) <h1>Sistema de Gestión</h1> aka getByRole('heading', { name: 'Sistema de Gestión' })\n    2) <h2>Panel Principal</h2> aka getByRole('heading', { name: 'Panel Principal' })\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1, h2')\u001b[22m\n\n\n\u001b[0m \u001b[90m 16 |\u001b[39m   test(\u001b[32m'Debe crear orden de compra completa'\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\n \u001b[90m 17 |\u001b[39m     \u001b[90m// Verificar página de órdenes\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 18 |\u001b[39m     \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mlocator(\u001b[32m'h1, h2'\u001b[39m))\u001b[33m.\u001b[39mtoContainText(\u001b[35m/orden.*compra|compras/i\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                          \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 19 |\u001b[39m\n \u001b[90m 20 |\u001b[39m     \u001b[90m// Crear nueva orden\u001b[39m\n \u001b[90m 21 |\u001b[39m     \u001b[36mconst\u001b[39m nuevaOrdenBtn \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'button:has-text(\"Nueva Orden\"), button:has-text(\"Crear\"), button:has-text(\"Agregar\")'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\compras-flow.spec.js:18:42\u001b[22m"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-07-15T02:31:34.662Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\compras-flow-Flujo-de-Comp-c8012-ar-orden-de-compra-completa-chromium\\test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\compras-flow-Flujo-de-Comp-c8012-ar-orden-de-compra-completa-chromium\\video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\compras-flow-Flujo-de-Comp-c8012-ar-orden-de-compra-completa-chromium\\error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\compras-flow.spec.js",
+                        "column": 42,
+                        "line": 18
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "3757445656312f4de5d5-7fd8efd81ea7a824f7d6",
+              "file": "compras-flow.spec.js",
+              "line": 16,
+              "column": 3
+            },
+            {
+              "title": "Debe recibir productos de orden de compra",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 9094,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-07-15T02:31:34.676Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3757445656312f4de5d5-ebb6f9c4625a067f1b25",
+              "file": "compras-flow.spec.js",
+              "line": 87,
+              "column": 3
+            },
+            {
+              "title": "Debe manejar orden con múltiples productos",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 2,
+                      "status": "failed",
+                      "duration": 18148,
+                      "error": {
+                        "message": "TimeoutError: locator.click: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button:has-text(\"Nueva\"), button:has-text(\"Crear\")').first()\u001b[22m\n",
+                        "stack": "TimeoutError: locator.click: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button:has-text(\"Nueva\"), button:has-text(\"Crear\")').first()\u001b[22m\n\n    at C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\compras-flow.spec.js:129:25",
+                        "location": {
+                          "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\compras-flow.spec.js",
+                          "column": 25,
+                          "line": 129
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 127 |\u001b[39m     \u001b[90m// Crear nueva orden múltiple\u001b[39m\n \u001b[90m 128 |\u001b[39m     \u001b[36mconst\u001b[39m nuevaOrdenBtn \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'button:has-text(\"Nueva\"), button:has-text(\"Crear\")'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 129 |\u001b[39m     \u001b[36mawait\u001b[39m nuevaOrdenBtn\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                         \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 130 |\u001b[39m\n \u001b[90m 131 |\u001b[39m     \u001b[90m// Seleccionar proveedor\u001b[39m\n \u001b[90m 132 |\u001b[39m     \u001b[36mconst\u001b[39m proveedorSelect \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'select, input[placeholder*=\"proveedor\"]'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\compras-flow.spec.js",
+                            "column": 25,
+                            "line": 129
+                          },
+                          "message": "TimeoutError: locator.click: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button:has-text(\"Nueva\"), button:has-text(\"Crear\")').first()\u001b[22m\n\n\n\u001b[0m \u001b[90m 127 |\u001b[39m     \u001b[90m// Crear nueva orden múltiple\u001b[39m\n \u001b[90m 128 |\u001b[39m     \u001b[36mconst\u001b[39m nuevaOrdenBtn \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'button:has-text(\"Nueva\"), button:has-text(\"Crear\")'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 129 |\u001b[39m     \u001b[36mawait\u001b[39m nuevaOrdenBtn\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                         \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 130 |\u001b[39m\n \u001b[90m 131 |\u001b[39m     \u001b[90m// Seleccionar proveedor\u001b[39m\n \u001b[90m 132 |\u001b[39m     \u001b[36mconst\u001b[39m proveedorSelect \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'select, input[placeholder*=\"proveedor\"]'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\compras-flow.spec.js:129:25\u001b[22m"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-07-15T02:31:34.905Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\compras-flow-Flujo-de-Comp-70e35-den-con-múltiples-productos-chromium\\test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\compras-flow-Flujo-de-Comp-70e35-den-con-múltiples-productos-chromium\\video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\compras-flow-Flujo-de-Comp-70e35-den-con-múltiples-productos-chromium\\error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\compras-flow.spec.js",
+                        "column": 25,
+                        "line": 129
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "3757445656312f4de5d5-c0d539015afd46b992fa",
+              "file": "compras-flow.spec.js",
+              "line": 126,
+              "column": 3
+            },
+            {
+              "title": "Debe validar datos obligatorios en orden",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 15249,
+                      "error": {
+                        "message": "TimeoutError: locator.click: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button:has-text(\"Nueva\"), button:has-text(\"Crear\")').first()\u001b[22m\n",
+                        "stack": "TimeoutError: locator.click: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button:has-text(\"Nueva\"), button:has-text(\"Crear\")').first()\u001b[22m\n\n    at C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\compras-flow.spec.js:192:25",
+                        "location": {
+                          "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\compras-flow.spec.js",
+                          "column": 25,
+                          "line": 192
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 190 |\u001b[39m     \u001b[90m// Intentar crear orden sin proveedor\u001b[39m\n \u001b[90m 191 |\u001b[39m     \u001b[36mconst\u001b[39m nuevaOrdenBtn \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'button:has-text(\"Nueva\"), button:has-text(\"Crear\")'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 192 |\u001b[39m     \u001b[36mawait\u001b[39m nuevaOrdenBtn\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                         \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 193 |\u001b[39m\n \u001b[90m 194 |\u001b[39m     \u001b[90m// Intentar confirmar sin datos\u001b[39m\n \u001b[90m 195 |\u001b[39m     \u001b[36mconst\u001b[39m confirmarBtn \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'button:has-text(\"Confirmar\"), button:has-text(\"Crear\")'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\compras-flow.spec.js",
+                            "column": 25,
+                            "line": 192
+                          },
+                          "message": "TimeoutError: locator.click: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button:has-text(\"Nueva\"), button:has-text(\"Crear\")').first()\u001b[22m\n\n\n\u001b[0m \u001b[90m 190 |\u001b[39m     \u001b[90m// Intentar crear orden sin proveedor\u001b[39m\n \u001b[90m 191 |\u001b[39m     \u001b[36mconst\u001b[39m nuevaOrdenBtn \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'button:has-text(\"Nueva\"), button:has-text(\"Crear\")'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 192 |\u001b[39m     \u001b[36mawait\u001b[39m nuevaOrdenBtn\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                         \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 193 |\u001b[39m\n \u001b[90m 194 |\u001b[39m     \u001b[90m// Intentar confirmar sin datos\u001b[39m\n \u001b[90m 195 |\u001b[39m     \u001b[36mconst\u001b[39m confirmarBtn \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'button:has-text(\"Confirmar\"), button:has-text(\"Crear\")'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\compras-flow.spec.js:192:25\u001b[22m"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-07-15T02:31:47.514Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\compras-flow-Flujo-de-Comp-bbe62-datos-obligatorios-en-orden-chromium\\test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\compras-flow-Flujo-de-Comp-bbe62-datos-obligatorios-en-orden-chromium\\video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\compras-flow-Flujo-de-Comp-bbe62-datos-obligatorios-en-orden-chromium\\error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\compras-flow.spec.js",
+                        "column": 25,
+                        "line": 192
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "3757445656312f4de5d5-e956e2904283c647a7ec",
+              "file": "compras-flow.spec.js",
+              "line": 189,
+              "column": 3
+            },
+            {
+              "title": "Debe calcular correctamente el total de la orden",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "failed",
+                      "duration": 14895,
+                      "error": {
+                        "message": "TimeoutError: locator.click: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button:has-text(\"Nueva\")').first()\u001b[22m\n",
+                        "stack": "TimeoutError: locator.click: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button:has-text(\"Nueva\")').first()\u001b[22m\n\n    at C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\compras-flow.spec.js:210:25",
+                        "location": {
+                          "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\compras-flow.spec.js",
+                          "column": 25,
+                          "line": 210
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 208 |\u001b[39m   test(\u001b[32m'Debe calcular correctamente el total de la orden'\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\n \u001b[90m 209 |\u001b[39m     \u001b[36mconst\u001b[39m nuevaOrdenBtn \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'button:has-text(\"Nueva\")'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 210 |\u001b[39m     \u001b[36mawait\u001b[39m nuevaOrdenBtn\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                         \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 211 |\u001b[39m\n \u001b[90m 212 |\u001b[39m     \u001b[90m// Seleccionar proveedor\u001b[39m\n \u001b[90m 213 |\u001b[39m     \u001b[36mconst\u001b[39m proveedorSelect \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'select, input[placeholder*=\"proveedor\"]'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\compras-flow.spec.js",
+                            "column": 25,
+                            "line": 210
+                          },
+                          "message": "TimeoutError: locator.click: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button:has-text(\"Nueva\")').first()\u001b[22m\n\n\n\u001b[0m \u001b[90m 208 |\u001b[39m   test(\u001b[32m'Debe calcular correctamente el total de la orden'\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\n \u001b[90m 209 |\u001b[39m     \u001b[36mconst\u001b[39m nuevaOrdenBtn \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'button:has-text(\"Nueva\")'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 210 |\u001b[39m     \u001b[36mawait\u001b[39m nuevaOrdenBtn\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                         \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 211 |\u001b[39m\n \u001b[90m 212 |\u001b[39m     \u001b[90m// Seleccionar proveedor\u001b[39m\n \u001b[90m 213 |\u001b[39m     \u001b[36mconst\u001b[39m proveedorSelect \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'select, input[placeholder*=\"proveedor\"]'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\compras-flow.spec.js:210:25\u001b[22m"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-07-15T02:31:44.225Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\compras-flow-Flujo-de-Comp-e5229-amente-el-total-de-la-orden-chromium\\test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\compras-flow-Flujo-de-Comp-e5229-amente-el-total-de-la-orden-chromium\\video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\compras-flow-Flujo-de-Comp-e5229-amente-el-total-de-la-orden-chromium\\error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\compras-flow.spec.js",
+                        "column": 25,
+                        "line": 210
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "3757445656312f4de5d5-ad23cc2ba8771d659f88",
+              "file": "compras-flow.spec.js",
+              "line": 208,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "devoluciones-flow.spec.js",
+      "file": "devoluciones-flow.spec.js",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Flujo de Devoluciones - Crítico",
+          "file": "devoluciones-flow.spec.js",
+          "line": 3,
+          "column": 6,
+          "specs": [
+            {
+              "title": "Debe procesar devolución de producto compuesto completa",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 4,
+                      "parallelIndex": 2,
+                      "status": "failed",
+                      "duration": 4866,
+                      "error": {
+                        "message": "Error: expect.toContainText: Error: strict mode violation: locator('h1, h2') resolved to 2 elements:\n    1) <h1>Sistema de Gestión</h1> aka getByRole('heading', { name: 'Sistema de Gestión' })\n    2) <h2>Panel Principal</h2> aka getByRole('heading', { name: 'Panel Principal' })\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1, h2')\u001b[22m\n",
+                        "stack": "Error: expect.toContainText: Error: strict mode violation: locator('h1, h2') resolved to 2 elements:\n    1) <h1>Sistema de Gestión</h1> aka getByRole('heading', { name: 'Sistema de Gestión' })\n    2) <h2>Panel Principal</h2> aka getByRole('heading', { name: 'Panel Principal' })\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1, h2')\u001b[22m\n\n    at C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\devoluciones-flow.spec.js:18:42",
+                        "location": {
+                          "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\devoluciones-flow.spec.js",
+                          "column": 42,
+                          "line": 18
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 16 |\u001b[39m   test(\u001b[32m'Debe procesar devolución de producto compuesto completa'\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\n \u001b[90m 17 |\u001b[39m     \u001b[90m// Verificar página de devoluciones\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 18 |\u001b[39m     \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mlocator(\u001b[32m'h1, h2'\u001b[39m))\u001b[33m.\u001b[39mtoContainText(\u001b[35m/devoluc|return/i\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                          \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 19 |\u001b[39m\n \u001b[90m 20 |\u001b[39m     \u001b[90m// Crear nueva devolución\u001b[39m\n \u001b[90m 21 |\u001b[39m     \u001b[36mconst\u001b[39m nuevaDevolucionBtn \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'button:has-text(\"Nueva Devolución\"), button:has-text(\"Crear\"), button:has-text(\"Registrar\")'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\devoluciones-flow.spec.js",
+                            "column": 42,
+                            "line": 18
+                          },
+                          "message": "Error: expect.toContainText: Error: strict mode violation: locator('h1, h2') resolved to 2 elements:\n    1) <h1>Sistema de Gestión</h1> aka getByRole('heading', { name: 'Sistema de Gestión' })\n    2) <h2>Panel Principal</h2> aka getByRole('heading', { name: 'Panel Principal' })\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1, h2')\u001b[22m\n\n\n\u001b[0m \u001b[90m 16 |\u001b[39m   test(\u001b[32m'Debe procesar devolución de producto compuesto completa'\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\n \u001b[90m 17 |\u001b[39m     \u001b[90m// Verificar página de devoluciones\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 18 |\u001b[39m     \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mlocator(\u001b[32m'h1, h2'\u001b[39m))\u001b[33m.\u001b[39mtoContainText(\u001b[35m/devoluc|return/i\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                          \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 19 |\u001b[39m\n \u001b[90m 20 |\u001b[39m     \u001b[90m// Crear nueva devolución\u001b[39m\n \u001b[90m 21 |\u001b[39m     \u001b[36mconst\u001b[39m nuevaDevolucionBtn \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'button:has-text(\"Nueva Devolución\"), button:has-text(\"Crear\"), button:has-text(\"Registrar\")'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\devoluciones-flow.spec.js:18:42\u001b[22m"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-07-15T02:31:59.485Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\devoluciones-flow-Flujo-de-a6b70-producto-compuesto-completa-chromium\\test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\devoluciones-flow-Flujo-de-a6b70-producto-compuesto-completa-chromium\\video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\devoluciones-flow-Flujo-de-a6b70-producto-compuesto-completa-chromium\\error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\devoluciones-flow.spec.js",
+                        "column": 42,
+                        "line": 18
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "e4421d005c6f5c6a6ac6-e7ab9ff62c739dc82e29",
+              "file": "devoluciones-flow.spec.js",
+              "line": 16,
+              "column": 3
+            },
+            {
+              "title": "Debe manejar devolución parcial de productos compuestos",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 5,
+                      "parallelIndex": 1,
+                      "status": "failed",
+                      "duration": 5369,
+                      "error": {
+                        "message": "Error: expect.toContainText: Error: strict mode violation: locator('h1, h2') resolved to 2 elements:\n    1) <h1>Sistema de Gestión</h1> aka getByRole('heading', { name: 'Sistema de Gestión' })\n    2) <h2>Panel Principal</h2> aka getByRole('heading', { name: 'Panel Principal' })\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1, h2')\u001b[22m\n",
+                        "stack": "Error: expect.toContainText: Error: strict mode violation: locator('h1, h2') resolved to 2 elements:\n    1) <h1>Sistema de Gestión</h1> aka getByRole('heading', { name: 'Sistema de Gestión' })\n    2) <h2>Panel Principal</h2> aka getByRole('heading', { name: 'Panel Principal' })\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1, h2')\u001b[22m\n\n    at C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\devoluciones-flow.spec.js:80:42",
+                        "location": {
+                          "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\devoluciones-flow.spec.js",
+                          "column": 42,
+                          "line": 80
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 78 |\u001b[39m\n \u001b[90m 79 |\u001b[39m   test(\u001b[32m'Debe manejar devolución parcial de productos compuestos'\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 80 |\u001b[39m     \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mlocator(\u001b[32m'h1, h2'\u001b[39m))\u001b[33m.\u001b[39mtoContainText(\u001b[35m/devoluc/i\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                          \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 81 |\u001b[39m\n \u001b[90m 82 |\u001b[39m     \u001b[90m// Nueva devolución parcial\u001b[39m\n \u001b[90m 83 |\u001b[39m     \u001b[36mconst\u001b[39m nuevaBtn \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'button:has-text(\"Nueva\")'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\devoluciones-flow.spec.js",
+                            "column": 42,
+                            "line": 80
+                          },
+                          "message": "Error: expect.toContainText: Error: strict mode violation: locator('h1, h2') resolved to 2 elements:\n    1) <h1>Sistema de Gestión</h1> aka getByRole('heading', { name: 'Sistema de Gestión' })\n    2) <h2>Panel Principal</h2> aka getByRole('heading', { name: 'Panel Principal' })\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1, h2')\u001b[22m\n\n\n\u001b[0m \u001b[90m 78 |\u001b[39m\n \u001b[90m 79 |\u001b[39m   test(\u001b[32m'Debe manejar devolución parcial de productos compuestos'\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 80 |\u001b[39m     \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mlocator(\u001b[32m'h1, h2'\u001b[39m))\u001b[33m.\u001b[39mtoContainText(\u001b[35m/devoluc/i\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                          \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 81 |\u001b[39m\n \u001b[90m 82 |\u001b[39m     \u001b[90m// Nueva devolución parcial\u001b[39m\n \u001b[90m 83 |\u001b[39m     \u001b[36mconst\u001b[39m nuevaBtn \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'button:has-text(\"Nueva\")'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\devoluciones-flow.spec.js:80:42\u001b[22m"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-07-15T02:32:04.875Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\devoluciones-flow-Flujo-de-dc3dc-ial-de-productos-compuestos-chromium\\test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\devoluciones-flow-Flujo-de-dc3dc-ial-de-productos-compuestos-chromium\\video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\devoluciones-flow-Flujo-de-dc3dc-ial-de-productos-compuestos-chromium\\error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\devoluciones-flow.spec.js",
+                        "column": 42,
+                        "line": 80
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "e4421d005c6f5c6a6ac6-e3153452274a1dd5a764",
+              "file": "devoluciones-flow.spec.js",
+              "line": 79,
+              "column": 3
+            },
+            {
+              "title": "Debe validar stock al procesar devolución",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 6,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 11382,
+                      "error": {
+                        "message": "Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: locator('h1')\nExpected pattern: \u001b[32m/devoluc/i\u001b[39m\nReceived string:  \u001b[31m\"Sistema de Gestión\"\u001b[39m\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n\u001b[2m    8 × locator resolved to <h1>Sistema de Gestión</h1>\u001b[22m\n\u001b[2m      - unexpected value \"Sistema de Gestión\"\u001b[22m\n",
+                        "stack": "Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: locator('h1')\nExpected pattern: \u001b[32m/devoluc/i\u001b[39m\nReceived string:  \u001b[31m\"Sistema de Gestión\"\u001b[39m\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n\u001b[2m    8 × locator resolved to <h1>Sistema de Gestión</h1>\u001b[22m\n\u001b[2m      - unexpected value \"Sistema de Gestión\"\u001b[22m\n\n    at C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\devoluciones-flow.spec.js:127:38",
+                        "location": {
+                          "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\devoluciones-flow.spec.js",
+                          "column": 38,
+                          "line": 127
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 125 |\u001b[39m\n \u001b[90m 126 |\u001b[39m   test(\u001b[32m'Debe validar stock al procesar devolución'\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 127 |\u001b[39m     \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mlocator(\u001b[32m'h1'\u001b[39m))\u001b[33m.\u001b[39mtoContainText(\u001b[35m/devoluc/i\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                                      \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 128 |\u001b[39m\n \u001b[90m 129 |\u001b[39m     \u001b[36mconst\u001b[39m nuevaBtn \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'button:has-text(\"Nueva\")'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\n \u001b[90m 130 |\u001b[39m     \u001b[36mawait\u001b[39m nuevaBtn\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\devoluciones-flow.spec.js",
+                            "column": 38,
+                            "line": 127
+                          },
+                          "message": "Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: locator('h1')\nExpected pattern: \u001b[32m/devoluc/i\u001b[39m\nReceived string:  \u001b[31m\"Sistema de Gestión\"\u001b[39m\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n\u001b[2m    8 × locator resolved to <h1>Sistema de Gestión</h1>\u001b[22m\n\u001b[2m      - unexpected value \"Sistema de Gestión\"\u001b[22m\n\n\n\u001b[0m \u001b[90m 125 |\u001b[39m\n \u001b[90m 126 |\u001b[39m   test(\u001b[32m'Debe validar stock al procesar devolución'\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 127 |\u001b[39m     \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mlocator(\u001b[32m'h1'\u001b[39m))\u001b[33m.\u001b[39mtoContainText(\u001b[35m/devoluc/i\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                                      \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 128 |\u001b[39m\n \u001b[90m 129 |\u001b[39m     \u001b[36mconst\u001b[39m nuevaBtn \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'button:has-text(\"Nueva\")'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\n \u001b[90m 130 |\u001b[39m     \u001b[36mawait\u001b[39m nuevaBtn\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\devoluciones-flow.spec.js:127:38\u001b[22m"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-07-15T02:32:10.123Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\devoluciones-flow-Flujo-de-c7884-tock-al-procesar-devolución-chromium\\test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\devoluciones-flow-Flujo-de-c7884-tock-al-procesar-devolución-chromium\\video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\devoluciones-flow-Flujo-de-c7884-tock-al-procesar-devolución-chromium\\error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\devoluciones-flow.spec.js",
+                        "column": 38,
+                        "line": 127
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "e4421d005c6f5c6a6ac6-f95a424a7d1dd7c674b6",
+              "file": "devoluciones-flow.spec.js",
+              "line": 126,
+              "column": 3
+            },
+            {
+              "title": "Debe generar reembolso automático",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 7,
+                      "parallelIndex": 2,
+                      "status": "failed",
+                      "duration": 10855,
+                      "error": {
+                        "message": "Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: locator('h1')\nExpected pattern: \u001b[32m/devoluc/i\u001b[39m\nReceived string:  \u001b[31m\"Sistema de Gestión\"\u001b[39m\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n\u001b[2m    8 × locator resolved to <h1>Sistema de Gestión</h1>\u001b[22m\n\u001b[2m      - unexpected value \"Sistema de Gestión\"\u001b[22m\n",
+                        "stack": "Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: locator('h1')\nExpected pattern: \u001b[32m/devoluc/i\u001b[39m\nReceived string:  \u001b[31m\"Sistema de Gestión\"\u001b[39m\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n\u001b[2m    8 × locator resolved to <h1>Sistema de Gestión</h1>\u001b[22m\n\u001b[2m      - unexpected value \"Sistema de Gestión\"\u001b[22m\n\n    at C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\devoluciones-flow.spec.js:168:38",
+                        "location": {
+                          "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\devoluciones-flow.spec.js",
+                          "column": 38,
+                          "line": 168
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 166 |\u001b[39m\n \u001b[90m 167 |\u001b[39m   test(\u001b[32m'Debe generar reembolso automático'\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 168 |\u001b[39m     \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mlocator(\u001b[32m'h1'\u001b[39m))\u001b[33m.\u001b[39mtoContainText(\u001b[35m/devoluc/i\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                                      \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 169 |\u001b[39m\n \u001b[90m 170 |\u001b[39m     \u001b[36mconst\u001b[39m nuevaBtn \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'button:has-text(\"Nueva\")'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\n \u001b[90m 171 |\u001b[39m     \u001b[36mawait\u001b[39m nuevaBtn\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\devoluciones-flow.spec.js",
+                            "column": 38,
+                            "line": 168
+                          },
+                          "message": "Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: locator('h1')\nExpected pattern: \u001b[32m/devoluc/i\u001b[39m\nReceived string:  \u001b[31m\"Sistema de Gestión\"\u001b[39m\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n\u001b[2m    8 × locator resolved to <h1>Sistema de Gestión</h1>\u001b[22m\n\u001b[2m      - unexpected value \"Sistema de Gestión\"\u001b[22m\n\n\n\u001b[0m \u001b[90m 166 |\u001b[39m\n \u001b[90m 167 |\u001b[39m   test(\u001b[32m'Debe generar reembolso automático'\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 168 |\u001b[39m     \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mlocator(\u001b[32m'h1'\u001b[39m))\u001b[33m.\u001b[39mtoContainText(\u001b[35m/devoluc/i\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                                      \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 169 |\u001b[39m\n \u001b[90m 170 |\u001b[39m     \u001b[36mconst\u001b[39m nuevaBtn \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'button:has-text(\"Nueva\")'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\n \u001b[90m 171 |\u001b[39m     \u001b[36mawait\u001b[39m nuevaBtn\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\devoluciones-flow.spec.js:168:38\u001b[22m"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-07-15T02:32:11.305Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\devoluciones-flow-Flujo-de-dfc2f-enerar-reembolso-automático-chromium\\test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\devoluciones-flow-Flujo-de-dfc2f-enerar-reembolso-automático-chromium\\video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\devoluciones-flow-Flujo-de-dfc2f-enerar-reembolso-automático-chromium\\error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\devoluciones-flow.spec.js",
+                        "column": 38,
+                        "line": 168
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "e4421d005c6f5c6a6ac6-d49ea32208d760442ff2",
+              "file": "devoluciones-flow.spec.js",
+              "line": 167,
+              "column": 3
+            },
+            {
+              "title": "Debe manejar devolución con componentes dañados",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 8,
+                      "parallelIndex": 1,
+                      "status": "failed",
+                      "duration": 9113,
+                      "error": {
+                        "message": "Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: locator('h1')\nExpected pattern: \u001b[32m/devoluc/i\u001b[39m\nReceived string:  \u001b[31m\"Sistema de Gestión\"\u001b[39m\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n\u001b[2m    8 × locator resolved to <h1>Sistema de Gestión</h1>\u001b[22m\n\u001b[2m      - unexpected value \"Sistema de Gestión\"\u001b[22m\n",
+                        "stack": "Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: locator('h1')\nExpected pattern: \u001b[32m/devoluc/i\u001b[39m\nReceived string:  \u001b[31m\"Sistema de Gestión\"\u001b[39m\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n\u001b[2m    8 × locator resolved to <h1>Sistema de Gestión</h1>\u001b[22m\n\u001b[2m      - unexpected value \"Sistema de Gestión\"\u001b[22m\n\n    at C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\devoluciones-flow.spec.js:220:38",
+                        "location": {
+                          "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\devoluciones-flow.spec.js",
+                          "column": 38,
+                          "line": 220
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 218 |\u001b[39m\n \u001b[90m 219 |\u001b[39m   test(\u001b[32m'Debe manejar devolución con componentes dañados'\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 220 |\u001b[39m     \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mlocator(\u001b[32m'h1'\u001b[39m))\u001b[33m.\u001b[39mtoContainText(\u001b[35m/devoluc/i\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                                      \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 221 |\u001b[39m\n \u001b[90m 222 |\u001b[39m     \u001b[36mconst\u001b[39m nuevaBtn \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'button:has-text(\"Nueva\")'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\n \u001b[90m 223 |\u001b[39m     \u001b[36mawait\u001b[39m nuevaBtn\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\devoluciones-flow.spec.js",
+                            "column": 38,
+                            "line": 220
+                          },
+                          "message": "Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: locator('h1')\nExpected pattern: \u001b[32m/devoluc/i\u001b[39m\nReceived string:  \u001b[31m\"Sistema de Gestión\"\u001b[39m\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n\u001b[2m    8 × locator resolved to <h1>Sistema de Gestión</h1>\u001b[22m\n\u001b[2m      - unexpected value \"Sistema de Gestión\"\u001b[22m\n\n\n\u001b[0m \u001b[90m 218 |\u001b[39m\n \u001b[90m 219 |\u001b[39m   test(\u001b[32m'Debe manejar devolución con componentes dañados'\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 220 |\u001b[39m     \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mlocator(\u001b[32m'h1'\u001b[39m))\u001b[33m.\u001b[39mtoContainText(\u001b[35m/devoluc/i\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                                      \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 221 |\u001b[39m\n \u001b[90m 222 |\u001b[39m     \u001b[36mconst\u001b[39m nuevaBtn \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'button:has-text(\"Nueva\")'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\n \u001b[90m 223 |\u001b[39m     \u001b[36mawait\u001b[39m nuevaBtn\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\devoluciones-flow.spec.js:220:38\u001b[22m"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-07-15T02:32:17.430Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\devoluciones-flow-Flujo-de-e9781-ión-con-componentes-dañados-chromium\\test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\devoluciones-flow-Flujo-de-e9781-ión-con-componentes-dañados-chromium\\video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\devoluciones-flow-Flujo-de-e9781-ión-con-componentes-dañados-chromium\\error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\devoluciones-flow.spec.js",
+                        "column": 38,
+                        "line": 220
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "e4421d005c6f5c6a6ac6-497ff8eed65576825cad",
+              "file": "devoluciones-flow.spec.js",
+              "line": 219,
+              "column": 3
+            },
+            {
+              "title": "Debe actualizar inventario tras devolución",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 9,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 21262,
+                      "error": {
+                        "message": "TimeoutError: locator.click: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button:has-text(\"Nueva\")').first()\u001b[22m\n",
+                        "stack": "TimeoutError: locator.click: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button:has-text(\"Nueva\")').first()\u001b[22m\n\n    at C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\devoluciones-flow.spec.js:277:20",
+                        "location": {
+                          "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\devoluciones-flow.spec.js",
+                          "column": 20,
+                          "line": 277
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 275 |\u001b[39m     \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgoto(\u001b[32m'/returns'\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 276 |\u001b[39m     \u001b[36mconst\u001b[39m nuevaBtn \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'button:has-text(\"Nueva\")'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 277 |\u001b[39m     \u001b[36mawait\u001b[39m nuevaBtn\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                    \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 278 |\u001b[39m\n \u001b[90m 279 |\u001b[39m     \u001b[36mconst\u001b[39m ventaInput \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'input[placeholder*=\"venta\"]'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\n \u001b[90m 280 |\u001b[39m     \u001b[36mawait\u001b[39m ventaInput\u001b[33m.\u001b[39mfill(\u001b[32m'VNT-006'\u001b[39m)\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\devoluciones-flow.spec.js",
+                            "column": 20,
+                            "line": 277
+                          },
+                          "message": "TimeoutError: locator.click: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button:has-text(\"Nueva\")').first()\u001b[22m\n\n\n\u001b[0m \u001b[90m 275 |\u001b[39m     \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgoto(\u001b[32m'/returns'\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 276 |\u001b[39m     \u001b[36mconst\u001b[39m nuevaBtn \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'button:has-text(\"Nueva\")'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 277 |\u001b[39m     \u001b[36mawait\u001b[39m nuevaBtn\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                    \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 278 |\u001b[39m\n \u001b[90m 279 |\u001b[39m     \u001b[36mconst\u001b[39m ventaInput \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'input[placeholder*=\"venta\"]'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\n \u001b[90m 280 |\u001b[39m     \u001b[36mawait\u001b[39m ventaInput\u001b[33m.\u001b[39mfill(\u001b[32m'VNT-006'\u001b[39m)\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\devoluciones-flow.spec.js:277:20\u001b[22m"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-07-15T02:32:26.437Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\devoluciones-flow-Flujo-de-4ca78--inventario-tras-devolución-chromium\\test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\devoluciones-flow-Flujo-de-4ca78--inventario-tras-devolución-chromium\\video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\devoluciones-flow-Flujo-de-4ca78--inventario-tras-devolución-chromium\\error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\devoluciones-flow.spec.js",
+                        "column": 20,
+                        "line": 277
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "e4421d005c6f5c6a6ac6-b3b77317a08b05287fc9",
+              "file": "devoluciones-flow.spec.js",
+              "line": 264,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "ventas-flow.spec.js",
+      "file": "ventas-flow.spec.js",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Flujo de Ventas - Crítico",
+          "file": "ventas-flow.spec.js",
+          "line": 3,
+          "column": 6,
+          "specs": [
+            {
+              "title": "Debe completar venta con cliente específico",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 10,
+                      "parallelIndex": 2,
+                      "status": "failed",
+                      "duration": 12383,
+                      "error": {
+                        "message": "Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: locator('h1')\nExpected string: \u001b[32m\"Registrar Venta\"\u001b[39m\nReceived string: \u001b[31m\"Sistema de Gestión\"\u001b[39m\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n\u001b[2m    8 × locator resolved to <h1>Sistema de Gestión</h1>\u001b[22m\n\u001b[2m      - unexpected value \"Sistema de Gestión\"\u001b[22m\n",
+                        "stack": "Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: locator('h1')\nExpected string: \u001b[32m\"Registrar Venta\"\u001b[39m\nReceived string: \u001b[31m\"Sistema de Gestión\"\u001b[39m\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n\u001b[2m    8 × locator resolved to <h1>Sistema de Gestión</h1>\u001b[22m\n\u001b[2m      - unexpected value \"Sistema de Gestión\"\u001b[22m\n\n    at C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\ventas-flow.spec.js:18:38",
+                        "location": {
+                          "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\ventas-flow.spec.js",
+                          "column": 38,
+                          "line": 18
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 16 |\u001b[39m   test(\u001b[32m'Debe completar venta con cliente específico'\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\n \u001b[90m 17 |\u001b[39m     \u001b[90m// Verificar que estamos en la página de ventas\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 18 |\u001b[39m     \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mlocator(\u001b[32m'h1'\u001b[39m))\u001b[33m.\u001b[39mtoContainText(\u001b[32m'Registrar Venta'\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                      \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 19 |\u001b[39m\n \u001b[90m 20 |\u001b[39m     \u001b[90m// PASO 1: Seleccionar cliente\u001b[39m\n \u001b[90m 21 |\u001b[39m     \u001b[36mconst\u001b[39m clienteInput \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'input[placeholder*=\"cliente\" i]'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\ventas-flow.spec.js",
+                            "column": 38,
+                            "line": 18
+                          },
+                          "message": "Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: locator('h1')\nExpected string: \u001b[32m\"Registrar Venta\"\u001b[39m\nReceived string: \u001b[31m\"Sistema de Gestión\"\u001b[39m\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n\u001b[2m    8 × locator resolved to <h1>Sistema de Gestión</h1>\u001b[22m\n\u001b[2m      - unexpected value \"Sistema de Gestión\"\u001b[22m\n\n\n\u001b[0m \u001b[90m 16 |\u001b[39m   test(\u001b[32m'Debe completar venta con cliente específico'\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\n \u001b[90m 17 |\u001b[39m     \u001b[90m// Verificar que estamos en la página de ventas\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 18 |\u001b[39m     \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mlocator(\u001b[32m'h1'\u001b[39m))\u001b[33m.\u001b[39mtoContainText(\u001b[32m'Registrar Venta'\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                      \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 19 |\u001b[39m\n \u001b[90m 20 |\u001b[39m     \u001b[90m// PASO 1: Seleccionar cliente\u001b[39m\n \u001b[90m 21 |\u001b[39m     \u001b[36mconst\u001b[39m clienteInput \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'input[placeholder*=\"cliente\" i]'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\ventas-flow.spec.js:18:38\u001b[22m"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-07-15T02:32:27.928Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\ventas-flow-Flujo-de-Venta-38af3-enta-con-cliente-específico-chromium\\test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\ventas-flow-Flujo-de-Venta-38af3-enta-con-cliente-específico-chromium\\video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\ventas-flow-Flujo-de-Venta-38af3-enta-con-cliente-específico-chromium\\error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\ventas-flow.spec.js",
+                        "column": 38,
+                        "line": 18
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "965eb0931c7492f184ad-8af519a8f06913400270",
+              "file": "ventas-flow.spec.js",
+              "line": 16,
+              "column": 3
+            },
+            {
+              "title": "Debe manejar venta sin cliente específico",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 11,
+                      "parallelIndex": 1,
+                      "status": "failed",
+                      "duration": 9016,
+                      "error": {
+                        "message": "Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: locator('h1')\nExpected string: \u001b[32m\"Registrar Venta\"\u001b[39m\nReceived string: \u001b[31m\"Sistema de Gestión\"\u001b[39m\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n\u001b[2m    8 × locator resolved to <h1>Sistema de Gestión</h1>\u001b[22m\n\u001b[2m      - unexpected value \"Sistema de Gestión\"\u001b[22m\n",
+                        "stack": "Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: locator('h1')\nExpected string: \u001b[32m\"Registrar Venta\"\u001b[39m\nReceived string: \u001b[31m\"Sistema de Gestión\"\u001b[39m\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n\u001b[2m    8 × locator resolved to <h1>Sistema de Gestión</h1>\u001b[22m\n\u001b[2m      - unexpected value \"Sistema de Gestión\"\u001b[22m\n\n    at C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\ventas-flow.spec.js:84:38",
+                        "location": {
+                          "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\ventas-flow.spec.js",
+                          "column": 38,
+                          "line": 84
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 82 |\u001b[39m   test(\u001b[32m'Debe manejar venta sin cliente específico'\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\n \u001b[90m 83 |\u001b[39m     \u001b[90m// Verificar página de ventas\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 84 |\u001b[39m     \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mlocator(\u001b[32m'h1'\u001b[39m))\u001b[33m.\u001b[39mtoContainText(\u001b[32m'Registrar Venta'\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                      \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 85 |\u001b[39m\n \u001b[90m 86 |\u001b[39m     \u001b[90m// Seleccionar venta sin cliente\u001b[39m\n \u001b[90m 87 |\u001b[39m     \u001b[36mconst\u001b[39m sinClienteBtn \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'button:has-text(\"sin cliente\"), button:has-text(\"Sin Cliente\")'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\ventas-flow.spec.js",
+                            "column": 38,
+                            "line": 84
+                          },
+                          "message": "Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: locator('h1')\nExpected string: \u001b[32m\"Registrar Venta\"\u001b[39m\nReceived string: \u001b[31m\"Sistema de Gestión\"\u001b[39m\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n\u001b[2m    8 × locator resolved to <h1>Sistema de Gestión</h1>\u001b[22m\n\u001b[2m      - unexpected value \"Sistema de Gestión\"\u001b[22m\n\n\n\u001b[0m \u001b[90m 82 |\u001b[39m   test(\u001b[32m'Debe manejar venta sin cliente específico'\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\n \u001b[90m 83 |\u001b[39m     \u001b[90m// Verificar página de ventas\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 84 |\u001b[39m     \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mlocator(\u001b[32m'h1'\u001b[39m))\u001b[33m.\u001b[39mtoContainText(\u001b[32m'Registrar Venta'\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                      \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 85 |\u001b[39m\n \u001b[90m 86 |\u001b[39m     \u001b[90m// Seleccionar venta sin cliente\u001b[39m\n \u001b[90m 87 |\u001b[39m     \u001b[36mconst\u001b[39m sinClienteBtn \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'button:has-text(\"sin cliente\"), button:has-text(\"Sin Cliente\")'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\ventas-flow.spec.js:84:38\u001b[22m"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-07-15T02:32:36.656Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\ventas-flow-Flujo-de-Venta-bbd72-enta-sin-cliente-específico-chromium\\test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\ventas-flow-Flujo-de-Venta-bbd72-enta-sin-cliente-específico-chromium\\video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\ventas-flow-Flujo-de-Venta-bbd72-enta-sin-cliente-específico-chromium\\error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\ventas-flow.spec.js",
+                        "column": 38,
+                        "line": 84
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "965eb0931c7492f184ad-9529ac40347202a7d458",
+              "file": "ventas-flow.spec.js",
+              "line": 82,
+              "column": 3
+            },
+            {
+              "title": "Debe validar stock insuficiente",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 12,
+                      "parallelIndex": 2,
+                      "status": "failed",
+                      "duration": 10916,
+                      "error": {
+                        "message": "Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: locator('h1')\nExpected string: \u001b[32m\"Registrar Venta\"\u001b[39m\nReceived string: \u001b[31m\"Sistema de Gestión\"\u001b[39m\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n\u001b[2m    8 × locator resolved to <h1>Sistema de Gestión</h1>\u001b[22m\n\u001b[2m      - unexpected value \"Sistema de Gestión\"\u001b[22m\n",
+                        "stack": "Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: locator('h1')\nExpected string: \u001b[32m\"Registrar Venta\"\u001b[39m\nReceived string: \u001b[31m\"Sistema de Gestión\"\u001b[39m\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n\u001b[2m    8 × locator resolved to <h1>Sistema de Gestión</h1>\u001b[22m\n\u001b[2m      - unexpected value \"Sistema de Gestión\"\u001b[22m\n\n    at C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\ventas-flow.spec.js:115:38",
+                        "location": {
+                          "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\ventas-flow.spec.js",
+                          "column": 38,
+                          "line": 115
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 113 |\u001b[39m\n \u001b[90m 114 |\u001b[39m   test(\u001b[32m'Debe validar stock insuficiente'\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 115 |\u001b[39m     \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mlocator(\u001b[32m'h1'\u001b[39m))\u001b[33m.\u001b[39mtoContainText(\u001b[32m'Registrar Venta'\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                                      \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 116 |\u001b[39m\n \u001b[90m 117 |\u001b[39m     \u001b[90m// Intentar agregar cantidad mayor al stock\u001b[39m\n \u001b[90m 118 |\u001b[39m     \u001b[36mconst\u001b[39m productoInput \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'input[placeholder*=\"producto\" i]'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\ventas-flow.spec.js",
+                            "column": 38,
+                            "line": 115
+                          },
+                          "message": "Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: locator('h1')\nExpected string: \u001b[32m\"Registrar Venta\"\u001b[39m\nReceived string: \u001b[31m\"Sistema de Gestión\"\u001b[39m\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n\u001b[2m    8 × locator resolved to <h1>Sistema de Gestión</h1>\u001b[22m\n\u001b[2m      - unexpected value \"Sistema de Gestión\"\u001b[22m\n\n\n\u001b[0m \u001b[90m 113 |\u001b[39m\n \u001b[90m 114 |\u001b[39m   test(\u001b[32m'Debe validar stock insuficiente'\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 115 |\u001b[39m     \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mlocator(\u001b[32m'h1'\u001b[39m))\u001b[33m.\u001b[39mtoContainText(\u001b[32m'Registrar Venta'\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                                      \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 116 |\u001b[39m\n \u001b[90m 117 |\u001b[39m     \u001b[90m// Intentar agregar cantidad mayor al stock\u001b[39m\n \u001b[90m 118 |\u001b[39m     \u001b[36mconst\u001b[39m productoInput \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'input[placeholder*=\"producto\" i]'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\ventas-flow.spec.js:115:38\u001b[22m"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-07-15T02:32:43.903Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\ventas-flow-Flujo-de-Venta-efd60--validar-stock-insuficiente-chromium\\test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\ventas-flow-Flujo-de-Venta-efd60--validar-stock-insuficiente-chromium\\video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\ventas-flow-Flujo-de-Venta-efd60--validar-stock-insuficiente-chromium\\error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\ventas-flow.spec.js",
+                        "column": 38,
+                        "line": 115
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "965eb0931c7492f184ad-e03629e405454e57e45f",
+              "file": "ventas-flow.spec.js",
+              "line": 114,
+              "column": 3
+            },
+            {
+              "title": "Debe procesar venta con múltiples productos",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 13,
+                      "parallelIndex": 1,
+                      "status": "failed",
+                      "duration": 11237,
+                      "error": {
+                        "message": "Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: locator('h1')\nExpected string: \u001b[32m\"Registrar Venta\"\u001b[39m\nReceived string: \u001b[31m\"Sistema de Gestión\"\u001b[39m\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n\u001b[2m    8 × locator resolved to <h1>Sistema de Gestión</h1>\u001b[22m\n\u001b[2m      - unexpected value \"Sistema de Gestión\"\u001b[22m\n",
+                        "stack": "Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: locator('h1')\nExpected string: \u001b[32m\"Registrar Venta\"\u001b[39m\nReceived string: \u001b[31m\"Sistema de Gestión\"\u001b[39m\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n\u001b[2m    8 × locator resolved to <h1>Sistema de Gestión</h1>\u001b[22m\n\u001b[2m      - unexpected value \"Sistema de Gestión\"\u001b[22m\n\n    at C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\ventas-flow.spec.js:147:38",
+                        "location": {
+                          "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\ventas-flow.spec.js",
+                          "column": 38,
+                          "line": 147
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 145 |\u001b[39m\n \u001b[90m 146 |\u001b[39m   test(\u001b[32m'Debe procesar venta con múltiples productos'\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 147 |\u001b[39m     \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mlocator(\u001b[32m'h1'\u001b[39m))\u001b[33m.\u001b[39mtoContainText(\u001b[32m'Registrar Venta'\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                                      \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 148 |\u001b[39m\n \u001b[90m 149 |\u001b[39m     \u001b[90m// Agregar primer producto\u001b[39m\n \u001b[90m 150 |\u001b[39m     \u001b[36mlet\u001b[39m productoInput \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'input[placeholder*=\"producto\" i]'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\ventas-flow.spec.js",
+                            "column": 38,
+                            "line": 147
+                          },
+                          "message": "Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: locator('h1')\nExpected string: \u001b[32m\"Registrar Venta\"\u001b[39m\nReceived string: \u001b[31m\"Sistema de Gestión\"\u001b[39m\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n\u001b[2m    8 × locator resolved to <h1>Sistema de Gestión</h1>\u001b[22m\n\u001b[2m      - unexpected value \"Sistema de Gestión\"\u001b[22m\n\n\n\u001b[0m \u001b[90m 145 |\u001b[39m\n \u001b[90m 146 |\u001b[39m   test(\u001b[32m'Debe procesar venta con múltiples productos'\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({ page }) \u001b[33m=>\u001b[39m {\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 147 |\u001b[39m     \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mlocator(\u001b[32m'h1'\u001b[39m))\u001b[33m.\u001b[39mtoContainText(\u001b[32m'Registrar Venta'\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                                      \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 148 |\u001b[39m\n \u001b[90m 149 |\u001b[39m     \u001b[90m// Agregar primer producto\u001b[39m\n \u001b[90m 150 |\u001b[39m     \u001b[36mlet\u001b[39m productoInput \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'input[placeholder*=\"producto\" i]'\u001b[39m)\u001b[33m.\u001b[39mfirst()\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\ventas-flow.spec.js:147:38\u001b[22m"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-07-15T02:32:50.565Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\ventas-flow-Flujo-de-Venta-fe563-nta-con-múltiples-productos-chromium\\test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\ventas-flow-Flujo-de-Venta-fe563-nta-con-múltiples-productos-chromium\\video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\test-results\\ventas-flow-Flujo-de-Venta-fe563-nta-con-múltiples-productos-chromium\\error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "C:\\Users\\jpant\\OneDrive\\Desktop\\Universidad\\UNIDENTAL\\unidental-frontend\\tests\\e2e\\ventas-flow.spec.js",
+                        "column": 38,
+                        "line": 147
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "965eb0931c7492f184ad-baff1418af1086c48a9c",
+              "file": "ventas-flow.spec.js",
+              "line": 146,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2025-07-15T02:31:30.476Z",
+    "duration": 91920.54,
+    "expected": 1,
+    "skipped": 0,
+    "unexpected": 14,
+    "flaky": 0
+  }
+}

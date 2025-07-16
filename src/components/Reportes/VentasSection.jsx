@@ -1,41 +1,109 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../../context/AuthContext";
-import {
-    getSalesStatisticsByDays,
-    getSalesByLocation,
+import { 
+    getTodaySales, 
+    getSalesInDateRange, 
+    getSalesStatisticsByDays, 
+    getSalesByLocation, 
     getTopProductsByDays,
-    getTodaySales,
-    getSalesInDateRange,
+    getSalesByDateRange
 } from "../../services/salesService";
+import { getReturnedItemsBySale } from "../../services/returnsService";
+import { getCurrentDateLocal, debugDate } from "../../utils/dateUtils";
 import ReportesFilters from "./ReportesFilters";
+import ReportesTable from "./ReportesTable";
+import ReportesInfo from "./ReportesInfo";
 import SaleDetailModal from "./SaleDetailModal";
+import ReturnDetailModal from "./ReturnDetailModal";
+import PaymentDetailModal from "./PaymentDetailModal";
 
 const VentasSection = () => {
     const { authToken } = useAuth();
-
-    // Estados para datos
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState("");
+    const [detailedSales, setDetailedSales] = useState([]);
     const [salesStats, setSalesStats] = useState(null);
     const [salesByLocation, setSalesByLocation] = useState([]);
     const [topProducts, setTopProducts] = useState([]);
-    const [detailedSales, setDetailedSales] = useState([]);
+    const [returns, setReturns] = useState([]);
+    const [creditPayments, setCreditPayments] = useState([]);
 
-    // Estados de carga y errores
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState("");
-
-    // Estados para el modal de detalle
+    // Estados para modales
     const [selectedSaleData, setSelectedSaleData] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [selectedReturnData, setSelectedReturnData] = useState(null);
+    const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
+    const [selectedPaymentData, setSelectedPaymentData] = useState(null);
+    const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
-    // Filtros
+    // Estados para filtros
     const [filters, setFilters] = useState({
         type: "sale",
         days: "", // Por defecto mostrar "Selecciona uno"
-        specificDate: new Date().toISOString().split("T")[0], // Por defecto mostrar ventas de hoy
+        specificDate: getCurrentDateLocal(), // Por defecto mostrar ventas de hoy
         startDate: "",
         endDate: "",
         sede: "all",
     });
+
+    // Mueve aquí la función getFilteredData
+    const getFilteredData = (data) => {
+        if (!data || filters.sede === "all") return data;
+        if (Array.isArray(data)) {
+            return data.filter((item) => {
+                const itemSede = item.sede || item.location || item.location_name || "";
+                return itemSede === filters.sede;
+            });
+        }
+        return data;
+    };
+
+    // Ahora sí puedes usar los filtrados
+    const filteredDetailedSales = getFilteredData(detailedSales);
+    const filteredSalesByLocation = getFilteredData(salesByLocation);
+
+    // Función para validar y corregir datos de ventas por sede
+    const validateAndCorrectLocationData = (locationData) => {
+        if (!locationData || !Array.isArray(locationData)) return locationData;
+        return locationData.map((location) => {
+            let correctedLocation = { ...location };
+            // Si total_amount es 0 o undefined, pero tenemos total_sales > 0 y average_sale > 0
+            // Podemos calcular el total: total_sales * average_sale
+            if (
+                (!location.total_amount || location.total_amount === 0) &&
+                location.total_sales > 0 && location.average_sale > 0
+            ) {
+                const calculatedTotal = location.total_sales * location.average_sale;
+                correctedLocation.total_amount = calculatedTotal;
+            }
+            // También verificar si tenemos total_revenue como alternativa
+            if (
+                (!correctedLocation.total_amount || correctedLocation.total_amount === 0) &&
+                location.total_revenue && location.total_revenue > 0
+            ) {
+                correctedLocation.total_amount = location.total_revenue;
+            }
+            return correctedLocation;
+        });
+    };
+
+    // Función para mapear días a filtros predefinidos del backend
+    const getDateRangeFromDays = (days) => {
+        switch (days) {
+            case 1:
+                return "today";
+            case 7:
+                return "last_7_days";
+            case 30:
+                return "last_30_days";
+            case 90:
+                return "last_90_days";
+            case 365:
+                return "last_365_days"; // Si el backend lo soporta
+            default:
+                return null; // Usar filtros específicos de fecha
+        }
+    };
 
     // Función para cargar datos usando API de estadísticas
     const loadSalesDataByDays = async (days) => {
@@ -49,51 +117,130 @@ const VentasSection = () => {
                 `🔄 Cargando datos de ventas para últimos ${days} días`
             );
 
-            // Cargar datos en paralelo
-            const [statsData, locationData, productsData] = await Promise.all([
-                getSalesStatisticsByDays(days, authToken),
-                getSalesByLocation(days, authToken),
-                getTopProductsByDays(days, 10, authToken),
-            ]);
+            // Intentar usar filtros predefinidos del backend
+            const dateRange = getDateRangeFromDays(days);
+            let salesData = [];
 
-            console.log("📊 Datos de estadísticas recibidos:", statsData);
-            console.log("📍 Datos de ubicaciones recibidos:", locationData);
-            console.log("🔥 Datos de productos recibidos:", productsData);
-
-            // Agregar logging detallado para debug de totales por sede
-            if (locationData && locationData.length > 0) {
-                console.log("🏢 DETALLE DE VENTAS POR SEDE:");
-                locationData.forEach((location, index) => {
-                    console.log(
-                        `  ${index + 1}. ${
-                            location.location_name || "Sin nombre"
-                        }:`
-                    );
-                    console.log(`     - ID: ${location.location_id}`);
-                    console.log(
-                        `     - Total Sales: ${location.total_sales || 0}`
-                    );
-                    console.log(
-                        `     - Total Amount: ${
-                            location.total_amount || 0
-                        } (ESTE ES EL TOTAL DE DINERO)`
-                    );
-                    console.log(
-                        `     - Average Sale: ${
-                            location.average_sale || 0
-                        } (ESTE ES EL PROMEDIO)`
-                    );
-                    console.log(
-                        `     - Total Revenue: ${
-                            location.total_revenue || "No disponible"
-                        }`
-                    );
-                });
+            if (dateRange) {
+                console.log(`🎯 Usando filtro predefinido: ${dateRange}`);
+                try {
+                    salesData = await getSalesByDateRange(dateRange, {}, authToken);
+                } catch (error) {
+                    console.warn(`⚠️ Error con filtro predefinido ${dateRange}, usando estadísticas:`, error);
+                }
             }
 
-            setSalesStats(statsData);
-            setSalesByLocation(locationData);
-            setTopProducts(productsData);
+            // Si no hay datos con filtros predefinidos, usar estadísticas
+            if (salesData.length === 0) {
+                console.log("📊 Usando endpoints de estadísticas");
+                // Cargar datos en paralelo
+                const [statsData, locationData, productsData] = await Promise.all([
+                    getSalesStatisticsByDays(days, authToken).catch(err => {
+                        console.warn("⚠️ Error cargando estadísticas:", err);
+                        return null;
+                    }),
+                    getSalesByLocation(days, authToken).catch(err => {
+                        console.warn("⚠️ Error cargando datos por ubicación:", err);
+                        return [];
+                    }),
+                    getTopProductsByDays(days, 10, authToken).catch(err => {
+                        console.warn("⚠️ Error cargando productos top:", err);
+                        return [];
+                    }),
+                ]);
+
+                console.log("📊 Datos de estadísticas recibidos:", statsData);
+                console.log("📍 Datos de ubicaciones recibidos:", locationData);
+                console.log("🔥 Datos de productos recibidos:", productsData);
+
+                // Agregar logging detallado para debug de totales por sede
+                if (locationData && locationData.length > 0) {
+                    console.log("🏢 DETALLE DE VENTAS POR SEDE:");
+                    locationData.forEach((location, index) => {
+                        console.log(
+                            `  ${index + 1}. ${
+                                location.location_name || "Sin nombre"
+                            }:`
+                        );
+                        console.log(`     - ID: ${location.location_id}`);
+                        console.log(
+                            `     - Total Sales: ${location.total_sales || 0}`
+                        );
+                        console.log(
+                            `     - Total Amount: ${
+                                location.total_amount || 0
+                            } (ESTE ES EL TOTAL DE DINERO)`
+                        );
+                        console.log(
+                            `     - Average Sale: ${
+                                location.average_sale || 0
+                            } (ESTE ES EL PROMEDIO)`
+                        );
+                        console.log(
+                            `     - Total Revenue: ${
+                                location.total_revenue || "No disponible"
+                            }`
+                        );
+                    });
+                }
+
+                // Procesar datos para compatibilidad
+                const processedStats = statsData ? {
+                    totalSales: statsData.total_sales || 0,
+                    totalRevenue: statsData.total_revenue || 0,
+                    averageSale: statsData.average_sale_value || 0,
+                    salesByType: statsData.sales_by_type || [],
+                    ...statsData
+                } : null;
+
+                const processedLocationData = locationData || [];
+                const processedProductsData = productsData || [];
+
+                setSalesStats(processedStats);
+                setSalesByLocation(processedLocationData);
+                setTopProducts(processedProductsData);
+            } else {
+                // Si tenemos datos de ventas detalladas, procesarlos para estadísticas
+                console.log(`📊 Procesando ${salesData.length} ventas para estadísticas`);
+                
+                // Calcular estadísticas básicas
+                const totalSales = salesData.length;
+                const totalRevenue = salesData.reduce((sum, sale) => sum + parseFloat(sale.total_net || sale.total_gross || sale.total || 0), 0);
+                const averageSale = totalSales > 0 ? totalRevenue / totalSales : 0;
+
+                // Agrupar por sede
+                const locationMap = {};
+                salesData.forEach(sale => {
+                    const locationName = sale.location_details?.name || "Sin sede";
+                    if (!locationMap[locationName]) {
+                        locationMap[locationName] = {
+                            location_name: locationName,
+                            location_id: sale.location_details?.id || 0,
+                            total_sales: 0,
+                            total_amount: 0,
+                            average_sale: 0
+                        };
+                    }
+                    locationMap[locationName].total_sales++;
+                    locationMap[locationName].total_amount += parseFloat(sale.total_net || sale.total_gross || sale.total || 0);
+                });
+
+                // Calcular promedios por sede
+                Object.values(locationMap).forEach(location => {
+                    location.average_sale = location.total_sales > 0 ? location.total_amount / location.total_sales : 0;
+                });
+
+                const processedStats = {
+                    totalSales,
+                    totalRevenue,
+                    averageSale,
+                    salesByType: []
+                };
+
+                setSalesStats(processedStats);
+                setSalesByLocation(Object.values(locationMap));
+                setTopProducts([]); // Los productos top se calculan en el backend
+            }
 
             console.log("✅ Datos de estadísticas cargados exitosamente");
         } catch (error) {
@@ -117,13 +264,14 @@ const VentasSection = () => {
             let salesData = [];
 
             // Si es hoy, usar endpoint específico
-            const today = new Date().toISOString().split("T")[0];
+            const today = getCurrentDateLocal();
             if (specificDate === today) {
                 console.log("📅 Usando endpoint de ventas de hoy");
                 const todayData = await getTodaySales({}, authToken);
                 salesData = todayData.results || todayData || [];
             } else {
-                console.log("📅 Usando filtrado local para fecha específica");
+                console.log("📅 Usando filtros de fecha del backend");
+                // Usar los nuevos filtros de fecha del backend
                 salesData = await getSalesInDateRange(
                     specificDate,
                     specificDate,
@@ -168,7 +316,7 @@ const VentasSection = () => {
     useEffect(() => {
         // Cargar ventas de hoy por defecto
         if (authToken) {
-            const today = new Date().toISOString().split("T")[0];
+            const today = getCurrentDateLocal();
             loadDetailedSales(today);
         }
     }, [authToken]);
@@ -185,65 +333,90 @@ const VentasSection = () => {
         }
     }, [filters.days, filters.specificDate, authToken]);
 
-    // Filtrar datos por sede si es necesario
-    const getFilteredData = (data) => {
-        if (!data || filters.sede === "all") return data;
-
-        if (Array.isArray(data)) {
-            return data.filter((item) => {
-                const itemSede =
-                    item.sede || item.location || item.location_name || "";
-                return itemSede === filters.sede;
+    // Nueva función para obtener devoluciones del día o por rango de fechas usando filtros del backend
+    const fetchDevolucionesDelDia = useCallback(async (fecha, fechaFin = null) => {
+        try {
+            let params = {};
+            if (fecha && !fechaFin) {
+                params.date_range = "today";
+            } else if (fecha && fechaFin) {
+                params.return_date_from = fecha;
+                params.return_date_to = fechaFin;
+            }
+            const query = new URLSearchParams(params).toString();
+            const resp = await fetch(`https://unidental-backend.onrender.com/api/sales/returns/?${query}`, {
+                headers: {
+                    Authorization: `Token ${authToken}`,
+                    "Content-Type": "application/json"
+                }
             });
+            if (!resp.ok) throw new Error("Error consultando devoluciones");
+            const data = await resp.json();
+            const arr = Array.isArray(data.results) ? data.results : (Array.isArray(data) ? data : []);
+            setReturns(arr);
+            // Sumar el total devuelto
+            const total = arr.reduce((sum, d) => sum + parseFloat(d.total_amount || 0), 0);
+            return total;
+        } catch (e) {
+            setReturns([]);
+            return 0;
         }
+    }, [authToken]);
 
-        return data;
-    };
-
-    const filteredDetailedSales = getFilteredData(detailedSales);
-    const filteredSalesByLocation = getFilteredData(salesByLocation);
-
-    // Función para validar y corregir datos de ventas por sede
-    const validateAndCorrectLocationData = useCallback((locationData) => {
-        if (!locationData || !Array.isArray(locationData)) return locationData;
-
-        return locationData.map((location) => {
-            let correctedLocation = { ...location };
-
-            // Si total_amount es 0 o undefined, pero tenemos total_sales > 0 y average_sale > 0
-            // Podemos calcular el total: total_sales * average_sale
-            if (
-                (!location.total_amount || location.total_amount === 0) &&
-                location.total_sales > 0 &&
-                location.average_sale > 0
-            ) {
-                const calculatedTotal =
-                    location.total_sales * location.average_sale;
-                correctedLocation.total_amount = calculatedTotal;
-
-                console.log(`🔧 CORRECCIÓN: Sede ${location.location_name}:`);
-                console.log(`   Total original: ${location.total_amount}`);
-                console.log(
-                    `   Total calculado: ${calculatedTotal} (${location.total_sales} ventas × $${location.average_sale} promedio)`
-                );
+    // Nueva función para obtener abonos a créditos del día o por rango de fechas usando filtros del backend
+    const fetchAbonosDelDia = useCallback(async (fecha, fechaFin = null) => {
+        if (!fecha || !authToken) return;
+        try {
+            let params = {};
+            if (fecha && !fechaFin) {
+                params.date_range = "today";
+            } else if (fecha && fechaFin) {
+                params.payment_date_from = fecha;
+                params.payment_date_to = fechaFin;
             }
+            const query = new URLSearchParams(params).toString();
+            const resp = await fetch(`https://unidental-backend.onrender.com/api/credits/payments/?${query}`, {
+                headers: {
+                    Authorization: `Token ${authToken}`,
+                    "Content-Type": "application/json"
+                }
+            });
+            if (!resp.ok) throw new Error("Error consultando abonos");
+            const data = await resp.json();
+            const pagos = Array.isArray(data.results) ? data.results : (Array.isArray(data) ? data : []);
+            setCreditPayments(pagos);
+        } catch (e) {
+            setCreditPayments([]);
+        }
+    }, [authToken]);
 
-            // También verificar si tenemos total_revenue como alternativa
-            if (
-                (!correctedLocation.total_amount ||
-                    correctedLocation.total_amount === 0) &&
-                location.total_revenue &&
-                location.total_revenue > 0
-            ) {
-                correctedLocation.total_amount = location.total_revenue;
-                console.log(
-                    `🔧 CORRECCIÓN: Usando total_revenue para sede ${location.location_name}: $${location.total_revenue}`
+    // Efecto para actualizar neto cuando cambian las ventas detalladas o la fecha
+    useEffect(() => {
+        const calcularNeto = async () => {
+            if (filteredDetailedSales.length > 0 && filters.specificDate) {
+                const total = filteredDetailedSales.reduce(
+                    (sum, sale) => sum + parseFloat(sale.total_net || sale.total_gross || sale.total || 0),
+                    0
                 );
+                const devuelto = await fetchDevolucionesDelDia(filters.specificDate);
+                return total - devuelto;
+            } else {
+                return 0;
             }
+        };
+        calcularNeto();
+        // No incluir fetchDevolucionesDelDia en dependencias para evitar bucles
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [filteredDetailedSales, filters.specificDate]);
 
-            return correctedLocation;
-        });
-    }, []);
+    // Llama a fetchAbonosDelDia cuando cambie la fecha
+    useEffect(() => {
+        if (filters.specificDate) {
+            fetchAbonosDelDia(filters.specificDate);
+        }
+        // No incluir fetchAbonosDelDia en dependencias para evitar bucles
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [filters.specificDate]);
 
     // Aplicar validación y corrección a los datos filtrados
     const validatedSalesByLocation = validateAndCorrectLocationData(
@@ -260,6 +433,39 @@ const VentasSection = () => {
     const handleCloseModal = () => {
         setIsModalOpen(false);
         setSelectedSaleData(null);
+    };
+
+    // Función para manejar el click en una devolución
+    const handleReturnClick = (returnData) => {
+        setSelectedReturnData(returnData);
+        setIsReturnModalOpen(true);
+    };
+    const handleCloseReturnModal = () => {
+        setIsReturnModalOpen(false);
+        setSelectedReturnData(null);
+    };
+
+    // Función para manejar el click en un abono
+    const handlePaymentClick = (paymentData) => {
+        setSelectedPaymentData(paymentData);
+        setIsPaymentModalOpen(true);
+    };
+    const handleClosePaymentModal = () => {
+        setIsPaymentModalOpen(false);
+        setSelectedPaymentData(null);
+    };
+
+    // Calcular totales por tipo de venta
+    const totalVentasBrutas = filteredDetailedSales.reduce((sum, s) => sum + (parseFloat(s.total) || 0), 0);
+    const totalVentasEfectivo = filteredDetailedSales.filter(s => s.sale_type === 'normal').reduce((sum, s) => sum + (parseFloat(s.total) || 0), 0);
+    const totalRecibidoEfectivo = totalVentasEfectivo - (returns ? returns.reduce((sum, r) => sum + parseFloat(r.total_amount || 0), 0) : 0);
+
+    // Utilidad para mostrar el tipo de venta
+    const getSaleTypeLabel = (type) => {
+        if (type === 'normal') return { label: 'Efectivo', color: '#27ae60', bg: '#eafaf1', icon: '💵' };
+        if (type === 'card') return { label: 'Tarjeta', color: '#0984e3', bg: '#e3f2fd', icon: '💳' };
+        if (type === 'credit') return { label: 'Crédito', color: '#fdcb6e', bg: '#fffbe6', icon: '📝' };
+        return { label: type, color: '#636e72', bg: '#f1f2f6', icon: '❓' };
     };
 
     return (
@@ -316,6 +522,42 @@ const VentasSection = () => {
                 </div>
             )}
 
+            {/* Tarjetas de totales */}
+            <div style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+                gap: "20px",
+                marginBottom: "24px",
+            }}>
+                <div style={{ background: "linear-gradient(135deg, #27ae60 0%, #00b894 100%)", color: "white", padding: "24px", borderRadius: "12px", boxShadow: "0 4px 12px rgba(39, 174, 96, 0.18)" }}>
+                    <div style={{ fontSize: "14px", opacity: 0.9, marginBottom: "8px" }}>Total del Día (Bruto)</div>
+                    <div style={{ fontSize: "32px", fontWeight: "700" }}>${totalVentasBrutas.toLocaleString()}</div>
+                    <div style={{ fontSize: "12px", opacity: 0.8, marginTop: "4px" }}>{filters.specificDate}</div>
+                </div>
+                <div style={{ background: "linear-gradient(135deg, #dc3545 0%, #ff7675 100%)", color: "white", padding: "24px", borderRadius: "12px", boxShadow: "0 4px 12px rgba(220, 53, 69, 0.18)" }}>
+                    <div style={{ fontSize: "14px", opacity: 0.9, marginBottom: "8px" }}>Total Devuelto</div>
+                    <div style={{ fontSize: "32px", fontWeight: "700" }}>-${(returns ? returns.reduce((sum, r) => sum + parseFloat(r.total_amount || 0), 0) : 0).toLocaleString()}</div>
+                    <div style={{ fontSize: "12px", opacity: 0.8, marginTop: "4px" }}>{filters.specificDate}</div>
+                </div>
+                <div style={{ background: "linear-gradient(135deg, #0984e3 0%, #74b9ff 100%)", color: "white", padding: "24px", borderRadius: "12px", boxShadow: "0 4px 12px rgba(9, 132, 227, 0.18)", fontSize: "24px", fontWeight: "700", textAlign: "center" }}>
+                    <div style={{ fontSize: "14px", opacity: 0.9, marginBottom: "8px" }}>Total Neto (Ventas - Devoluciones)</div>
+                    <div style={{ fontSize: "32px", fontWeight: "700" }}>${(totalVentasBrutas - (returns ? returns.reduce((sum, r) => sum + parseFloat(r.total_amount || 0), 0) : 0)).toLocaleString()}</div>
+                    <div style={{ fontSize: "12px", opacity: 0.8, marginTop: "4px" }}>{filters.specificDate}</div>
+                </div>
+                <div style={{ background: "linear-gradient(135deg, #00b894 0%, #55efc4 100%)", color: "white", padding: "24px", borderRadius: "12px", boxShadow: "0 4px 12px rgba(0, 184, 148, 0.18)" }}>
+                    <div style={{ fontSize: "14px", opacity: 0.9, marginBottom: "8px" }}>Total Recibido en Efectivo</div>
+                    <div style={{ fontSize: "32px", fontWeight: "700" }}>${totalRecibidoEfectivo.toLocaleString()}</div>
+                    <div style={{ fontSize: "12px", opacity: 0.8, marginTop: "4px" }}>Ventas en efectivo - devoluciones</div>
+                </div>
+                {creditPayments && creditPayments.length > 0 && (
+                    <div style={{ background: "linear-gradient(135deg, #00b894 0%, #55efc4 100%)", color: "white", padding: "24px", borderRadius: "12px", boxShadow: "0 4px 12px rgba(0, 184, 148, 0.18)" }}>
+                        <div style={{ fontSize: "14px", opacity: 0.9, marginBottom: "8px" }}>Total Recibido por Abonos</div>
+                                                 <div style={{ fontSize: "32px", fontWeight: "700" }}>+${(creditPayments ? creditPayments.reduce((sum, p) => sum + parseFloat(p.amount_paid || 0), 0) : 0).toLocaleString()}</div>
+                        <div style={{ fontSize: "12px", opacity: 0.8, marginTop: "4px" }}>Abonos a créditos recibidos</div>
+                    </div>
+                )}
+            </div>
+
             {/* Estadísticas del día actual */}
             {filteredDetailedSales.length > 0 && !isLoading && (
                 <div
@@ -327,152 +569,21 @@ const VentasSection = () => {
                         marginBottom: "32px",
                     }}
                 >
-                    {/* Total de ventas del día */}
-                    <div
-                        style={{
-                            padding: "24px",
-                            backgroundColor: "white",
-                            borderRadius: "16px",
-                            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.08)",
-                            border: "1px solid #e9ecef",
-                        }}
-                    >
-                        <div
-                            style={{
-                                fontSize: "32px",
-                                fontWeight: "800",
-                                marginBottom: "8px",
-                                color: "#28a745",
-                            }}
-                        >
-                            $
-                            {filteredDetailedSales
-                                .reduce(
-                                    (total, sale) =>
-                                        total +
-                                        parseFloat(
-                                            sale.total_net ||
-                                                sale.total_gross ||
-                                                sale.total ||
-                                                0
-                                        ),
-                                    0
-                                )
-                                .toLocaleString()}
-                        </div>
-                        <div
-                            style={{
-                                fontSize: "16px",
-                                fontWeight: "600",
-                                color: "#6c757d",
-                            }}
-                        >
-                            Total del Día
-                        </div>
-                        <div
-                            style={{
-                                fontSize: "14px",
-                                color: "#6c757d",
-                                marginTop: "4px",
-                            }}
-                        >
-                            {filters.specificDate}
-                        </div>
-                    </div>
-
                     {/* Número de ventas del día */}
-                    <div
-                        style={{
-                            padding: "24px",
-                            backgroundColor: "white",
-                            borderRadius: "16px",
-                            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.08)",
-                            border: "1px solid #e9ecef",
-                        }}
-                    >
-                        <div
-                            style={{
-                                fontSize: "32px",
-                                fontWeight: "800",
-                                marginBottom: "8px",
-                                color: "#007bff",
-                            }}
-                        >
+                    <div style={{ padding: "24px", backgroundColor: "white", borderRadius: "16px", boxShadow: "0 4px 20px rgba(0, 0, 0, 0.08)", border: "1px solid #e9ecef" }}>
+                        <div style={{ fontSize: "32px", fontWeight: "800", marginBottom: "8px", color: "#007bff" }}>
                             {filteredDetailedSales.length}
                         </div>
-                        <div
-                            style={{
-                                fontSize: "16px",
-                                fontWeight: "600",
-                                color: "#6c757d",
-                            }}
-                        >
-                            Ventas del Día
+                        <div style={{ fontSize: "16px", fontWeight: "600", color: "#6c757d" }}>Ventas del Día</div>
+                        <div style={{ fontSize: "14px", color: "#6c757d", marginTop: "4px" }}>{filters.specificDate}</div>
                         </div>
-                        <div
-                            style={{
-                                fontSize: "14px",
-                                color: "#6c757d",
-                                marginTop: "4px",
-                            }}
-                        >
-                            {filters.specificDate}
+                    {/* Promedio por venta del día (Neto) */}
+                    <div style={{ padding: "24px", backgroundColor: "white", borderRadius: "16px", boxShadow: "0 4px 20px rgba(255, 193, 7, 0.08)", border: "1px solid #e9ecef" }}>
+                        <div style={{ fontSize: "32px", fontWeight: "800", marginBottom: "8px", color: "#fd7e14" }}>
+                            ${filteredDetailedSales.length > 0 ? (totalVentasBrutas / filteredDetailedSales.length).toFixed(0) : "0"}
                         </div>
-                    </div>
-
-                    {/* Promedio por venta del día */}
-                    <div
-                        style={{
-                            padding: "24px",
-                            backgroundColor: "white",
-                            borderRadius: "16px",
-                            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.08)",
-                            border: "1px solid #e9ecef",
-                        }}
-                    >
-                        <div
-                            style={{
-                                fontSize: "32px",
-                                fontWeight: "800",
-                                marginBottom: "8px",
-                                color: "#fd7e14",
-                            }}
-                        >
-                            $
-                            {filteredDetailedSales.length > 0
-                                ? (
-                                      filteredDetailedSales.reduce(
-                                          (total, sale) =>
-                                              total +
-                                              parseFloat(
-                                                  sale.total_net ||
-                                                      sale.total_gross ||
-                                                      sale.total ||
-                                                      0
-                                              ),
-                                          0
-                                      ) / filteredDetailedSales.length
-                                  ).toFixed(0)
-                                : "0"}
-                        </div>
-                        <div
-                            style={{
-                                fontSize: "16px",
-                                fontWeight: "600",
-                                color: "#6c757d",
-                            }}
-                        >
-                            Promedio por Venta
-                        </div>
-                        <div
-                            style={{
-                                fontSize: "14px",
-                                color: "#6c757d",
-                                marginTop: "4px",
-                            }}
-                        >
-                            {filters.specificDate}
-                        </div>
+                        <div style={{ fontSize: "16px", fontWeight: "600", color: "#6c757d" }}>Promedio por Venta (Neto)</div>
+                        <div style={{ fontSize: "14px", color: "#6c757d", marginTop: "4px" }}>{filters.specificDate}</div>
                     </div>
                 </div>
             )}
@@ -621,7 +732,7 @@ const VentasSection = () => {
             )}
 
             {/* Productos más vendidos */}
-            {topProducts.length > 0 && !isLoading && (
+            {topProducts && topProducts.length > 0 && !isLoading && (
                 <div
                     style={{
                         backgroundColor: "white",
@@ -718,7 +829,7 @@ const VentasSection = () => {
             )}
 
             {/* Ventas por ubicación */}
-            {validatedSalesByLocation.length > 0 && !isLoading && (
+            {validatedSalesByLocation && validatedSalesByLocation.length > 0 && !isLoading && (
                 <div
                     style={{
                         backgroundColor: "white",
@@ -1336,37 +1447,24 @@ const VentasSection = () => {
                                                 textAlign: "center",
                                             }}
                                         >
-                                            <span
-                                                style={{
-                                                    display: "inline-block",
-                                                    padding: "6px 12px",
-                                                    borderRadius: "20px",
-                                                    fontSize: "12px",
-                                                    fontWeight: "600",
-                                                    textTransform: "uppercase",
-                                                    letterSpacing: "0.5px",
-                                                    backgroundColor:
-                                                        sale.sale_type ===
-                                                        "credit"
-                                                            ? "#f39c12" + "20"
-                                                            : "#27ae60" + "20",
-                                                    color:
-                                                        sale.sale_type ===
-                                                        "credit"
-                                                            ? "#f39c12"
-                                                            : "#27ae60",
-                                                    border: `2px solid ${
-                                                        sale.sale_type ===
-                                                        "credit"
-                                                            ? "#f39c12" + "40"
-                                                            : "#27ae60" + "40"
-                                                    }`,
-                                                }}
-                                            >
-                                                {sale.sale_type === "credit"
-                                                    ? "Crédito"
-                                                    : "Normal"}
-                                            </span>
+                                            {(() => {
+                                                const t = getSaleTypeLabel(sale.sale_type);
+                                                return (
+                                                    <span style={{
+                                                        background: t.bg,
+                                                        color: t.color,
+                                                        fontWeight: 600,
+                                                        borderRadius: 12,
+                                                        padding: '4px 14px',
+                                                        fontSize: 14,
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: 6,
+                                                    }}>
+                                                        <span>{t.icon}</span> {t.label}
+                                                    </span>
+                                                );
+                                            })()}
                                         </td>
                                         <td
                                             style={{
@@ -1389,8 +1487,134 @@ const VentasSection = () => {
                 </div>
             )}
 
+            {/* Tabla de devoluciones con el mismo estilo que ventas detalladas */}
+            {returns && returns.length > 0 && (
+                <div style={{
+                    background: '#fff',
+                    borderRadius: 16,
+                    boxShadow: '0 2px 12px rgba(220,53,69,0.10)',
+                    margin: '32px 0',
+                    padding: 0,
+                    overflow: 'hidden',
+                }}>
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        background: '#ffe5e8',
+                        padding: '18px 32px',
+                        borderBottom: '2px solid #dc3545',
+                    }}>
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style={{ marginRight: 12 }}>
+                            <circle cx="12" cy="12" r="12" fill="#dc3545"/>
+                            <path d="M8 12l2 2 4-4" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                        <h3 style={{ color: '#dc3545', fontWeight: 700, fontSize: 20, margin: 0 }}>
+                            Devoluciones del Día
+                        </h3>
+                        <span style={{ marginLeft: 16, color: '#dc3545', fontWeight: 500, fontSize: 16 }}>
+                                                         {returns ? returns.length : 0} devolución{(returns ? returns.length : 0) !== 1 ? 'es' : ''}
+                        </span>
+                    </div>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff' }}>
+                        <thead>
+                            <tr style={{ background: '#ffe5e8' }}>
+                                <th style={{ color: '#dc3545', fontWeight: 700, padding: '12px 8px', textAlign: 'left', borderBottom: '2px solid #dc3545' }}>ID</th>
+                                <th style={{ color: '#dc3545', fontWeight: 700, padding: '12px 8px', textAlign: 'left', borderBottom: '2px solid #dc3545' }}>Fecha/Hora</th>
+                                <th style={{ color: '#dc3545', fontWeight: 700, padding: '12px 8px', textAlign: 'left', borderBottom: '2px solid #dc3545' }}>Monto</th>
+                                <th style={{ color: '#dc3545', fontWeight: 700, padding: '12px 8px', textAlign: 'left', borderBottom: '2px solid #dc3545' }}>Motivo</th>
+                                <th style={{ color: '#dc3545', fontWeight: 700, padding: '12px 8px', textAlign: 'left', borderBottom: '2px solid #dc3545' }}>Productos devueltos</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                                                         {returns && returns.map((d, idx) => (
+                                <tr key={d.id} style={{ background: idx % 2 === 0 ? '#fff' : '#fff6f7' }} onClick={() => handleReturnClick(d)}>
+                                    {[
+                                        <td key="id" style={{ padding: '12px 8px', color: '#dc3545', fontWeight: 600, cursor: 'pointer' }} onMouseOver={e => { e.currentTarget.style.background = '#ffe5e8'; e.currentTarget.style.color = '#dc3545'; }} onMouseOut={e => { e.currentTarget.style.background = ''; e.currentTarget.style.color = '#dc3545'; }}>#{d.id}</td>,
+                                        <td key="fecha" style={{ padding: '12px 8px', cursor: 'pointer' }} onMouseOver={e => { e.currentTarget.style.background = '#ffe5e8'; e.currentTarget.style.color = '#dc3545'; }} onMouseOut={e => { e.currentTarget.style.background = ''; e.currentTarget.style.color = ''; }}>{
+                                            d.return_date ? new Date(d.return_date).toLocaleString() :
+                                            d.created_at ? new Date(d.created_at).toLocaleString() :
+                                            '-'
+                                        }</td>,
+                                        <td key="monto" style={{ padding: '12px 8px', color: '#dc3545', fontWeight: 700, cursor: 'pointer' }} onMouseOver={e => { e.currentTarget.style.background = '#ffe5e8'; e.currentTarget.style.color = '#dc3545'; }} onMouseOut={e => { e.currentTarget.style.background = ''; e.currentTarget.style.color = '#dc3545'; }}>${parseFloat(d.total_amount).toLocaleString()}</td>,
+                                        <td key="motivo" style={{ padding: '12px 8px', cursor: 'pointer' }} onMouseOver={e => { e.currentTarget.style.background = '#ffe5e8'; e.currentTarget.style.color = '#dc3545'; }} onMouseOut={e => { e.currentTarget.style.background = ''; e.currentTarget.style.color = ''; }}>{
+                                            d.reason_display ? d.reason_display :
+                                            d.reason ? d.reason.charAt(0).toUpperCase() + d.reason.slice(1) :
+                                            '-'
+                                        }</td>,
+                                        <td key="productos" style={{ padding: '12px 8px', cursor: 'pointer' }} onMouseOver={e => { e.currentTarget.style.background = '#ffe5e8'; e.currentTarget.style.color = '#dc3545'; }} onMouseOut={e => { e.currentTarget.style.background = ''; e.currentTarget.style.color = ''; }}>
+                                            <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                                                {(d.items || []).map((item, i) => (
+                                                    <li key={i} style={{ marginBottom: 4 }}>
+                                                        <span style={{ color: '#dc3545', fontWeight: 600 }}>{item.product_details?.name || item.product}</span>
+                                                        {': '}
+                                                        <span style={{ fontWeight: 500 }}>{item.quantity_returned}</span>
+                                                        {' x $'}
+                                                        <span style={{ fontWeight: 500 }}>{parseFloat(item.unit_price).toLocaleString()}</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </td>
+                                    ]}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+
+            {/* Desglose de abonos a créditos */}
+            {creditPayments && creditPayments.length > 0 && (
+                <div style={{
+                    background: '#fff',
+                    borderRadius: 16,
+                    boxShadow: '0 2px 12px rgba(0,184,148,0.10)',
+                    margin: '32px 0',
+                    padding: 0,
+                    overflow: 'hidden',
+                }}>
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        background: '#e0f7fa',
+                        padding: '18px 32px',
+                        borderBottom: '2px solid #00b894',
+                    }}>
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style={{ marginRight: 12 }}>
+                            <circle cx="12" cy="12" r="12" fill="#00b894"/>
+                            <path d="M12 7v5l4 2" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                        <h3 style={{ color: '#00b894', fontWeight: 700, fontSize: 20, margin: 0 }}>
+                            Abonos a Créditos del Día
+                        </h3>
+                        <span style={{ marginLeft: 16, color: '#00b894', fontWeight: 500, fontSize: 16 }}>
+                                                         {creditPayments ? creditPayments.length : 0} abono{(creditPayments ? creditPayments.length : 0) !== 1 ? 's' : ''}
+                        </span>
+                    </div>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff' }}>
+                        <thead>
+                            <tr style={{ background: '#e0f7fa' }}>
+                                <th style={{ color: '#00b894', fontWeight: 700, padding: '12px 8px', textAlign: 'left', borderBottom: '2px solid #00b894' }}>ID</th>
+                                <th style={{ color: '#00b894', fontWeight: 700, padding: '12px 8px', textAlign: 'left', borderBottom: '2px solid #00b894' }}>Fecha/Hora</th>
+                                <th style={{ color: '#00b894', fontWeight: 700, padding: '12px 8px', textAlign: 'left', borderBottom: '2px solid #00b894' }}>Monto</th>
+                                <th style={{ color: '#00b894', fontWeight: 700, padding: '12px 8px', textAlign: 'left', borderBottom: '2px solid #00b894' }}>Observaciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                                                         {creditPayments && creditPayments.map((p, idx) => (
+                                <tr key={p.id} style={{ background: idx % 2 === 0 ? '#fff' : '#eafaf1' }} onClick={() => handlePaymentClick(p)}>
+                                    <td style={{ padding: '12px 8px', color: '#00b894', fontWeight: 600, cursor: 'pointer' }} onMouseOver={e => { e.currentTarget.style.background = '#e0f7fa'; e.currentTarget.style.color = '#00b894'; }} onMouseOut={e => { e.currentTarget.style.background = ''; e.currentTarget.style.color = '#00b894'; }}>#{p.id}</td>
+                                    <td style={{ padding: '12px 8px', cursor: 'pointer' }} onMouseOver={e => { e.currentTarget.style.background = '#e0f7fa'; e.currentTarget.style.color = '#00b894'; }} onMouseOut={e => { e.currentTarget.style.background = ''; e.currentTarget.style.color = ''; }}>{p.payment_date ? new Date(p.payment_date).toLocaleString() : '-'}</td>
+                                    <td style={{ padding: '12px 8px', color: '#00b894', fontWeight: 700, cursor: 'pointer' }} onMouseOver={e => { e.currentTarget.style.background = '#e0f7fa'; e.currentTarget.style.color = '#00b894'; }} onMouseOut={e => { e.currentTarget.style.background = ''; e.currentTarget.style.color = '#00b894'; }}>+${parseFloat(p.amount_paid).toLocaleString()}</td>
+                                    <td style={{ padding: '12px 8px', cursor: 'pointer' }} onMouseOver={e => { e.currentTarget.style.background = '#e0f7fa'; e.currentTarget.style.color = '#00b894'; }} onMouseOut={e => { e.currentTarget.style.background = ''; e.currentTarget.style.color = ''; }}>{p.notes || '-'}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+
             {/* Información sobre problemas de datos */}
-            {validatedSalesByLocation.length === 0 &&
+            {validatedSalesByLocation && validatedSalesByLocation.length === 0 &&
                 salesStats === null &&
                 filters.days &&
                 !isLoading && (
@@ -1500,6 +1724,20 @@ const VentasSection = () => {
                 isOpen={isModalOpen}
                 onClose={handleCloseModal}
                 saleData={selectedSaleData}
+            />
+
+            {/* Modal de detalle de devolución */}
+            <ReturnDetailModal
+                isOpen={isReturnModalOpen}
+                onClose={handleCloseReturnModal}
+                returnData={selectedReturnData}
+            />
+
+            {/* Modal de detalle de abono */}
+            <PaymentDetailModal
+                isOpen={isPaymentModalOpen}
+                onClose={handleClosePaymentModal}
+                paymentData={selectedPaymentData}
             />
 
             <style>
