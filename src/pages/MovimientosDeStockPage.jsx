@@ -153,15 +153,12 @@ const MovimientosDeStockPage = () => {
             // Filtrar por ubicación
             if (locationFilter) {
                 filtered = filtered.filter((movement) => {
-                    const movementLocation = String(
-                        movement.location_name || movement.location || ""
-                    );
-                    const movementLocationId = String(
-                        movement.location_id || ""
-                    );
+                    // Usar solo el id para comparar, ambos como string
+                    const movementLocationId =
+                        movement.location_id || movement.location;
                     return (
-                        movementLocation === locationFilter ||
-                        movementLocationId === locationFilter.toString()
+                        movementLocationId &&
+                        movementLocationId.toString() === locationFilter
                     );
                 });
             }

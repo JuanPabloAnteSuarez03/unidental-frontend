@@ -1503,20 +1503,29 @@ const useInventory = () => {
                 console.error("Error al procesar parámetros de URL:", error);
             }
 
-            // 🚀 MODIFICADO: Solo cargar productos si no hay cache persistente
+            // 🚀 MODIFICADO: Solo cargar productos generales si NO hay filtros activos
+            const hayFiltrosActivos =
+                !!nameFilter ||
+                !!skuFilter ||
+                (selectedCategories && selectedCategories.length > 0);
+
             if (
-                !cacheProductosData.isLoaded ||
-                cacheProductosData.products.length === 0
+                !hayFiltrosActivos &&
+                (!cacheProductosData.isLoaded ||
+                    cacheProductosData.products.length === 0)
             ) {
                 fetchProducts();
             } else {
-                // Los productos ya están cargados desde el localStorage en el estado inicial
+                // Los productos ya están cargados desde el localStorage en el estado inicial o hay filtros activos
             }
         }
     }, [
         authToken,
         cacheProductosData.isLoaded,
         cacheProductosData.products.length,
+        nameFilter,
+        skuFilter,
+        selectedCategories,
     ]);
 
     // 🚀 NUEVA FUNCIÓN: Refrescar cache de inventario manualmente

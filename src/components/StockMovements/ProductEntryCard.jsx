@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import batchesService from "../../services/batchesService";
 import inventoryService from "../../services/inventoryService";
+import advancedInventoryService from "../../services/advancedInventoryService";
 
 const ProductEntryCard = ({
     productEntry,
@@ -51,7 +52,7 @@ const ProductEntryCard = ({
         }
     }, [productEntry.product, movementType]);
 
-    // NUEVO: Cargar lotes disponibles para salida usando inventoryService.getBatchesWithStockAtLocation
+    // NUEVO: Cargar lotes disponibles para salida usando el endpoint correcto y filtrando por sede
     useEffect(() => {
         const fetchBatches = async () => {
             if (
@@ -63,19 +64,40 @@ const ProductEntryCard = ({
             ) {
                 setIsLoadingBatches(true);
                 try {
-                    const batches =
-                        await inventoryService.getBatchesWithStockAtLocation(
-                            productEntry.product.id,
-                            locationId,
-                            authToken
-                        );
+                    // Consultar todos los lotes del producto
+                    const url = `/api/inventory/stock/product_batches_stock/?product=${productEntry.product.id}`;
+                    const response = await fetch(url, {
+                        headers: {
+                            Authorization: `Token ${authToken}`,
+                            "Content-Type": "application/json",
+                        },
+                    });
+                    const data = await response.json();
+                    // Filtrar lotes que tienen stock en la sede seleccionada
+                    const batches = (data.batches || [])
+                        .map((batch) => {
+                            const locationStock = (batch.locations || []).find(
+                                (loc) =>
+                                    String(loc.location_id) ===
+                                    String(locationId)
+                            );
+                            if (locationStock && locationStock.quantity > 0) {
+                                return {
+                                    ...batch,
+                                    quantity: locationStock.quantity,
+                                    location_id: locationStock.location_id,
+                                    location_name: locationStock.location_name,
+                                };
+                            }
+                            return null;
+                        })
+                        .filter(Boolean);
+                    console.log("DEBUG batches response:", batches);
                     setAvailableBatches(batches);
-                    // Inicializar batchesData con los lotes disponibles y cantidad 0
                     setBatchesData(
                         batches.map((batch) => ({
-                            batch_id: batch.batch || batch.batch_id || batch.id,
-                            batch_number:
-                                batch.batch_number || batch.batch || batch.id,
+                            batch_id: batch.batch_id || batch.id,
+                            batch_number: batch.batch_number || batch.id,
                             expiry_date: batch.expiry_date,
                             quantity: "", // cantidad a sacar
                             stock: batch.quantity,

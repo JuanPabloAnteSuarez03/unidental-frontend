@@ -206,7 +206,7 @@ const TableRow = ({
         const purchasePrice = product.latest_purchase_price;
 
         if (purchasePrice === null || purchasePrice === undefined) {
-            return <span style={{ color: "#6c757d" }}>N/A</span>;
+            return <span style={{ color: "#6c757d" }}>Cargando...</span>;
         }
 
         return (

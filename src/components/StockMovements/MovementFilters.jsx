@@ -271,7 +271,11 @@ const MovementFilters = ({
                             {locations.map((location) => (
                                 <option
                                     key={location.id || location.name}
-                                    value={location.id || location.name}
+                                    value={
+                                        location.id
+                                            ? location.id.toString()
+                                            : location.name
+                                    }
                                 >
                                     {location.name || location}
                                 </option>
