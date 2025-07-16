@@ -19,6 +19,8 @@ import AdditionalInfoForm from "../components/ProductForm/AdditionalInfoForm";
 import FormActions from "../components/ProductForm/FormActions";
 import ComponentSearch from "../components/ProductForm/ComponentSearch";
 import CreateSkuEntityModal from "../components/Common/CreateSkuEntityModal";
+import Modal from "../components/Common/Modal"; // Asume que tienes un componente Modal, si no, lo creo inline
+import ProductSearchSelector from "../components/Common/ProductSearchSelector";
 
 const NuevoProductoPage = () => {
     const { authToken } = useAuth();
@@ -33,7 +35,6 @@ const NuevoProductoPage = () => {
         sku_tipo: "",
         category: "", // Categoría de inventario (ID numérico)
         unit: "",
-        product_type: "", // Tipo de producto: simple o composite
         requires_batch_control: false, // Manejo por lotes
         sale_price: "",
         description: "",
@@ -77,6 +78,20 @@ const NuevoProductoPage = () => {
         parentData: null,
         isSubmitting: false,
     });
+
+    // Estado para mostrar el modal de conversión
+    const [showConversionModal, setShowConversionModal] = useState(false);
+    const [lastCreatedProduct, setLastCreatedProduct] = useState(null);
+    const [conversionForm, setConversionForm] = useState({
+      to_product: null,
+      conversion_rate: 1,
+      is_reversible: false,
+    });
+    const [isSubmittingConversion, setIsSubmittingConversion] = useState(false);
+
+    // Estado para mensaje de actualización
+    const [refreshMsg, setRefreshMsg] = useState("");
+    const [refreshKey, setRefreshKey] = useState(0);
 
     // Cargar categorías e información del sistema SKU al iniciar
     useEffect(() => {
@@ -571,27 +586,9 @@ const NuevoProductoPage = () => {
             { field: "sku", label: "SKU" },
             { field: "category", label: "Categoría de inventario" },
             { field: "sku_categoria", label: "Categoría del producto" },
-            { field: "product_type", label: "Tipo de producto" },
             { field: "unit", label: "Unidad de medida" },
             { field: "sale_price", label: "Precio de venta" },
         ];
-
-        // Validación adicional para productos compuestos
-        if (
-            formData.product_type === "composite" &&
-            selectedComponents.length === 0
-        ) {
-            setNotification({
-                show: true,
-                type: "error",
-                message:
-                    "Los productos compuestos deben tener al menos un componente",
-            });
-            setTimeout(() => {
-                setNotification({ show: false, type: "", message: "" });
-            }, 5000);
-            return;
-        }
 
         const missingFields = requiredFields.filter(
             ({ field }) =>
@@ -619,10 +616,10 @@ const NuevoProductoPage = () => {
             const productData = {
                 name: formData.name.trim(),
                 sku: formData.sku.trim(),
-                category: parseInt(formData.category), // Usar la categoría de inventario como categoría del producto
+                category: parseInt(formData.category),
                 unit: formData.unit,
-                product_type: formData.product_type,
-                requires_batch_control: formData.requires_batch_control, // Manejo por lotes
+                product_type: "simple", // Siempre simple
+                requires_batch_control: formData.requires_batch_control,
                 sale_price: parseFloat(formData.sale_price),
                 description: formData.description
                     ? formData.description.trim()
@@ -648,37 +645,6 @@ const NuevoProductoPage = () => {
                 authToken
             );
 
-            // Si es un producto compuesto, agregar los componentes
-            if (
-                formData.product_type === "composite" &&
-                selectedComponents.length > 0
-            ) {
-                try {
-                    // Crear cada componente individualmente según la documentación de la API
-                    for (const component of selectedComponents) {
-                        const componentData = {
-                            composite_product: productId.id, // ID del producto padre
-                            component_product: component.id, // ID del producto componente
-                            quantity: component.quantity, // Cantidad del componente
-                        };
-
-                        await createProductComponent(componentData, authToken);
-                    }
-                } catch (componentError) {
-                    console.error(
-                        "Error al agregar componentes:",
-                        componentError
-                    );
-                    // No fallar la creación del producto si falla la adición de componentes
-                    setNotification({
-                        show: true,
-                        type: "warning",
-                        message:
-                            "Producto creado pero hubo un problema al agregar los componentes. Puedes agregarlos manualmente más tarde.",
-                    });
-                }
-            }
-
             // Mostrar notificación de éxito
             setNotification({
                 show: true,
@@ -695,35 +661,26 @@ const NuevoProductoPage = () => {
                 sku_tipo: "",
                 category: "",
                 unit: "",
-                product_type: "",
                 requires_batch_control: false,
                 sale_price: "",
                 description: "",
                 margin: "",
             });
 
-            // Limpiar componentes seleccionados
-            setSelectedComponents([]);
-
             // Limpiar validación de SKU
             setSkuValidation(null);
 
-            // Redirigir al inventario después de 3 segundos
-            setTimeout(() => {
-                setNotification({ show: false, type: "", message: "" });
-                navigate("/inventario");
-            }, 3000);
+            setLastCreatedProduct(productId); // Guarda el producto recién creado
+            setShowConversionModal(true); // Muestra el modal de conversión
+
         } catch (error) {
             console.error("Error al crear producto:", error);
 
             let errorMessage = "Error al crear el producto";
 
-            // Manejar diferentes tipos de errores
             if (error.message) {
-                // Si el error tiene un mensaje específico de la API
                 errorMessage = error.message;
             } else if (error.response && error.response.data) {
-                // Si hay datos de error de la respuesta
                 errorMessage =
                     typeof error.response.data === "string"
                         ? error.response.data
@@ -1139,7 +1096,8 @@ const NuevoProductoPage = () => {
                         </div>
 
                         {/* Búsqueda de Componentes (solo si es producto compuesto) */}
-                        {formData.product_type === "composite" && (
+                        {/* Este bloque ya no es necesario para productos simples */}
+                        {/* {formData.product_type === "composite" && (
                             <div className="form-section">
                                 <div
                                     style={{
@@ -1208,7 +1166,7 @@ const NuevoProductoPage = () => {
                                     onRemoveComponent={handleRemoveComponent}
                                 />
                             </div>
-                        )}
+                        )} */}
 
                         {/* SKU y Configuración */}
                         <div className="form-section">
@@ -1277,6 +1235,118 @@ const NuevoProductoPage = () => {
                 parentData={createModal.parentData}
                 isSubmitting={createModal.isSubmitting}
             />
+
+            {/* Modal de conversión */}
+            <Modal isOpen={showConversionModal} onClose={() => setShowConversionModal(false)}>
+              <h2>¿Deseas crear una conversión para este producto?</h2>
+              <p>Por ejemplo: de caja a unidad, blister, etc.</p>
+              <button
+                onClick={async () => {
+                  if (typeof refrescarCacheInventario === 'function') {
+                    await refrescarCacheInventario();
+                    setRefreshMsg("Productos actualizados");
+                    setRefreshKey(k => k + 1);
+                    setTimeout(() => setRefreshMsg(""), 2000);
+                  }
+                }}
+                style={{ marginBottom: 10, background: '#00b894', color: 'white', border: 'none', borderRadius: 6, padding: '6px 16px', fontWeight: 600, cursor: 'pointer' }}
+              >
+                Actualizar productos
+              </button>
+              {refreshMsg && <span style={{ color: '#00b894', marginLeft: 10 }}>{refreshMsg}</span>}
+              <div style={{ margin: '16px 0' }}>
+                <div style={{ marginBottom: 12 }}>
+                  <strong>Producto origen:</strong> {lastCreatedProduct?.name} (SKU: {lastCreatedProduct?.sku})<br />
+                  <span style={{ color: '#888', fontSize: 13 }}>Unidad: {lastCreatedProduct?.unit}</span>
+                </div>
+                <label>Producto destino:</label>
+                <ProductSearchSelector
+                  key={refreshKey + '-to'}
+                  refreshKey={refreshKey}
+                  onProductSelected={prod => setConversionForm(f => ({ ...f, to_product: prod }))}
+                  placeholder="Buscar producto destino por nombre, SKU o código..."
+                  minSearchLength={2}
+                  maxResults={10}
+                />
+                {conversionForm.to_product && (
+                  <div style={{ marginTop: 8, color: '#2c3e50', border: '1px solid #2ecc71', borderRadius: 8, padding: 8, background: '#eafaf1', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ flex: 1 }}>
+                      <strong>{conversionForm.to_product.name}</strong><br />
+                      SKU: {conversionForm.to_product.sku}<br />
+                      <span style={{ color: '#888', fontSize: 13 }}>Unidad: {conversionForm.to_product.unit} | Categoría: {conversionForm.to_product.category_name || ''}</span>
+                    </div>
+                    <button onClick={() => setConversionForm(f => ({ ...f, to_product: null }))} style={{ background: '#ff7675', color: 'white', border: 'none', borderRadius: 4, fontWeight: 700, fontSize: 18, width: 32, height: 32, cursor: 'pointer' }}>×</button>
+                  </div>
+                )}
+                {conversionForm.to_product && (
+                  <div style={{ marginTop: 18 }}>
+                    <label style={{ fontWeight: 600 }}>
+                      ¿Cuántas <span style={{ color: '#0984e3' }}>{conversionForm.to_product.unit}</span> de <span style={{ color: '#0984e3' }}>{conversionForm.to_product.name}</span> salen de 1 <span style={{ color: '#27ae60' }}>{lastCreatedProduct?.unit}</span> de <span style={{ color: '#27ae60' }}>{lastCreatedProduct?.name}</span>?
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={conversionForm.conversion_rate}
+                      onChange={e => setConversionForm(f => ({ ...f, conversion_rate: Math.max(1, Number(e.target.value)) }))}
+                      style={{ width: 80, marginLeft: 8 }}
+                    />
+                    <div style={{ marginTop: 12 }}>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={conversionForm.is_reversible}
+                          onChange={e => setConversionForm(f => ({ ...f, is_reversible: e.target.checked }))}
+                        /> Conversión reversible
+                      </label>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
+                <button
+                  onClick={async () => {
+                    if (!lastCreatedProduct || !conversionForm.to_product || !conversionForm.conversion_rate) return;
+                    setIsSubmittingConversion(true);
+                    try {
+                      const resp = await fetch("https://unidental-backend.onrender.com/api/catalogs/product-conversions/", {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                          Authorization: `Token ${authToken}`,
+                        },
+                        body: JSON.stringify({
+                          from_product: lastCreatedProduct.id || lastCreatedProduct,
+                          to_product: conversionForm.to_product.id,
+                          conversion_rate: conversionForm.conversion_rate,
+                          is_reversible: conversionForm.is_reversible,
+                        }),
+                      });
+                      if (!resp.ok) throw new Error("Error creando conversión");
+                      setNotification({ show: true, type: "success", message: "¡Conversión creada exitosamente!" });
+                      // Limpiar el formulario para permitir crear otra conversión
+                      setConversionForm({ to_product: null, conversion_rate: 1, is_reversible: false });
+                    } catch (err) {
+                      setNotification({ show: true, type: "error", message: err.message || "Error al crear conversión" });
+                    } finally {
+                      setIsSubmittingConversion(false);
+                    }
+                  }}
+                  disabled={isSubmittingConversion || !conversionForm.to_product || !conversionForm.conversion_rate}
+                  style={{ background: '#3498db', color: 'white', padding: '8px 18px', borderRadius: 6, border: 'none', fontWeight: 600 }}
+                >
+                  Crear conversión
+                </button>
+                <button
+                  onClick={() => {
+                    setShowConversionModal(false);
+                    navigate("/inventario");
+                  }}
+                  style={{ background: '#eee', color: '#2c3e50', padding: '8px 18px', borderRadius: 6, border: 'none' }}
+                >
+                  No, gracias
+                </button>
+              </div>
+            </Modal>
         </>
     );
 };

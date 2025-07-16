@@ -18,6 +18,7 @@ const ProductSearchSelector = ({
     style = {},
     inputStyle = {},
     dropdownStyle = {},
+    refreshKey = 0, // Nuevo prop
 }) => {
     const { authToken } = useAuth();
     const {
@@ -71,6 +72,15 @@ const ProductSearchSelector = ({
 
         setSelectedIndex(-1);
     }, [inputValue, minSearchLength, debouncedSearch, handleSearch]);
+
+    // Refrescar productos al cambiar refreshKey
+    useEffect(() => {
+        setInputValue("");
+        setSelectedProduct(null);
+        setShowDropdown(false);
+        setSelectedIndex(-1);
+        handleSearch("");
+    }, [refreshKey, handleSearch]);
 
     // Cleanup del timer
     useEffect(() => {
