@@ -6,9 +6,11 @@ import SaleSummary from "../components/Sales/SaleSummary";
 import InvoiceModal from "../components/Sales/InvoiceModal";
 import PaymentMethodSelector from "../components/Sales/PaymentMethodSelector";
 import CreditConfigurationForm from "../components/Sales/CreditConfigurationForm";
-import BreakdownConfirmationModal from "../components/Sales/BreakdownConfirmationModal";
+// ❌ REMOVIDO: import BreakdownConfirmationModal from "../components/Sales/BreakdownConfirmationModal";
+import ConversionSuggestionsModal from "../components/Sales/ConversionSuggestionsModal";
 import { salesService } from "../services/salesService";
 import { inventoryService } from "../services/inventoryService";
+import { executeConversion } from "../services/conversionService";
 import { useAuth } from "../context/AuthContext";
 import {
   createSimpleCredit,
@@ -28,7 +30,7 @@ const SalesPage = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Estados para métodos de pago
-  const [paymentMethod, setPaymentMethod] = useState("cash"); // cash, card, credit
+  const [paymentMethod, setPaymentMethod] = useState("normal"); // normal, card, credit
   const [creditConfig, setCreditConfig] = useState({
     hasInitialPayment: false,
     initialPayment: "",
@@ -46,12 +48,15 @@ const SalesPage = () => {
     // Ref para acceder a la función updateProductsStock
     const productSelectorRef = useRef(null);
 
-  // Estado para manejador de ruptura de kits/cajas
-  const [breakdownState, setBreakdownState] = useState({
-    isOpen: false,
-    plan: [],
-    pendingSaleData: null,
-  });
+  // ✅ NUEVO: Estado para sugerencias de conversión
+  const [conversionError, setConversionError] = useState(null);
+
+  // ❌ REMOVIDO: Estados para breakdown confirmation modal
+  // const [breakdownState, setBreakdownState] = useState({
+  //   isOpen: false,
+  //   plan: [],
+  //   pendingSaleData: null,
+  // });
 
     // Cargar ubicaciones al iniciar
     useEffect(() => {
@@ -372,12 +377,13 @@ const SalesPage = () => {
 
             console.log("handleSubmitSale - mappedItems:", mappedItems);
 
-      // No enviar sale_type: 'credit' al backend
+            console.log("Método de pago a enviar (paymentMethod):", paymentMethod);
+            const fixedPaymentMethod = paymentMethod === "cash" ? "normal" : paymentMethod;
+            console.log("Método de pago corregido (fixedPaymentMethod):", fixedPaymentMethod);
             const saleData = {
                 customer: selectedCustomer ? selectedCustomer.id : null,
                 location: selectedLocation.id,
-                sale_type: saleType,
-        payment_method: paymentMethod,
+                sale_type: fixedPaymentMethod,
                 should_invoice: shouldInvoice,
                 items: mappedItems,
             };
@@ -393,17 +399,14 @@ const SalesPage = () => {
       try {
         response = await attemptCreateSale(saleData);
       } catch (err) {
-        if (err.breakdownRequired) {
-          // Mostrar modal y esperar confirmación
-          setBreakdownState({
-            isOpen: true,
-            plan: err.breakdownPlan || [],
-            pendingSaleData: saleData,
-          });
+    // ✅ NUEVO: Manejo de errores con sugerencias de conversión
+    if (err.status === 400 && err.raw && err.raw.error && err.raw.error.suggestions) {
+      // Error de stock insuficiente con sugerencias de conversión
+      setConversionError(err.raw.error);
           setIsSubmitting(false);
-          return; // esperar interacción
+      return; // Esperar interacción del usuario
         }
-        throw err; // Otro error
+    throw err; // Otro tipo de error
       }
 
       // Si el método de pago es crédito, crear la cuenta de crédito
@@ -573,7 +576,7 @@ const SalesPage = () => {
             setSelectedCustomer(null);
             setSaleItems([]);
             setShouldInvoice(false);
-      setPaymentMethod("cash");
+      setPaymentMethod("normal");
       setCreditConfig({
         hasInitialPayment: false,
         initialPayment: "",
@@ -633,36 +636,216 @@ const SalesPage = () => {
 
     const totals = calculateTotals();
 
-  // Determinar el tipo de venta basado en el método de pago
-  const saleType = paymentMethod === "credit" ? "credit" : "normal";
-
-  const handleCancelBreakdown = () => {
-    setBreakdownState({ isOpen: false, plan: [], pendingSaleData: null });
+  // ✅ NUEVO: Funciones para manejar conversiones
+  const handleCancelConversion = () => {
+    setConversionError(null);
   };
 
-  const handleConfirmBreakdown = async () => {
-    if (!breakdownState.pendingSaleData) return;
-    const newData = {
-      ...breakdownState.pendingSaleData,
-      confirm_breakdown: true,
-    };
-    setBreakdownState((prev) => ({ ...prev, isOpen: false }));
+  const handleConfirmConversion = async (selectedSuggestion, selectedBatch) => {
+    if (!selectedSuggestion || !selectedLocation) return;
+
     setIsSubmitting(true);
+    setConversionError(null);
+
     try {
-      const response = await attemptCreateSale(newData);
-      // reuse logic after successful response
-      // Simplest: set saleItems and show success
-      alert(`¡Venta registrada (desarmando kits)! ID: ${response.id}`);
-      // TODO: replicate credit logic etc (omitted for brevity)
-      // Reset forms similar to success path earlier
+      // 1. Ejecutar la conversión
+      const conversionData = {
+        conversion_id: selectedSuggestion.conversion_id,
+        quantity_to_convert: selectedSuggestion.units_needed,
+        location_id: selectedLocation.id,
+        notes: `Conversión manual para venta - ${selectedSuggestion.from_product.name} → ${selectedSuggestion.to_product.name}`
+      };
+
+      // Agregar batch_id si el producto origen requiere control de lotes
+      if (selectedSuggestion.from_product.requires_batch_control && selectedBatch) {
+        conversionData.batch_id = selectedBatch.batch_id; // Usar batch_id de la nueva estructura
+      }
+
+      console.log("Executing conversion:", conversionData);
+      const conversionResult = await executeConversion(conversionData, authToken);
+      console.log("Conversion successful:", conversionResult);
+
+      // 2. Mostrar mensaje de éxito de la conversión con información detallada de lotes
+      let successMessage = `✅ Conversión exitosa: +${selectedSuggestion.would_convert_to} ${conversionError.product} disponibles`;
+      
+      // Mostrar información de herencia de lotes si está disponible
+      if (conversionResult.batch_info) {
+        successMessage += `\n\n🏷️ Información de lotes:`;
+        successMessage += `\n📦 Lote utilizado: ${conversionResult.batch_info.from_batch}`;
+        successMessage += `\n🧪 Lote heredado creado: ${conversionResult.batch_info.to_batch}`;
+        successMessage += `\n📅 Fecha de vencimiento heredada: ${new Date(conversionResult.batch_info.expiry_date).toLocaleDateString()}`;
+      } else if (selectedBatch) {
+        // Fallback para mostrar información del lote seleccionado
+        successMessage += `\n\n📦 Lote utilizado: ${selectedBatch.batch_number}`;
+        successMessage += `\n🧪 Se creó automáticamente un lote heredado para el producto destino`;
+      }
+      
+      successMessage += `\n\n🔄 Ahora reintentando la venta...`;
+      alert(successMessage);
+
+      // 3. Reintentar la venta original
+      await retryOriginalSale();
+
+    } catch (error) {
+      console.error("Error executing conversion:", error);
+      
+      // Manejo específico de errores de lotes
+      if (error.status === 400 && error.raw && error.raw.batch) {
+        alert(`❌ Error de lote: ${error.raw.batch[0] || 'Problema con el lote seleccionado'}`);
+      } else {
+        alert(`❌ Error al ejecutar conversión: ${error.message}`);
+      }
+      setIsSubmitting(false);
+    }
+  };
+
+  const retryOriginalSale = async () => {
+    // Recrear los datos de venta original y reintentarla
+    const mappedItems = [];
+
+    saleItems.forEach((item) => {
+      if (item.selectedBatches && item.selectedBatches.length > 0) {
+        item.selectedBatches.forEach((batch) => {
+          mappedItems.push({
+            product: item.product_id,
+            batch: batch.batch_id,
+            quantity: batch.quantity,
+            unit_price: item.unit_price.toString(),
+          });
+        });
+      } else {
+        mappedItems.push({
+          product: item.product_id,
+          quantity: item.quantity,
+          unit_price: item.unit_price.toString(),
+        });
+      }
+    });
+
+    const saleData = {
+      customer: selectedCustomer ? selectedCustomer.id : null,
+      location: selectedLocation.id,
+      sale_type: paymentMethod, // Puede ser 'normal', 'card', 'credit'
+      should_invoice: shouldInvoice,
+      items: mappedItems,
+    };
+
+    try {
+      const response = await salesService.createSale(saleData, authToken);
+      
+      // ✅ Manejar créditos si es necesario (igual que en el flujo original)
+      if (paymentMethod === "credit") {
+        try {
+          const totalAmount = parseFloat(totals.total);
+          const initialPayment = creditConfig.hasInitialPayment && creditConfig.initialPayment
+            ? parseFloat(creditConfig.initialPayment) : 0;
+          const installmentAmount = calculateInstallmentAmount(
+            totalAmount, initialPayment, parseInt(creditConfig.installmentsCount)
+          );
+
+          if (creditConfig.hasInitialPayment && creditConfig.initialPayment && parseFloat(creditConfig.initialPayment) > 0) {
+            const creditData = {
+              sale_id: response.id,
+              original_amount: totalAmount.toString(),
+              initial_payment: creditConfig.initialPayment.toString(),
+              installments_count: parseInt(creditConfig.installmentsCount),
+              installment_amount: installmentAmount.toString(),
+              payment_frequency: creditConfig.paymentFrequency,
+              next_payment_date: creditConfig.nextPaymentDate,
+            };
+            await createCreditWithInstallments(creditData, authToken);
+          } else {
+            const creditData = {
+              sale_id: response.id,
+              original_amount: totalAmount.toString(),
+              installments_count: parseInt(creditConfig.installmentsCount),
+              installment_amount: installmentAmount.toString(),
+              payment_frequency: creditConfig.paymentFrequency,
+              next_payment_date: creditConfig.nextPaymentDate,
+            };
+            await createCreditWithInstallments(creditData, authToken);
+          }
+        } catch (creditError) {
+          console.error("❌ Error al crear crédito después de conversión:", creditError);
+          alert(`⚠️ Venta registrada pero hubo un error al crear el crédito: ${creditError.message}`);
+        }
+      }
+      
+      // ✅ Venta exitosa después de conversión
+      if (shouldInvoice) {
+        setInvoiceData({
+          saleData: response,
+          customerData: selectedCustomer,
+          locationData: selectedLocation,
+          saleItems: saleItems,
+          totals: totals,
+          paymentMethod: paymentMethod,
+        });
+        setShowInvoice(true);
+      } else {
+        const successMessage = paymentMethod === "credit"
+          ? `🎉 ¡Venta registrada exitosamente después de conversión! ID: ${response.id}\n💳 Crédito configurado correctamente.`
+          : `🎉 ¡Venta registrada exitosamente después de conversión! ID: ${response.id}`;
+        alert(successMessage);
+      }
+
+      // Reset form
+      setSelectedCustomer(null);
       setSaleItems([]);
-    } catch (err) {
-      console.error("Error after confirming breakdown:", err);
-      alert(err.message || "Error al registrar venta con ruptura");
+      setShouldInvoice(false);
+      setPaymentMethod("normal");
+      setCreditConfig({
+        hasInitialPayment: false,
+        initialPayment: "",
+        installmentsCount: 3,
+        paymentFrequency: "monthly",
+        nextPaymentDate: "",
+        installmentAmount: "",
+        isValid: false,
+      });
+
+    } catch (retryError) {
+      console.error("Error retrying sale after conversion:", retryError);
+      
+      // Si sigue habiendo problemas de stock después de la conversión
+      if (retryError.status === 400 && retryError.raw && retryError.raw.error && retryError.raw.error.suggestions) {
+        setConversionError(retryError.raw.error);
+      } else {
+        alert(`❌ Error al reintentar venta: ${retryError.message}`);
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  // ❌ REMOVIDO: Funciones de manejo de ruptura de kits/cajas
+  // const handleCancelBreakdown = () => {
+  //   setBreakdownState({ isOpen: false, plan: [], pendingSaleData: null });
+  // };
+
+  // const handleConfirmBreakdown = async () => {
+  //   if (!breakdownState.pendingSaleData) return;
+  //   const newData = {
+  //     ...breakdownState.pendingSaleData,
+  //     confirm_breakdown: true,
+  //   };
+  //   setBreakdownState((prev) => ({ ...prev, isOpen: false }));
+  //   setIsSubmitting(true);
+  //   try {
+  //     const response = await attemptCreateSale(newData);
+  //     // reuse logic after successful response
+  //     // Simplest: set saleItems and show success
+  //     alert(`¡Venta registrada (desarmando kits)! ID: ${response.id}`);
+  //     // TODO: replicate credit logic etc (omitted for brevity)
+  //     // Reset forms similar to success path earlier
+  //     setSaleItems([]);
+  //   } catch (err) {
+  //     console.error("Error after confirming breakdown:", err);
+  //     alert(err.message || "Error al registrar venta con ruptura");
+  //   } finally {
+  //     setIsSubmitting(false);
+  //   }
+  // };
 
     return (
         <>
@@ -1077,12 +1260,15 @@ const SalesPage = () => {
         />
       )}
 
-      <BreakdownConfirmationModal
-        isOpen={breakdownState.isOpen}
-        breakdownPlan={breakdownState.plan}
-        message="Se requiere desarmar kits/cajas para completar la venta."
-        onCancel={handleCancelBreakdown}
-        onConfirm={handleConfirmBreakdown}
+      {/* ❌ REMOVIDO: BreakdownConfirmationModal */}
+       
+       {/* ✅ NUEVO: Modal de sugerencias de conversión */}
+       <ConversionSuggestionsModal
+         isOpen={!!conversionError}
+         error={conversionError}
+         locationId={selectedLocation?.id}
+         onCancel={handleCancelConversion}
+         onConfirm={handleConfirmConversion}
       />
         </>
     );
