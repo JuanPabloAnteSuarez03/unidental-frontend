@@ -1,11 +1,20 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { getLocations } from "../../services/inventoryService";
+import { getCurrentDateLocal, debugDate } from "../../utils/dateUtils";
 
 const ReportesFilters = ({ filters, setFilters, activeView, children }) => {
     const { authToken } = useAuth();
     const [locations, setLocations] = useState([]);
     const [isLoadingLocations, setIsLoadingLocations] = useState(false);
+
+    // Función para obtener la fecha actual en zona horaria local
+    const getTodayLocal = () => {
+        const today = getCurrentDateLocal();
+        console.log("📅 Fecha actual (local):", today);
+        debugDate(today, "Fecha actual local");
+        return today;
+    };
 
     // Cargar ubicaciones disponibles
     const loadLocations = async () => {
@@ -284,9 +293,8 @@ const ReportesFilters = ({ filters, setFilters, activeView, children }) => {
                     </label>
                     <button
                         onClick={() => {
-                            const today = new Date()
-                                .toISOString()
-                                .split("T")[0];
+                            const today = getTodayLocal();
+                            console.log("🔄 Configurando filtro para ventas de hoy:", today);
                             setFilters({
                                 ...filters,
                                 specificDate: today,
@@ -308,28 +316,26 @@ const ReportesFilters = ({ filters, setFilters, activeView, children }) => {
                             boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
                             transition: "all 0.2s ease",
                         }}
-                        onMouseOver={(e) => {
-                            e.target.style.backgroundColor = "#218838";
-                            e.target.style.boxShadow =
-                                "0 2px 8px rgba(0, 0, 0, 0.15)";
+                        onMouseEnter={(e) => {
+                            e.target.style.background = "#218838";
+                            e.target.style.transform = "translateY(-1px)";
                         }}
-                        onMouseOut={(e) => {
-                            e.target.style.backgroundColor = "#28a745";
-                            e.target.style.boxShadow =
-                                "0 2px 4px rgba(0, 0, 0, 0.1)";
+                        onMouseLeave={(e) => {
+                            e.target.style.background = "#28a745";
+                            e.target.style.transform = "translateY(0)";
                         }}
                     >
-                        📅 Ver ventas de hoy
+                        Ver ventas de hoy
                     </button>
                 </div>
 
-                {/* Botón para limpiar filtros */}
+                {/* Botón de limpiar filtros */}
                 <div
                     style={{
                         display: "flex",
                         flexDirection: "column",
                         gap: 6,
-                        marginLeft: "auto", // Empuja el botón hacia la derecha
+                        minWidth: "200px",
                     }}
                 >
                     <label
@@ -344,9 +350,8 @@ const ReportesFilters = ({ filters, setFilters, activeView, children }) => {
                     </label>
                     <button
                         onClick={() => {
-                            const today = new Date()
-                                .toISOString()
-                                .split("T")[0];
+                            const today = getTodayLocal();
+                            console.log("🧹 Limpiando filtros, volviendo a fecha actual:", today);
                             setFilters({
                                 type: "sale",
                                 days: "",
@@ -372,46 +377,49 @@ const ReportesFilters = ({ filters, setFilters, activeView, children }) => {
                             alignItems: "center",
                             gap: "8px",
                         }}
-                        onMouseOver={(e) => {
-                            e.target.style.backgroundColor = "#c82333";
-                            e.target.style.boxShadow =
-                                "0 2px 8px rgba(0, 0, 0, 0.15)";
+                        onMouseEnter={(e) => {
+                            e.target.style.background = "#c82333";
+                            e.target.style.transform = "translateY(-1px)";
                         }}
-                        onMouseOut={(e) => {
-                            e.target.style.backgroundColor = "#dc3545";
-                            e.target.style.boxShadow =
-                                "0 2px 4px rgba(0, 0, 0, 0.1)";
+                        onMouseLeave={(e) => {
+                            e.target.style.background = "#dc3545";
+                            e.target.style.transform = "translateY(0)";
                         }}
                     >
-                        🧹 Limpiar Filtros
+                        🗑️ Limpiar Filtros
                     </button>
                 </div>
             </div>
 
-            {/* Mensaje de filtro activo */}
-            {(filters.days ||
-                filters.specificDate ||
-                filters.sede !== "all") && (
+            {/* Mostrar filtros activos */}
+            {(filters.days || filters.specificDate || filters.startDate || filters.endDate) && (
                 <div
                     style={{
                         marginTop: "16px",
                         padding: "12px 16px",
                         backgroundColor: "#e3f2fd",
                         borderRadius: "8px",
+                        border: "1px solid #2196f3",
                         fontSize: "14px",
                         color: "#1976d2",
-                        border: "1px solid #bbdefb",
+                        fontWeight: "500",
                     }}
                 >
-                    🔍 <strong>Filtros activos:</strong>
+                    <strong>Filtros activos:</strong>
                     {filters.days && (
-                        <span> 📅 Últimos {filters.days} días</span>
+                        <span style={{ marginLeft: "8px" }}>
+                            📅 Período: Últimos {filters.days} días
+                        </span>
                     )}
                     {filters.specificDate && (
-                        <span> 📅 Fecha: {filters.specificDate}</span>
+                        <span style={{ marginLeft: "8px" }}>
+                            🗓️ Fecha: {filters.specificDate}
+                        </span>
                     )}
-                    {filters.sede !== "all" && (
-                        <span> 🏢 Sede: {filters.sede}</span>
+                    {filters.startDate && filters.endDate && (
+                        <span style={{ marginLeft: "8px" }}>
+                            📅 Rango: {filters.startDate} - {filters.endDate}
+                        </span>
                     )}
                 </div>
             )}

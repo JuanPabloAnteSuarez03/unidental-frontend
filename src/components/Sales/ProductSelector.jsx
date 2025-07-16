@@ -12,8 +12,12 @@ import PriceSourceLegend from "./PriceSourceLegend";
 import { useAuth } from "../../context/AuthContext";
 import inventoryService from "../../services/inventoryService";
 import batchesService from "../../services/batchesService";
-import compositeProductsService from "../../services/compositeProductsService";
+// ❌ REMOVIDO: import compositeProductsService from "../../services/compositeProductsService";
 import advancedInventoryService from "../../services/advancedInventoryService";
+import { getAvailableConversions } from '../../services/conversionService';
+import ConversionSuggestionsModal from "./ConversionSuggestionsModal";
+import { getConversionSuggestions } from '../../services/conversionService';
+import { useProducts } from "../../context/ProductsContext";
 
 const ProductSelector = forwardRef(
     ({ onProductAdded, selectedLocation, availableLocations = [] }, ref) => {
@@ -31,6 +35,14 @@ const ProductSelector = forwardRef(
         const [productSalesInfo, setProductSalesInfo] = useState(null);
         const [selectedBatches, setSelectedBatches] = useState([]);
         const [loadingAdvancedInfo, setLoadingAdvancedInfo] = useState(false);
+        const [stockByLocation, setStockByLocation] = useState([]);
+        const [conversionSuggestions, setConversionSuggestions] = useState(null);
+        const [showConversionModal, setShowConversionModal] = useState(false);
+        const [conversionError, setConversionError] = useState(null);
+
+        // Cambia el estado de error a errorStock para distinguirlo
+        const [errorStock, setErrorStock] = useState(null);
+        const [isRefreshingAfterConversion, setIsRefreshingAfterConversion] = useState(false);
 
         const updateProductsStockRef = useRef(null);
 
@@ -155,20 +167,13 @@ const ProductSelector = forwardRef(
                         "Error loading advanced product info:",
                         error
                     );
-                    // Fallback: crear información básica
+                    // Fallback: crear información básica (todos los productos son simples ahora)
                     const basicProductInfo = {
                         ...product,
                         requiresBatchControl:
                             product.requires_batch_control === true,
-                        productType: product.product_type || "simple",
-                        isComposite:
-                            (product.product_type || "simple") === "composite",
-                        isComponent:
-                            (product.product_type || "simple") === "component",
-                        isSimple:
-                            (product.product_type || "simple") === "simple",
+                        productType: "simple", // Todos los productos son simples ahora
                         batches: [],
-                        components: [],
                         stockInfo: null,
                     };
                     setProductSalesInfo(basicProductInfo);
@@ -196,6 +201,7 @@ const ProductSelector = forwardRef(
                 setStockInfo(null);
                 setProductSalesInfo(null);
                 setSelectedBatches([]);
+                setStockByLocation([]); // Resetear el stock por sede
 
                 try {
                     // Ejecutar ambas operaciones en paralelo
@@ -296,6 +302,10 @@ const ProductSelector = forwardRef(
                             noStockRegistered: true,
                         });
                     }
+
+                    // Obtener stock por sede igual que la tabla principal
+                    const stockLocations = await inventoryService.getProductStockByLocations(product.id, authToken);
+                    setStockByLocation(stockLocations);
 
                     // Cargar información avanzada si hay ubicación seleccionada
                     if (selectedLocation) {
@@ -410,6 +420,7 @@ const ProductSelector = forwardRef(
             setStockInfo(null);
             setProductSalesInfo(null);
             setSelectedBatches([]);
+            setStockByLocation([]); // Resetear el stock por sede
             setError(null);
         }, []);
 
@@ -519,8 +530,6 @@ const ProductSelector = forwardRef(
                     requiresBatchControl:
                         productSalesInfo?.requiresBatchControl,
                     selectedBatches: selectedBatches,
-                    isComposite: productSalesInfo?.isComposite,
-                    components: productSalesInfo?.components,
                 }
             );
 
@@ -562,6 +571,7 @@ const ProductSelector = forwardRef(
                 setStockInfo(null);
                 setProductSalesInfo(null);
                 setSelectedBatches([]);
+                setStockByLocation([]); // Resetear el stock por sede
                 setError(null);
             } catch (error) {
                 console.error("Error adding product:", error);
@@ -578,9 +588,146 @@ const ProductSelector = forwardRef(
             onProductAdded,
         ]);
 
+        const handleQuantityChange = (newQuantity) => {
+            setQuantity(newQuantity);
+            setErrorStock(null);
+            setConversionSuggestions(null);
+            setShowConversionModal(false);
+            setConversionError(null);
+
+            // Solo para productos con lotes y sede seleccionada
+            if (
+                productSalesInfo?.requiresBatchControl &&
+                selectedLocation &&
+                productSalesInfo.batches
+            ) {
+                const stockEnSede = productSalesInfo.batches.reduce((sum, batch) => sum + (batch.quantity || 0), 0);
+                if (parseInt(newQuantity) > stockEnSede) {
+                    // Consultar sugerencias de conversión
+                    (async () => {
+                        console.log('Intentando consultar sugerencias de conversión...');
+                        try {
+                            const suggestions = await getAvailableConversions(selectedProduct.id, selectedLocation.id, authToken);
+                            console.log('Sugerencias de conversión:', suggestions);
+                            if (suggestions && suggestions.length > 0) {
+                                setConversionSuggestions(suggestions);
+                                setShowConversionModal(true);
+                                setErrorStock(null);
+                            } else {
+                                setConversionSuggestions(null);
+                                setShowConversionModal(false);
+                                setErrorStock(`Stock insuficiente. Disponible en ${selectedLocation.name}: ${stockEnSede} unidades (sin sugerencias de conversión)`);
+                            }
+                        } catch (err) {
+                            setConversionSuggestions(null);
+                            setShowConversionModal(false);
+                            setErrorStock('Error consultando sugerencias de conversión');
+                        }
+                    })();
+                } else {
+                    setErrorStock(null);
+                }
+            } else {
+                setErrorStock(null);
+            }
+        };
+
+        // useEffect para forzar la consulta si el usuario cambia de producto o sede y la cantidad es mayor al stock
+        useEffect(() => {
+            // Solo para productos con lotes y sede seleccionada
+            if (
+                productSalesInfo?.requiresBatchControl &&
+                selectedLocation &&
+                productSalesInfo.batches
+            ) {
+                const stockEnSede = productSalesInfo.batches.reduce((sum, batch) => sum + (batch.quantity || 0), 0);
+                if (parseInt(quantity) > stockEnSede) {
+                    // Consultar sugerencias de conversión (POST)
+                    (async () => {
+                        console.log('Intentando consultar sugerencias de conversión...');
+                        try {
+                            const resp = await getConversionSuggestions(selectedProduct.id, parseInt(quantity), selectedLocation.id, authToken);
+                            console.log('Respuesta sugerencias:', resp);
+                            if (resp && resp.suggestions && resp.suggestions.length > 0) {
+                                setConversionSuggestions(resp.suggestions);
+                                setShowConversionModal(true);
+                                setErrorStock(null);
+                            } else {
+                                setConversionSuggestions(null);
+                                setShowConversionModal(false);
+                                setErrorStock(`Stock insuficiente. Disponible en ${selectedLocation.name}: ${stockEnSede} unidades (sin sugerencias de conversión)`);
+                            }
+                        } catch (err) {
+                            setConversionSuggestions(null);
+                            setShowConversionModal(false);
+                            setErrorStock('Error consultando sugerencias de conversión');
+                        }
+                    })();
+                } else {
+                    setConversionSuggestions(null);
+                    setShowConversionModal(false);
+                    setErrorStock(null);
+                }
+            } else {
+                setConversionSuggestions(null);
+                setShowConversionModal(false);
+                setErrorStock(null);
+            }
+            // eslint-disable-next-line
+        }, [quantity, selectedProduct, selectedLocation, productSalesInfo]);
+
+        const { refreshCache } = useProducts();
+
+        // Handler para conversión exitosa
+        const handleConversionSuccess = useCallback(async (suggestion, batch, result) => {
+            setIsRefreshingAfterConversion(true);
+            await refreshCache();
+            // Volver a cargar el producto seleccionado y su stock/lotes
+            if (selectedProduct) {
+                await handleProductSelected(selectedProduct);
+            }
+            setShowConversionModal(false);
+            setConversionSuggestions(null);
+            setErrorStock(null);
+            // Volver a intentar agregar la cantidad original automáticamente
+            setTimeout(async () => {
+                await handleAddToSale();
+                setIsRefreshingAfterConversion(false);
+            }, 500); // Pequeño delay para asegurar que el stock se refresque
+            // Mensaje de éxito
+            // (alert eliminado)
+        }, [refreshCache, selectedProduct, handleProductSelected, handleAddToSale]);
+
         return (
-            <div>
-                {error && (
+            <div style={{ position: 'relative' }}>
+                {isRefreshingAfterConversion && (
+                    <div style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                        background: 'rgba(255,255,255,0.7)',
+                        zIndex: 100,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderRadius: 12,
+                    }}>
+                        <div className="spinner" style={{ marginBottom: 12 }}>
+                            <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="20" cy="20" r="18" stroke="#007bff" strokeWidth="4" strokeDasharray="90 60" strokeLinecap="round">
+                                    <animateTransform attributeName="transform" type="rotate" repeatCount="indefinite" dur="1s" from="0 20 20" to="360 20 20" />
+                                </circle>
+                            </svg>
+                        </div>
+                        <div style={{ color: '#007bff', fontWeight: 600, fontSize: 16 }}>
+                            Actualizando stock y agregando producto a la venta...
+                        </div>
+                    </div>
+                )}
+                {error && !showConversionModal && (
                     <div
                         style={{
                             marginBottom: "15px",
@@ -594,6 +741,9 @@ const ProductSelector = forwardRef(
                     >
                         {error}
                     </div>
+                )}
+                {errorStock && !showConversionModal && (
+                    <div style={{ color: 'red', marginBottom: 8 }}>{errorStock}</div>
                 )}
 
                 {/* Price Source Legend */}
@@ -810,9 +960,7 @@ const ProductSelector = forwardRef(
                                         </div>
 
                                         {/* Stock en la sede seleccionada */}
-                                        {selectedLocation &&
-                                            stockInfo.availableInLocation !==
-                                                null && (
+                                        {selectedLocation && (
                                                 <div
                                                     style={{
                                                         fontSize: "13px",
@@ -820,13 +968,12 @@ const ProductSelector = forwardRef(
                                                         marginBottom: "4px",
                                                     }}
                                                 >
-                                                    <strong>
-                                                        {selectedLocation.name}:
-                                                    </strong>{" "}
-                                                    {
-                                                        stockInfo.availableInLocation
-                                                    }{" "}
-                                                    unidades
+                                                <strong>{selectedLocation.name}:</strong> {
+                                                    // Siempre usar la suma de los lotes activos en la sede seleccionada si existen
+                                                    productSalesInfo?.requiresBatchControl && productSalesInfo?.batches && productSalesInfo.batches.length > 0
+                                                        ? productSalesInfo.batches.reduce((sum, batch) => sum + (batch.quantity || 0), 0)
+                                                        : stockInfo?.availableInLocation ?? 0
+                                                } unidades
                                                 </div>
                                             )}
 
@@ -837,97 +984,38 @@ const ProductSelector = forwardRef(
                                                 color: "#6c757d",
                                             }}
                                         >
-                                            Stock total: {stockInfo.totalStock}{" "}
-                                            unidades
+                                            Stock total: {stockByLocation.reduce((sum, loc) => sum + (loc.stock || 0), 0)} unidades
                                         </div>
 
                                         {/* Desglose por ubicaciones si hay múltiples */}
-                                        {Object.keys(stockInfo.allLocations)
-                                            .length > 1 && (
-                                            <div
-                                                style={{
-                                                    fontSize: "11px",
-                                                    color: "#6c757d",
-                                                    marginTop: "4px",
-                                                }}
-                                            >
+                                        {stockByLocation.length > 1 && (
+                                            <div style={{ fontSize: "11px", color: "#6c757d", marginTop: "4px" }}>
                                                 <details>
-                                                    <summary
-                                                        style={{
-                                                            cursor: "pointer",
-                                                            fontWeight: "500",
-                                                        }}
-                                                    >
-                                                        Ver stock en todas las
-                                                        sedes (
-                                                        {
-                                                            Object.keys(
-                                                                stockInfo.allLocations
-                                                            ).length
-                                                        }
-                                                        )
+                                                    <summary style={{ cursor: "pointer", fontWeight: "500" }}>
+                                                        Ver stock en todas las sedes ({stockByLocation.length})
                                                     </summary>
-                                                    <div
-                                                        style={{
-                                                            marginTop: "8px",
-                                                            paddingLeft: "12px",
-                                                        }}
-                                                    >
-                                                        {Object.entries(
-                                                            stockInfo.allLocations
-                                                        ).map(
-                                                            ([
-                                                                locationId,
-                                                                quantity,
-                                                            ]) => (
+                                                    <div style={{ marginTop: "8px", paddingLeft: "12px" }}>
+                                                        {stockByLocation.map((loc) => (
                                                                 <div
-                                                                    key={
-                                                                        locationId
-                                                                    }
+                                                                key={loc.id}
                                                                     style={{
                                                                         margin: "4px 0",
-                                                                        padding:
-                                                                            "4px 8px",
+                                                                    padding: "4px 8px",
                                                                         backgroundColor:
-                                                                            selectedLocation?.id ==
-                                                                            locationId
+                                                                        selectedLocation?.id == loc.id
                                                                                 ? "#e8f4fd"
                                                                                 : "#f8f9fa",
-                                                                        borderRadius:
-                                                                            "4px",
+                                                                    borderRadius: "4px",
                                                                         border:
-                                                                            selectedLocation?.id ==
-                                                                            locationId
+                                                                        selectedLocation?.id == loc.id
                                                                                 ? "1px solid #3498db"
                                                                                 : "1px solid #dee2e6",
                                                                     }}
                                                                 >
-                                                                    <strong>
-                                                                        {getLocationName(
-                                                                            locationId
-                                                                        )}
-                                                                        :
-                                                                    </strong>{" "}
-                                                                    {quantity}{" "}
-                                                                    unidades
-                                                                    {selectedLocation?.id ==
-                                                                        locationId && (
-                                                                        <span
-                                                                            style={{
-                                                                                color: "#3498db",
-                                                                                fontSize:
-                                                                                    "10px",
-                                                                                marginLeft:
-                                                                                    "8px",
-                                                                            }}
-                                                                        >
-                                                                            (sede
-                                                                            actual)
-                                                                        </span>
-                                                                    )}
+                                                                <strong>{loc.name}</strong>: {loc.stock} unidades
+                                                                {selectedLocation?.id == loc.id && " (sede actual)"}
                                                                 </div>
-                                                            )
-                                                        )}
+                                                        ))}
                                                     </div>
                                                 </details>
                                             </div>
@@ -995,14 +1083,7 @@ const ProductSelector = forwardRef(
                                     type="number"
                                     min="1"
                                     value={quantity}
-                                    onChange={(e) =>
-                                        setQuantity(
-                                            Math.max(
-                                                1,
-                                                parseInt(e.target.value) || 1
-                                            )
-                                        )
-                                    }
+                                    onChange={e => handleQuantityChange(e.target.value)}
                                     style={{
                                         width: "100%",
                                         boxSizing: "border-box",
@@ -1366,391 +1447,7 @@ const ProductSelector = forwardRef(
                             </div>
                         )}
 
-                        {/* Información de Tipo de Producto */}
-                        {productSalesInfo &&
-                            (productSalesInfo.isComposite ||
-                                productSalesInfo.isComponent) && (
-                                <div style={{ marginBottom: "15px" }}>
-                                    {/* Si es un producto compuesto (kit) */}
-                                    {productSalesInfo.isComposite &&
-                                        (console.log(
-                                            "Rendering composite info:",
-                                            {
-                                                isComposite:
-                                                    productSalesInfo.isComposite,
-                                                components:
-                                                    productSalesInfo.components,
-                                                componentsLength:
-                                                    productSalesInfo.components
-                                                        ?.length,
-                                            }
-                                        ) ||
-                                            true) && (
-                                            <div
-                                                style={{
-                                                    padding: "12px",
-                                                    backgroundColor: "#e8f5e8",
-                                                    border: "2px solid #27ae60",
-                                                    borderRadius: "8px",
-                                                    marginBottom: "10px",
-                                                }}
-                                            >
-                                                <div
-                                                    style={{
-                                                        display: "flex",
-                                                        alignItems: "center",
-                                                        gap: "8px",
-                                                        marginBottom: "8px",
-                                                    }}
-                                                >
-                                                    <span
-                                                        style={{
-                                                            fontSize: "20px",
-                                                        }}
-                                                    >
-                                                        📦
-                                                    </span>
-                                                    <div>
-                                                        <div
-                                                            style={{
-                                                                fontSize:
-                                                                    "16px",
-                                                                fontWeight:
-                                                                    "700",
-                                                                color: "#27ae60",
-                                                            }}
-                                                        >
-                                                            ✨ PRODUCTO
-                                                            KIT/COMPUESTO
-                                                        </div>
-                                                        <div
-                                                            style={{
-                                                                fontSize:
-                                                                    "13px",
-                                                                color: "#155724",
-                                                                fontWeight:
-                                                                    "500",
-                                                            }}
-                                                        >
-                                                            Este producto es un
-                                                            kit que incluye
-                                                            múltiples
-                                                            componentes
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                {productSalesInfo.components &&
-                                                    productSalesInfo.components
-                                                        .length > 0 && (
-                                                        <div
-                                                            style={{
-                                                                marginTop:
-                                                                    "10px",
-                                                            }}
-                                                        >
-                                                            <div
-                                                                style={{
-                                                                    fontSize:
-                                                                        "13px",
-                                                                    fontWeight:
-                                                                        "600",
-                                                                    color: "#155724",
-                                                                    marginBottom:
-                                                                        "8px",
-                                                                }}
-                                                            >
-                                                                🔍 Contenido del
-                                                                kit (por{" "}
-                                                                {quantity}{" "}
-                                                                unidad
-                                                                {quantity > 1
-                                                                    ? "es"
-                                                                    : ""}
-                                                                ):
-                                                            </div>
-                                                            {compositeProductsService
-                                                                .calculateComponentsNeeded(
-                                                                    productSalesInfo.components,
-                                                                    quantity
-                                                                )
-                                                                .map(
-                                                                    (
-                                                                        component,
-                                                                        index
-                                                                    ) => (
-                                                                        <div
-                                                                            key={
-                                                                                index
-                                                                            }
-                                                                            style={{
-                                                                                padding:
-                                                                                    "8px 10px",
-                                                                                margin: "4px 0",
-                                                                                backgroundColor:
-                                                                                    "white",
-                                                                                border: "1px solid #c3e6cb",
-                                                                                borderRadius:
-                                                                                    "4px",
-                                                                                fontSize:
-                                                                                    "12px",
-                                                                                display:
-                                                                                    "flex",
-                                                                                justifyContent:
-                                                                                    "space-between",
-                                                                                alignItems:
-                                                                                    "center",
-                                                                            }}
-                                                                        >
-                                                                            <div>
-                                                                                <strong
-                                                                                    style={{
-                                                                                        color: "#2c3e50",
-                                                                                    }}
-                                                                                >
-                                                                                    {
-                                                                                        component.component_product_name
-                                                                                    }
-                                                                                </strong>
-                                                                                <span
-                                                                                    style={{
-                                                                                        color: "#6c757d",
-                                                                                        marginLeft:
-                                                                                            "6px",
-                                                                                    }}
-                                                                                >
-                                                                                    (
-                                                                                    {
-                                                                                        component.component_product_sku
-                                                                                    }
-
-                                                                                    )
-                                                                                </span>
-                                                                            </div>
-                                                                            <div
-                                                                                style={{
-                                                                                    fontWeight:
-                                                                                        "700",
-                                                                                    color: "#27ae60",
-                                                                                    fontSize:
-                                                                                        "13px",
-                                                                                }}
-                                                                            >
-                                                                                {
-                                                                                    component.totalQuantityNeeded
-                                                                                }{" "}
-                                                                                unidades
-                                                                            </div>
-                                                                        </div>
-                                                                    )
-                                                                )}
-                                                            <div
-                                                                style={{
-                                                                    fontSize:
-                                                                        "11px",
-                                                                    color: "#155724",
-                                                                    marginTop:
-                                                                        "8px",
-                                                                    padding:
-                                                                        "6px 8px",
-                                                                    backgroundColor:
-                                                                        "#d4edda",
-                                                                    borderRadius:
-                                                                        "4px",
-                                                                    fontWeight:
-                                                                        "500",
-                                                                }}
-                                                            >
-                                                                ℹ️ Al vender
-                                                                este kit, se
-                                                                descontarán
-                                                                automáticamente
-                                                                todos los
-                                                                componentes del
-                                                                inventario
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                            </div>
-                                        )}
-
-                                    {/* Si es un componente de otros kits */}
-                                    {productSalesInfo.isComponent &&
-                                        (console.log(
-                                            "Rendering component info:",
-                                            {
-                                                isComponent:
-                                                    productSalesInfo.isComponent,
-                                                parentComposites:
-                                                    productSalesInfo.parentComposites,
-                                                parentCompositesLength:
-                                                    productSalesInfo
-                                                        .parentComposites
-                                                        ?.length,
-                                            }
-                                        ) ||
-                                            true) && (
-                                            <div
-                                                style={{
-                                                    padding: "12px",
-                                                    backgroundColor: "#fff3cd",
-                                                    border: "2px solid #ffc107",
-                                                    borderRadius: "8px",
-                                                    marginBottom: "10px",
-                                                }}
-                                            >
-                                                <div
-                                                    style={{
-                                                        display: "flex",
-                                                        alignItems: "center",
-                                                        gap: "8px",
-                                                        marginBottom: "8px",
-                                                    }}
-                                                >
-                                                    <span
-                                                        style={{
-                                                            fontSize: "20px",
-                                                        }}
-                                                    >
-                                                        🧩
-                                                    </span>
-                                                    <div>
-                                                        <div
-                                                            style={{
-                                                                fontSize:
-                                                                    "16px",
-                                                                fontWeight:
-                                                                    "700",
-                                                                color: "#856404",
-                                                            }}
-                                                        >
-                                                            ⚡ COMPONENTE DE KIT
-                                                        </div>
-                                                        <div
-                                                            style={{
-                                                                fontSize:
-                                                                    "13px",
-                                                                color: "#856404",
-                                                                fontWeight:
-                                                                    "500",
-                                                            }}
-                                                        >
-                                                            Este producto es
-                                                            parte de otros kits
-                                                            - puede desarmarse
-                                                            automáticamente
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                {productSalesInfo.parentComposites &&
-                                                    productSalesInfo
-                                                        .parentComposites
-                                                        .length > 0 && (
-                                                        <div
-                                                            style={{
-                                                                marginTop:
-                                                                    "10px",
-                                                            }}
-                                                        >
-                                                            <div
-                                                                style={{
-                                                                    fontSize:
-                                                                        "13px",
-                                                                    fontWeight:
-                                                                        "600",
-                                                                    color: "#856404",
-                                                                    marginBottom:
-                                                                        "8px",
-                                                                }}
-                                                            >
-                                                                🔗 Este
-                                                                componente está
-                                                                incluido en los
-                                                                siguientes kits:
-                                                            </div>
-                                                            {productSalesInfo.parentComposites.map(
-                                                                (
-                                                                    composite,
-                                                                    index
-                                                                ) => (
-                                                                    <div
-                                                                        key={
-                                                                            index
-                                                                        }
-                                                                        style={{
-                                                                            padding:
-                                                                                "6px 8px",
-                                                                            margin: "3px 0",
-                                                                            backgroundColor:
-                                                                                "white",
-                                                                            border: "1px solid #ffeaa7",
-                                                                            borderRadius:
-                                                                                "4px",
-                                                                            fontSize:
-                                                                                "11px",
-                                                                            display:
-                                                                                "flex",
-                                                                            justifyContent:
-                                                                                "space-between",
-                                                                            alignItems:
-                                                                                "center",
-                                                                        }}
-                                                                    >
-                                                                        <div>
-                                                                            <strong
-                                                                                style={{
-                                                                                    color: "#2c3e50",
-                                                                                }}
-                                                                            >
-                                                                                {
-                                                                                    composite.composite_product_name
-                                                                                }
-                                                                            </strong>
-                                                                        </div>
-                                                                        <div
-                                                                            style={{
-                                                                                fontWeight:
-                                                                                    "600",
-                                                                                color: "#856404",
-                                                                                fontSize:
-                                                                                    "10px",
-                                                                            }}
-                                                                        >
-                                                                            {
-                                                                                composite.quantity
-                                                                            }{" "}
-                                                                            por
-                                                                            kit
-                                                                        </div>
-                                                                    </div>
-                                                                )
-                                                            )}
-                                                        </div>
-                                                    )}
-
-                                                <div
-                                                    style={{
-                                                        fontSize: "11px",
-                                                        color: "#856404",
-                                                        marginTop: "8px",
-                                                        padding: "6px 8px",
-                                                        backgroundColor:
-                                                            "#ffeaa7",
-                                                        borderRadius: "4px",
-                                                        fontWeight: "500",
-                                                    }}
-                                                >
-                                                    ℹ️ Si no hay suficiente
-                                                    stock directo, el sistema
-                                                    desarmará automáticamente
-                                                    kits que contengan este
-                                                    producto
-                                                </div>
-                                            </div>
-                                        )}
-                                </div>
-                            )}
+                        {/* ❌ REMOVIDO: Información de Tipo de Producto (productos compuestos y componentes) */}
 
                         {/* Product info display */}
                         <div
@@ -1915,6 +1612,15 @@ const ProductSelector = forwardRef(
                             </button>
                         </div>
                     </div>
+                )}
+                {showConversionModal && conversionSuggestions && (
+                    <ConversionSuggestionsModal
+                        isOpen={showConversionModal}
+                        error={{ suggestions: conversionSuggestions, product: selectedProduct?.name, required: quantity, available: productSalesInfo?.batches?.reduce((sum, batch) => sum + (batch.quantity || 0), 0) || 0, deficit: Math.max(0, quantity - (productSalesInfo?.batches?.reduce((sum, batch) => sum + (batch.quantity || 0), 0) || 0)) }}
+                        locationId={selectedLocation?.id}
+                        onCancel={() => setShowConversionModal(false)}
+                        onConfirm={handleConversionSuccess}
+                    />
                 )}
             </div>
         );

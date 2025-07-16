@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useReportes } from "../../context/ReportesContext";
 import { useAuth } from "../../context/AuthContext";
 import inventoryService from "../../services/inventoryService";
+import { getCurrentDateLocal, debugDate } from "../../utils/dateUtils";
 import ReportesFilters from "./ReportesFilters";
 import ReportesTable from "./ReportesTable";
 import ReportesInfo from "./ReportesInfo";
@@ -17,44 +18,12 @@ const ComprasSection = () => {
 
     const { authToken } = useAuth();
 
-    // Función para obtener la fecha actual en formato YYYY-MM-DD
+    // Función para obtener la fecha actual en formato YYYY-MM-DD en zona horaria local
     const getCurrentDate = () => {
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = String(now.getMonth() + 1).padStart(2, "0");
-        const day = String(now.getDate()).padStart(2, "0");
-        const currentDate = `${year}-${month}-${day}`;
-        console.log("📅 Fecha actual generada:", currentDate);
-        return currentDate;
-    };
-
-    // Función para debuggear fechas
-    const debugDate = (dateString, label = "Fecha") => {
-        if (!dateString) {
-            console.log(`🔍 ${label}: null/undefined`);
-            return;
-        }
-
-        try {
-            const date = new Date(dateString);
-            const utcString = date.toISOString();
-            const localString = date.toLocaleDateString();
-            const utcDateOnly = utcString.split("T")[0];
-            const localDateOnly = `${date.getFullYear()}-${String(
-                date.getMonth() + 1
-            ).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-
-            console.log(`🔍 ${label}:`, {
-                original: dateString,
-                utc: utcString,
-                local: localString,
-                utcDateOnly,
-                localDateOnly,
-                timestamp: date.getTime(),
-            });
-        } catch (error) {
-            console.error(`❌ Error debuggeando ${label}:`, dateString, error);
-        }
+        const today = getCurrentDateLocal();
+        console.log("📅 Fecha actual generada (local):", today);
+        debugDate(today, "Fecha actual local");
+        return today;
     };
 
     const [filteredData, setFilteredData] = useState([]);

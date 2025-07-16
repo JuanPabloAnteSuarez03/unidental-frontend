@@ -28,7 +28,7 @@ const useProductSearch = () => {
 
     // 🚀 OPTIMIZACIÓN: Cargar productos del contexto al inicializar
     useEffect(() => {
-        if (!authToken) return;
+            if (!authToken) return;
 
         // Si el contexto no está inicializado, iniciarlo
         if (!isInitialized && !productsLoading) {
@@ -55,7 +55,7 @@ const useProductSearch = () => {
 
     // Función para actualizar stock después de venta (delegada al contexto)
     const updateProductsStock = useCallback((soldItems) => {
-        updateStockAfterSale(soldItems);
+            updateStockAfterSale(soldItems);
     }, [updateStockAfterSale]);
 
     return {

@@ -147,14 +147,24 @@ export const createSale = async (saleData, authToken, signal) => {
 
       // Si es un 409 de ruptura de kits/cajas
       if (response.status === 409 && errorData) {
+        // ❌ REMOVIDO: Lógica de confirm_breakdown 
+        // En el nuevo sistema esto no debería pasar ya que no hay productos compuestos
         const breakdownErr = new Error(
-          errorData.message || "Se requiere confirmación de ruptura"
+          errorData.message || "Error del servidor"
         );
         breakdownErr.status = 409;
-        breakdownErr.breakdownRequired = true;
-        breakdownErr.breakdownPlan = errorData.breakdown_plan || [];
         breakdownErr.raw = errorData;
         throw breakdownErr;
+      }
+
+      // ✅ NUEVO: Manejar errores 400 con sugerencias de conversión
+      if (response.status === 400 && errorData && errorData.error && errorData.error.suggestions) {
+        const conversionErr = new Error(
+          errorData.error.message || "Stock insuficiente con sugerencias de conversión"
+        );
+        conversionErr.status = 400;
+        conversionErr.raw = errorData;
+        throw conversionErr;
       }
 
       // Si hay errores de validación, mostrarlos de forma más clara
@@ -803,8 +813,8 @@ export const getDebtSummary = async (authToken, search = "") => {
 };
 
 /**
- * Get sales for a specific date range using local filtering
- * Since the API doesn't support date filtering, we fetch all sales and filter locally
+ * Get sales for a specific date range using backend filtering
+ * Now the API supports date filtering natively
  * @param {string} startDate - Start date (YYYY-MM-DD)
  * @param {string} endDate - End date (YYYY-MM-DD)
  * @param {string} authToken - Authentication token
@@ -823,24 +833,35 @@ export const getSalesInDateRange = async (
 
   try {
     console.log(
-      `🔄 Fetching and filtering sales from ${startDate} to ${endDate}`
-    );
-    console.warn(
-      "⚠️ API doesn't support date filtering - using local filtering"
+      `🔄 Fetching sales from ${startDate} to ${endDate} using backend filtering`
     );
 
-    // Fetch ALL sales since the API doesn't support date filtering
+    // Build URL with date filters
+    const url = new URL(API_SALES_URL, window.location.origin);
+    
+    // Add date range filters
+    if (startDate) {
+      url.searchParams.append("sale_date_from", startDate);
+    }
+    if (endDate) {
+      url.searchParams.append("sale_date_to", endDate);
+    }
+    
+    // Add pagination parameters
+    url.searchParams.append("page_size", "100");
+    url.searchParams.append("ordering", "-sale_date");
+
+    console.log(`🔗 API URL with date filters: ${url.toString()}`);
+
+    // Fetch sales with date filtering
     const allSales = [];
-    let nextUrl = new URL(API_SALES_URL, window.location.origin);
-    nextUrl.searchParams.append("page_size", "100");
-    nextUrl.searchParams.append("ordering", "-sale_date");
-
+    let nextUrl = url;
     let pageCount = 0;
     const maxPages = 50;
 
     while (nextUrl && pageCount < maxPages) {
       pageCount++;
-      console.log(`📄 Loading page ${pageCount} of all sales...`);
+      console.log(`📄 Loading page ${pageCount} of filtered sales...`);
 
       const response = await fetch(nextUrl.toString(), {
         headers: {
@@ -877,38 +898,10 @@ export const getSalesInDateRange = async (
       console.warn(`⚠️ Reached maximum ${maxPages} pages limit`);
     }
 
-    // Now filter locally by date
-    const filteredSales = allSales.filter((sale) => {
-      if (!sale.sale_date) return false;
-
-      // Convertir a objeto Date local (no solo string)
-      const saleDateObj = new Date(sale.sale_date);
-      // Normalizar a solo fecha local (sin hora)
-      const saleDateLocal = new Date(
-        saleDateObj.getFullYear(),
-        saleDateObj.getMonth(),
-        saleDateObj.getDate()
-      );
-
-      let isAfterStart = true;
-      let isBeforeEnd = true;
-
-      if (startDate) {
-        const start = new Date(startDate + "T00:00:00");
-        isAfterStart = saleDateLocal >= start;
-      }
-      if (endDate) {
-        const end = new Date(endDate + "T23:59:59");
-        isBeforeEnd = saleDateLocal <= end;
-      }
-
-      return isAfterStart && isBeforeEnd;
-    });
-
     console.log(
-      `✅ Filtered ${allSales.length} → ${filteredSales.length} sales for date range`
+      `✅ Backend filtered sales: ${allSales.length} sales for date range`
     );
-    return filteredSales;
+    return allSales;
   } catch (error) {
     if (error.name === "AbortError") {
       console.log("Sales request was aborted");
@@ -963,9 +956,23 @@ export const getAllSales = async (params = {}, authToken, signal) => {
     const allSales = [];
     let nextUrl = new URL(API_SALES_URL, window.location.origin);
 
-    // Agregar parámetros de consulta (solo los soportados por la API)
-    // Nota: La API no soporta filtros de fecha, solo search, ordering y page
-    const supportedParams = ["search", "ordering", "page", "page_size"];
+    // Agregar parámetros de consulta (ahora incluye filtros de fecha)
+    const supportedParams = [
+      "search", 
+      "ordering", 
+      "page", 
+      "page_size",
+      "sale_date_from",
+      "sale_date_to",
+      "date_range",
+      "total_min",
+      "total_max",
+      "customer_name",
+      "location_name",
+      "sale_type",
+      "should_invoice"
+    ];
+    
     Object.keys(params).forEach((key) => {
       if (
         supportedParams.includes(key) &&
@@ -1040,6 +1047,111 @@ export const getAllSales = async (params = {}, authToken, signal) => {
   }
 };
 
+/**
+ * Get sales using predefined date ranges from backend
+ * @param {string} dateRange - Predefined date range (today, yesterday, this_week, last_week, this_month, last_month, last_7_days, last_30_days, last_90_days)
+ * @param {Object} additionalParams - Additional filter parameters
+ * @param {string} authToken - Authentication token
+ * @param {AbortSignal} signal - AbortController signal for request cancellation
+ * @returns {Promise<Array>} - Array of sales for the date range
+ */
+export const getSalesByDateRange = async (
+  dateRange,
+  additionalParams = {},
+  authToken,
+  signal
+) => {
+  if (!authToken) {
+    throw new Error("No authentication token provided");
+  }
+
+  if (!dateRange) {
+    throw new Error("Date range parameter is required");
+  }
+
+  try {
+    console.log(`🔄 Fetching sales for date range: ${dateRange}`);
+
+    // Build URL with date range filter
+    const url = new URL(API_SALES_URL, window.location.origin);
+    url.searchParams.append("date_range", dateRange);
+    
+    // Add additional parameters
+    Object.keys(additionalParams).forEach((key) => {
+      if (
+        additionalParams[key] !== null &&
+        additionalParams[key] !== undefined &&
+        additionalParams[key] !== ""
+      ) {
+        url.searchParams.append(key, additionalParams[key]);
+      }
+    });
+    
+    // Add pagination parameters
+    url.searchParams.append("page_size", "100");
+    url.searchParams.append("ordering", "-sale_date");
+
+    console.log(`🔗 API URL with date range: ${url.toString()}`);
+
+    // Fetch sales with date range filtering
+    const allSales = [];
+    let nextUrl = url;
+    let pageCount = 0;
+    const maxPages = 50;
+
+    while (nextUrl && pageCount < maxPages) {
+      pageCount++;
+      console.log(`📄 Loading page ${pageCount} of ${dateRange} sales...`);
+
+      const response = await fetch(nextUrl.toString(), {
+        headers: {
+          Authorization: `Token ${authToken}`,
+          "Content-Type": "application/json",
+        },
+        signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const sales = data.results || [];
+
+      allSales.push(...sales);
+      console.log(`✅ Page ${pageCount}: ${sales.length} sales loaded`);
+
+      // Check for next page
+      nextUrl = data.next
+        ? new URL(convertToProxyUrl(data.next), window.location.origin)
+        : null;
+
+      if (!nextUrl) {
+        console.log(`🏁 All pages loaded. Total sales for ${dateRange}: ${allSales.length}`);
+        break;
+      }
+
+      if (signal?.aborted) break;
+    }
+
+    if (pageCount >= maxPages) {
+      console.warn(`⚠️ Reached maximum ${maxPages} pages limit`);
+    }
+
+    console.log(
+      `✅ Backend filtered sales for ${dateRange}: ${allSales.length} sales`
+    );
+    return allSales;
+  } catch (error) {
+    if (error.name === "AbortError") {
+      console.log("Sales request was aborted");
+      return [];
+    }
+    console.error("Error fetching sales by date range:", error);
+    throw error;
+  }
+};
+
 // Export all functions as a service object
 export const salesService = {
   getSales,
@@ -1061,6 +1173,7 @@ export const salesService = {
   getDebtSummary,
   getAllSales,
   getSalesInDateRange,
+  getSalesByDateRange,
 };
 
 // Default export
