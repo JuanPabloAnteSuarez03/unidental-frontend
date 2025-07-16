@@ -3,6 +3,7 @@ import React from "react";
 const InventoryHeader = ({
     totalGeneralProducts,
     refrescarCacheInventario,
+    eliminarCacheInventario,
     obtenerInfoCacheInventario,
     cacheInventarioData,
     isLoading,

@@ -1,42 +1,90 @@
-import React from "react";
+import React, { useState } from "react";
 
 const Pagination = ({
     currentPage = 1,
     totalPages = 1,
     onPageChange,
-    showGoTo = false,
-    totalCount = null,
-    itemsPerPage = null,
-    label = "registros",
+    totalCount = 0,
+    itemsPerPage = 25,
+    isLoading = false,
 }) => {
-    if (totalPages <= 1) return null;
+    const [goToPage, setGoToPage] = useState("");
 
-    const handleGoTo = (e) => {
+    // Validaciones básicas
+    if (totalPages <= 1) {
+        return null;
+    }
+
+    if (typeof onPageChange !== "function") {
+        console.error("❌ Pagination: onPageChange debe ser una función");
+        return null;
+    }
+
+    const handlePageChange = (newPage) => {
+        if (isLoading) return;
+
+        if (newPage < 1 || newPage > totalPages) {
+            console.warn(
+                `⚠️ Página ${newPage} fuera de rango (1-${totalPages})`
+            );
+            return;
+        }
+
+        if (newPage === currentPage) {
+            return;
+        }
+
+        console.log(`🔄 Cambiando de página ${currentPage} a ${newPage}`);
+        onPageChange(newPage);
+    };
+
+    const handleGoToSubmit = (e) => {
         e.preventDefault();
-        const page = parseInt(e.target.elements.page.value, 10);
+        const page = parseInt(goToPage, 10);
         if (!isNaN(page) && page >= 1 && page <= totalPages) {
-            onPageChange(page);
+            handlePageChange(page);
+            setGoToPage("");
         }
     };
 
-    const startItem = itemsPerPage
-        ? (currentPage - 1) * itemsPerPage + 1
-        : null;
-    const endItem =
-        itemsPerPage && totalCount
-            ? Math.min(currentPage * itemsPerPage, totalCount)
-            : null;
+    // Calcular elementos mostrados
+    const startItem = (currentPage - 1) * itemsPerPage + 1;
+    const endItem = Math.min(currentPage * itemsPerPage, totalCount);
 
-    // Paginación simple con máximo 5 páginas visibles
+    // Generar números de página a mostrar
     const getPageNumbers = () => {
-        const maxVisible = 5;
-        let start = Math.max(1, currentPage - 2);
-        let end = Math.min(totalPages, start + maxVisible - 1);
-        if (end - start < maxVisible - 1) {
-            start = Math.max(1, end - maxVisible + 1);
-        }
         const pages = [];
-        for (let i = start; i <= end; i++) pages.push(i);
+        const maxVisible = 7;
+
+        if (totalPages <= maxVisible) {
+            // Mostrar todas las páginas si hay 7 o menos
+            for (let i = 1; i <= totalPages; i++) {
+                pages.push(i);
+            }
+        } else {
+            // Lógica para mostrar páginas con elipsis
+            pages.push(1);
+
+            let start = Math.max(2, currentPage - 2);
+            let end = Math.min(totalPages - 1, currentPage + 2);
+
+            if (start > 2) {
+                pages.push("...");
+            }
+
+            for (let i = start; i <= end; i++) {
+                pages.push(i);
+            }
+
+            if (end < totalPages - 1) {
+                pages.push("...");
+            }
+
+            if (totalPages > 1) {
+                pages.push(totalPages);
+            }
+        }
+
         return pages;
     };
 
@@ -44,108 +92,202 @@ const Pagination = ({
         <div
             style={{
                 display: "flex",
-                justifyContent: "center",
+                flexDirection: "column",
                 alignItems: "center",
                 gap: "16px",
                 marginTop: "24px",
-                flexWrap: "wrap",
+                padding: "20px",
+                backgroundColor: "#f8f9fa",
+                borderRadius: "8px",
+                border: "1px solid #e9ecef",
             }}
         >
-            {totalCount && itemsPerPage && (
-                <span style={{ color: "#6c757d", fontSize: 14 }}>
-                    Mostrando {startItem}-{endItem} de {totalCount} {label}
-                </span>
-            )}
-            <button
-                onClick={() => onPageChange(currentPage - 1)}
-                disabled={currentPage <= 1}
-                style={{
-                    padding: "8px 16px",
-                    border: "1px solid #e9ecef",
-                    backgroundColor: currentPage <= 1 ? "#f8f9fa" : "#fff",
-                    borderRadius: "8px",
-                    color: currentPage <= 1 ? "#6c757d" : "#495057",
-                    cursor: currentPage <= 1 ? "not-allowed" : "pointer",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                }}
-            >
-                ← Anterior
-            </button>
-            {getPageNumbers().map((page) => (
-                <button
-                    key={page}
-                    onClick={() => onPageChange(page)}
+            {/* Información de elementos mostrados */}
+            {totalCount > 0 && (
+                <div
                     style={{
-                        padding: "8px 12px",
-                        border: "1px solid",
-                        borderColor:
-                            page === currentPage ? "#007bff" : "#e9ecef",
-                        backgroundColor:
-                            page === currentPage ? "#007bff" : "#fff",
-                        borderRadius: "8px",
-                        color: page === currentPage ? "#fff" : "#495057",
-                        cursor: "pointer",
+                        color: "#6c757d",
                         fontSize: "14px",
-                        fontWeight: page === currentPage ? "600" : "500",
-                        minWidth: "40px",
+                        fontWeight: "500",
                     }}
                 >
-                    {page}
-                </button>
-            ))}
-            <button
-                onClick={() => onPageChange(currentPage + 1)}
-                disabled={currentPage >= totalPages}
+                    Mostrando {startItem}-{endItem} de {totalCount} productos
+                </div>
+            )}
+
+            {/* Controles de paginación */}
+            <div
                 style={{
-                    padding: "8px 16px",
-                    border: "1px solid #e9ecef",
-                    backgroundColor:
-                        currentPage >= totalPages ? "#f8f9fa" : "#fff",
-                    borderRadius: "8px",
-                    color: currentPage >= totalPages ? "#6c757d" : "#495057",
-                    cursor:
-                        currentPage >= totalPages ? "not-allowed" : "pointer",
-                    fontSize: "14px",
-                    fontWeight: "500",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    flexWrap: "wrap",
+                    justifyContent: "center",
                 }}
             >
-                Siguiente →
-            </button>
-            {showGoTo && (
-                <form onSubmit={handleGoTo} style={{ display: "flex", gap: 8 }}>
-                    <input
-                        name="page"
-                        type="number"
-                        min={1}
-                        max={totalPages}
-                        defaultValue={currentPage}
-                        style={{
-                            width: 60,
-                            padding: "6px 8px",
-                            border: "1px solid #ced4da",
-                            borderRadius: "4px",
-                            fontSize: "14px",
-                            textAlign: "center",
-                        }}
-                        aria-label="Número de página"
-                    />
-                    <button
-                        type="submit"
-                        style={{
-                            padding: "6px 12px",
-                            backgroundColor: "#007bff",
-                            color: "#fff",
-                            border: "none",
-                            borderRadius: "4px",
-                            fontSize: "14px",
-                            cursor: "pointer",
-                        }}
-                    >
-                        Ir
-                    </button>
-                </form>
-            )}
+                {/* Botón Anterior */}
+                <button
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage <= 1 || isLoading}
+                    style={{
+                        padding: "8px 16px",
+                        border: "1px solid #dee2e6",
+                        backgroundColor:
+                            currentPage <= 1 || isLoading
+                                ? "#f8f9fa"
+                                : "#ffffff",
+                        color:
+                            currentPage <= 1 || isLoading
+                                ? "#6c757d"
+                                : "#495057",
+                        borderRadius: "6px",
+                        cursor:
+                            currentPage <= 1 || isLoading
+                                ? "not-allowed"
+                                : "pointer",
+                        fontSize: "14px",
+                        fontWeight: "500",
+                        transition: "all 0.2s ease",
+                        minWidth: "80px",
+                    }}
+                >
+                    ← Anterior
+                </button>
+
+                {/* Números de página */}
+                {getPageNumbers().map((page, index) => (
+                    <React.Fragment key={`page-${index}`}>
+                        {page === "..." ? (
+                            <span
+                                style={{
+                                    padding: "8px 12px",
+                                    color: "#6c757d",
+                                    fontSize: "14px",
+                                }}
+                            >
+                                ...
+                            </span>
+                        ) : (
+                            <button
+                                onClick={() => handlePageChange(page)}
+                                disabled={isLoading}
+                                style={{
+                                    padding: "8px 12px",
+                                    border: "1px solid",
+                                    borderColor:
+                                        page === currentPage
+                                            ? "#007bff"
+                                            : "#dee2e6",
+                                    backgroundColor:
+                                        page === currentPage
+                                            ? "#007bff"
+                                            : "#ffffff",
+                                    color:
+                                        page === currentPage
+                                            ? "#ffffff"
+                                            : "#495057",
+                                    borderRadius: "6px",
+                                    cursor: isLoading
+                                        ? "not-allowed"
+                                        : "pointer",
+                                    fontSize: "14px",
+                                    fontWeight:
+                                        page === currentPage ? "600" : "500",
+                                    minWidth: "40px",
+                                    transition: "all 0.2s ease",
+                                }}
+                            >
+                                {page}
+                            </button>
+                        )}
+                    </React.Fragment>
+                ))}
+
+                {/* Botón Siguiente */}
+                <button
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage >= totalPages || isLoading}
+                    style={{
+                        padding: "8px 16px",
+                        border: "1px solid #dee2e6",
+                        backgroundColor:
+                            currentPage >= totalPages || isLoading
+                                ? "#f8f9fa"
+                                : "#ffffff",
+                        color:
+                            currentPage >= totalPages || isLoading
+                                ? "#6c757d"
+                                : "#495057",
+                        borderRadius: "6px",
+                        cursor:
+                            currentPage >= totalPages || isLoading
+                                ? "not-allowed"
+                                : "pointer",
+                        fontSize: "14px",
+                        fontWeight: "500",
+                        transition: "all 0.2s ease",
+                        minWidth: "80px",
+                    }}
+                >
+                    Siguiente →
+                </button>
+            </div>
+
+            {/* Ir a página específica */}
+            <form
+                onSubmit={handleGoToSubmit}
+                style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                }}
+            >
+                <label
+                    htmlFor="go-to-page"
+                    style={{
+                        fontSize: "14px",
+                        color: "#495057",
+                        fontWeight: "500",
+                    }}
+                >
+                    Ir a página:
+                </label>
+                <input
+                    id="go-to-page"
+                    type="number"
+                    min="1"
+                    max={totalPages}
+                    value={goToPage}
+                    onChange={(e) => setGoToPage(e.target.value)}
+                    disabled={isLoading}
+                    style={{
+                        width: "60px",
+                        padding: "6px 8px",
+                        border: "1px solid #ced4da",
+                        borderRadius: "4px",
+                        fontSize: "14px",
+                        textAlign: "center",
+                    }}
+                    placeholder={currentPage.toString()}
+                />
+                <button
+                    type="submit"
+                    disabled={isLoading}
+                    style={{
+                        padding: "6px 12px",
+                        backgroundColor: "#007bff",
+                        color: "#ffffff",
+                        border: "none",
+                        borderRadius: "4px",
+                        fontSize: "14px",
+                        cursor: isLoading ? "not-allowed" : "pointer",
+                        fontWeight: "500",
+                        transition: "background-color 0.2s ease",
+                    }}
+                >
+                    Ir
+                </button>
+            </form>
         </div>
     );
 };

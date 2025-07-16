@@ -169,6 +169,14 @@ const DirectApiSearchSelector = ({
 
     // Manejar selección de producto
     const handleProductSelect = (product) => {
+        // Verificar si la opción de compra está vigente
+        if (!product.is_currently_valid) {
+            alert(
+                "⚠️ Esta opción de compra no está vigente y no puede ser agregada a la orden."
+            );
+            return;
+        }
+
         // Agregar información del proveedor al producto
         const productWithSupplierInfo = {
             ...product,
@@ -348,16 +356,33 @@ const DirectApiSearchSelector = ({
                                         index < searchResults.length - 1
                                             ? "1px solid #f1f5f9"
                                             : "none",
-                                    cursor: "pointer",
+                                    cursor: product.is_currently_valid
+                                        ? "pointer"
+                                        : "not-allowed",
                                     transition: "all 0.2s ease",
-                                    background: "#ffffff",
+                                    background: product.is_currently_valid
+                                        ? "#ffffff"
+                                        : "#f8f9fa",
+                                    opacity: product.is_currently_valid
+                                        ? 1
+                                        : 0.6,
                                 }}
                                 onMouseEnter={(e) => {
-                                    e.target.style.background = "#f8fafc";
+                                    if (product.is_currently_valid) {
+                                        e.target.style.background = "#f8fafc";
+                                    }
                                 }}
                                 onMouseLeave={(e) => {
-                                    e.target.style.background = "#ffffff";
+                                    e.target.style.background =
+                                        product.is_currently_valid
+                                            ? "#ffffff"
+                                            : "#f8f9fa";
                                 }}
+                                title={
+                                    !product.is_currently_valid
+                                        ? "Opción de compra no vigente"
+                                        : "Hacer clic para agregar"
+                                }
                             >
                                 <div
                                     style={{
@@ -396,6 +421,48 @@ const DirectApiSearchSelector = ({
                                             >
                                                 {product.supplier_name || "N/A"}
                                             </span>
+                                        </div>
+                                        <div
+                                            style={{
+                                                fontSize: "12px",
+                                                marginTop: "4px",
+                                            }}
+                                        >
+                                            <span
+                                                style={{
+                                                    padding: "2px 6px",
+                                                    borderRadius: "3px",
+                                                    fontSize: "11px",
+                                                    fontWeight: "600",
+                                                    backgroundColor:
+                                                        product.is_currently_valid
+                                                            ? "#d4edda"
+                                                            : "#ffeaa7",
+                                                    color: product.is_currently_valid
+                                                        ? "#155724"
+                                                        : "#856404",
+                                                }}
+                                            >
+                                                {product.is_currently_valid
+                                                    ? "VIGENTE"
+                                                    : "NO VIGENTE"}
+                                            </span>
+                                            {product.valid_to && (
+                                                <span
+                                                    style={{
+                                                        marginLeft: "8px",
+                                                        fontSize: "11px",
+                                                        color: product.is_currently_valid
+                                                            ? "#27ae60"
+                                                            : "#e74c3c",
+                                                    }}
+                                                >
+                                                    Válido hasta:{" "}
+                                                    {new Date(
+                                                        product.valid_to
+                                                    ).toLocaleDateString()}
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
 
@@ -469,6 +536,26 @@ const DirectApiSearchSelector = ({
                         </div>
                     </div>
                 )}
+
+            {/* Información sobre vigencia */}
+            {hasSearched && !isSearching && searchResults.length > 0 && (
+                <div
+                    style={{
+                        marginTop: "16px",
+                        padding: "8px 12px",
+                        backgroundColor: "#fff3cd",
+                        borderRadius: "6px",
+                        border: "1px solid #ffeaa7",
+                        color: "#856404",
+                        fontSize: "12px",
+                        fontWeight: "500",
+                        textAlign: "center",
+                    }}
+                >
+                    ⚠️ Solo se pueden agregar opciones de compra que estén
+                    vigentes. Las opciones no vigentes aparecen deshabilitadas.
+                </div>
+            )}
 
             {/* Estilos CSS para la animación */}
             <style jsx>{`

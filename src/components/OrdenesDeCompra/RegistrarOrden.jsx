@@ -17,6 +17,8 @@ const RegistrarOrden = ({
     orderItems,
     handleRemoveProduct,
     handleChangeQuantity,
+    handleChangePrice,
+    handleChangeSubtotal,
     getPurchasePrice,
     clearOrder,
     selectedLocation,
@@ -112,6 +114,8 @@ const RegistrarOrden = ({
                     orderItems={orderItems}
                     handleRemoveProduct={handleRemoveProduct}
                     handleChangeQuantity={handleChangeQuantity}
+                    handleChangePrice={handleChangePrice}
+                    handleChangeSubtotal={handleChangeSubtotal}
                     getPurchasePrice={getPurchasePrice}
                     selectedLocation={selectedLocation}
                     setSelectedLocation={setSelectedLocation}

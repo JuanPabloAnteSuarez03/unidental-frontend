@@ -95,12 +95,8 @@ const MainLayout = ({ children }) => {
             title: "Configuración",
             items: [
                 {
-                    name: "Tipos de Venta y Precios",
-                    path: "/configuracion/tipos-venta",
-                },
-                {
-                    name: "Niveles Mínimos de Stock",
-                    path: "/configuracion/niveles-stock",
+                    name: "Control de Usuarios",
+                    path: "/configuracion/control-usuarios",
                 },
             ],
         },

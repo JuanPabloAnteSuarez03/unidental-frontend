@@ -175,6 +175,23 @@ const SupplierProductsList = ({
                                                     {product.category_name}
                                                 </div>
                                             )}
+                                            {product.valid_to && (
+                                                <div
+                                                    style={{
+                                                        fontSize: "11px",
+                                                        color: product.is_currently_valid
+                                                            ? "#27ae60"
+                                                            : "#e74c3c",
+                                                        marginTop: "2px",
+                                                        fontWeight: "500",
+                                                    }}
+                                                >
+                                                    Válido hasta:{" "}
+                                                    {new Date(
+                                                        product.valid_to
+                                                    ).toLocaleDateString()}
+                                                </div>
+                                            )}
                                         </div>
                                     </td>
                                     <td
@@ -190,18 +207,48 @@ const SupplierProductsList = ({
                                               ).toLocaleString()
                                             : "0"}
                                     </td>
+
                                     <td>
                                         <button
                                             onClick={() => {
+                                                // Verificar si la opción de compra está vigente
+                                                if (
+                                                    !product.is_currently_valid
+                                                ) {
+                                                    alert(
+                                                        "⚠️ Esta opción de compra no está vigente y no puede ser agregada a la orden."
+                                                    );
+                                                    return;
+                                                }
+
                                                 // Verificar si hay productos de otro proveedor en la orden
                                                 // (Esta validación no debería activarse normalmente ya que los productos
                                                 // de esta lista son del mismo proveedor, pero es una validación de seguridad)
                                                 handleAddProduct(product);
                                             }}
                                             className="btn-small btn-success"
-                                            style={{ marginRight: "4px" }}
+                                            style={{
+                                                marginRight: "4px",
+                                                opacity:
+                                                    product.is_currently_valid
+                                                        ? 1
+                                                        : 0.5,
+                                                cursor: product.is_currently_valid
+                                                    ? "pointer"
+                                                    : "not-allowed",
+                                            }}
+                                            disabled={
+                                                !product.is_currently_valid
+                                            }
+                                            title={
+                                                !product.is_currently_valid
+                                                    ? "Opción de compra no vigente"
+                                                    : "Agregar a la orden"
+                                            }
                                         >
-                                            Agregar
+                                            {product.is_currently_valid
+                                                ? "Agregar"
+                                                : "No vigente"}
                                         </button>
                                     </td>
                                 </tr>
@@ -216,18 +263,33 @@ const SupplierProductsList = ({
                 <div
                     style={{
                         marginTop: "16px",
-                        padding: "8px 12px",
+                        padding: "12px",
                         backgroundColor: "#e8f5e9",
                         borderRadius: "6px",
                         border: "1px solid #c8e6c9",
                         color: "#2e7d32",
                         fontSize: "12px",
                         fontWeight: "500",
-                        textAlign: "center",
                     }}
                 >
-                    💡 Haz click en "Agregar" para incluir productos en tu orden
-                    de compra
+                    <div style={{ marginBottom: "8px", textAlign: "center" }}>
+                        💡 Haz click en "Agregar" para incluir productos en tu
+                        orden de compra
+                    </div>
+                    <div
+                        style={{
+                            fontSize: "11px",
+                            color: "#856404",
+                            backgroundColor: "#fff3cd",
+                            padding: "6px 8px",
+                            borderRadius: "4px",
+                            border: "1px solid #ffeaa7",
+                        }}
+                    >
+                        ⚠️ Solo se pueden agregar opciones de compra que estén
+                        vigentes. Las opciones no vigentes aparecen
+                        deshabilitadas.
+                    </div>
                 </div>
             )}
         </div>

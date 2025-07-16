@@ -106,14 +106,9 @@ export const useInventoryWithBatches = () => {
     // Función para obtener el próximo vencimiento de un producto
     const getNextExpiry = useCallback(
         (productId) => {
-            console.log(`🔍 Buscando vencimiento para producto ${productId}`);
             const expiringBatch = expiringBatches[productId];
-            console.log(`📦 Lote encontrado:`, expiringBatch);
 
             if (!expiringBatch || !expiringBatch.expiry_date) {
-                console.log(
-                    `❌ No hay lote con vencimiento para producto ${productId}`
-                );
                 return null;
             }
 
@@ -132,10 +127,6 @@ export const useInventoryWithBatches = () => {
                 isCritical: daysToExpiry <= 7 && daysToExpiry >= 0,
             };
 
-            console.log(
-                `📅 Información de vencimiento para producto ${productId}:`,
-                result
-            );
             return result;
         },
         [expiringBatches]
@@ -144,12 +135,8 @@ export const useInventoryWithBatches = () => {
     // Función para formatear fecha de vencimiento
     const formatExpiryDate = useCallback(
         (productId) => {
-            console.log(`🎨 Formateando fecha para producto ${productId}`);
             const expiryInfo = getNextExpiry(productId);
             if (!expiryInfo) {
-                console.log(
-                    `❌ No hay información de vencimiento para producto ${productId}`
-                );
                 return "N/A";
             }
 
@@ -172,9 +159,6 @@ export const useInventoryWithBatches = () => {
                     day: "2-digit",
                 });
 
-            console.log(
-                `✅ Fecha formateada para producto ${productId}: ${result}`
-            );
             return result;
         },
         [getNextExpiry]
