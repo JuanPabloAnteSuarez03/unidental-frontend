@@ -1,12 +1,17 @@
 // src/components/Table/InventoryTable.jsx
 import React, { useMemo } from "react";
 import TableRow from "./TableRow";
+import { useInventoryWithBatches } from "../../hooks/useInventoryWithBatches";
 
 const InventoryTable = ({
     products = [],
     isLoading = false,
     isStockLoading = false,
 }) => {
+    // Hook para datos de lotes - UNA SOLA VEZ para toda la tabla
+    const { formatExpiryDate, getExpiryColor, isBatchesLoading } =
+        useInventoryWithBatches();
+
     // Estilos memoizados para mejorar rendimiento
     const styles = useMemo(
         () => ({
@@ -276,13 +281,17 @@ const InventoryTable = ({
                         </tr>
                     </thead>
                     <tbody>
-                        {products.map((product) => (
+                        {products.map((product, index) => (
                             <TableRow
                                 key={product.id}
                                 product={product}
+                                index={index}
                                 isStockLoading={
                                     product.stockLoading || isStockLoading
                                 }
+                                formatExpiryDate={formatExpiryDate}
+                                getExpiryColor={getExpiryColor}
+                                isBatchesLoading={isBatchesLoading}
                             />
                         ))}
                     </tbody>

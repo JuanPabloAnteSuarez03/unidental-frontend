@@ -44,6 +44,7 @@ const InventoryPage = () => {
 
         // 🚀 NUEVO: Funciones de cache persistente
         refrescarCacheInventario,
+        eliminarCacheInventario,
         obtenerInfoCacheInventario,
         cacheInventarioData,
     } = useInventory(); // [cite: src/hooks/useInventory.js]
@@ -81,6 +82,7 @@ const InventoryPage = () => {
                 <InventoryHeader
                     totalGeneralProducts={totalGeneralProducts}
                     refrescarCacheInventario={refrescarCacheInventario}
+                    eliminarCacheInventario={eliminarCacheInventario}
                     obtenerInfoCacheInventario={obtenerInfoCacheInventario}
                     cacheInventarioData={cacheInventarioData}
                     isLoading={isLoading}

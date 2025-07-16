@@ -559,10 +559,19 @@ const PurchaseOrderModal = ({
                                 </thead>
                                 <tbody>
                                     {orderItems.map((item, index) => {
+                                        // Usar los campos correctos de la API
+                                        const quantity =
+                                            item.quantity_requested ||
+                                            item.quantity ||
+                                            0;
+                                        const unitPrice =
+                                            item.unit_price ||
+                                            item.purchase_price ||
+                                            0;
                                         const itemTotal =
-                                            parseFloat(
-                                                item.purchase_price || 0
-                                            ) * item.quantity;
+                                            parseFloat(unitPrice) *
+                                            parseFloat(quantity);
+
                                         return (
                                             <tr
                                                 key={index}
@@ -586,7 +595,10 @@ const PurchaseOrderModal = ({
                                                             color: "#2c3e50",
                                                         }}
                                                     >
-                                                        {item.product_name ||
+                                                        {item
+                                                            .purchase_option_details
+                                                            ?.product_name ||
+                                                            item.product_name ||
                                                             item.name}
                                                     </div>
                                                     <div
@@ -596,7 +608,10 @@ const PurchaseOrderModal = ({
                                                         }}
                                                     >
                                                         SKU:{" "}
-                                                        {item.sku ||
+                                                        {item
+                                                            .purchase_option_details
+                                                            ?.product_sku ||
+                                                            item.sku ||
                                                             item.product_sku}
                                                     </div>
                                                     {item.category_name && (
@@ -631,7 +646,7 @@ const PurchaseOrderModal = ({
                                                             "1px solid #dee2e6",
                                                     }}
                                                 >
-                                                    {item.quantity}{" "}
+                                                    {quantity}{" "}
                                                     {item.unit || "unidades"}
                                                 </td>
                                                 <td
@@ -644,7 +659,7 @@ const PurchaseOrderModal = ({
                                                 >
                                                     $
                                                     {Number(
-                                                        item.purchase_price || 0
+                                                        unitPrice
                                                     ).toLocaleString()}
                                                 </td>
                                                 <td
@@ -714,7 +729,10 @@ const PurchaseOrderModal = ({
                                             • Cantidad total:{" "}
                                             {orderItems.reduce(
                                                 (sum, item) =>
-                                                    sum + item.quantity,
+                                                    sum +
+                                                    (item.quantity_requested ||
+                                                        item.quantity ||
+                                                        0),
                                                 0
                                             )}{" "}
                                             unidades

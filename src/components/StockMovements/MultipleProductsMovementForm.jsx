@@ -3,6 +3,7 @@ import ProductSearchSelector from "../Common/ProductSearchSelector";
 import ProductEntryCard from "./ProductEntryCard";
 import ProductsSummary from "./ProductsSummary";
 import batchesService from "../../services/batchesService";
+import { useAuth } from "../../context/AuthContext";
 
 const MultipleProductsMovementForm = ({
     formData,
@@ -16,6 +17,8 @@ const MultipleProductsMovementForm = ({
     // Estado simulado para múltiples productos
     const [multipleProducts, setMultipleProducts] = useState(prefilledProducts);
     const [previousLocation, setPreviousLocation] = useState(formData.location);
+    const [wasSubmitting, setWasSubmitting] = useState(false); // NUEVO: Para detectar envíos exitosos
+    const { authToken } = useAuth();
 
     // Efecto para cargar productos pre-llenados
     useEffect(() => {
@@ -24,15 +27,18 @@ const MultipleProductsMovementForm = ({
         }
     }, [prefilledProducts]);
 
-    // Efecto para limpiar productos después de envío exitoso
+    // Efecto para detectar envíos exitosos y limpiar productos
     useEffect(() => {
-        // Si había una ubicación seleccionada y ahora está vacía, significa que fue exitoso
-        if (previousLocation && !formData.location && !isSubmitting) {
-            // Limpiar la lista de productos
+        // Si estaba enviando y ahora no, y la ubicación se vació, fue un envío exitoso
+        if (wasSubmitting && !isSubmitting && !formData.location) {
+            // Limpiar la lista de productos solo después de un envío exitoso
             setMultipleProducts([]);
         }
+
+        // Actualizar el estado de envío
+        setWasSubmitting(isSubmitting);
         setPreviousLocation(formData.location);
-    }, [formData.location, previousLocation, isSubmitting]);
+    }, [isSubmitting, formData.location, wasSubmitting]);
 
     const handleRemoveProduct = (productId) => {
         setMultipleProducts(multipleProducts.filter((p) => p.id !== productId));
@@ -562,6 +568,8 @@ const MultipleProductsMovementForm = ({
                                 onQuantityChange={handleProductQuantityChange}
                                 onBatchesChange={handleProductBatchesChange}
                                 movementType={formData.movementType}
+                                locationId={formData.location}
+                                authToken={authToken}
                             />
                         ))}
                     </div>

@@ -1,16 +1,43 @@
 // src/components/Table/TableRow.jsx
 import React, { useMemo, useState, useEffect } from "react";
 import StockCell from "./StockCell";
-import { useInventoryWithBatches } from "../../hooks/useInventoryWithBatches";
 import { useAuth } from "../../context/AuthContext";
 import inventoryService from "../../services/inventoryService";
 
-const TableRow = ({ product, index }) => {
+const TableRow = ({
+    product,
+    index,
+    formatExpiryDate,
+    getExpiryColor,
+    isBatchesLoading,
+}) => {
     const { authToken } = useAuth();
 
-    // Hook para datos de lotes
-    const { formatExpiryDate, getExpiryColor, isBatchesLoading } =
-        useInventoryWithBatches();
+    // Estado para controlar la expansión de la descripción
+    const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+
+    // Función para manejar el clic en la descripción
+    const handleDescriptionClick = (e) => {
+        e.stopPropagation();
+        setIsDescriptionExpanded(!isDescriptionExpanded);
+    };
+
+    // Función para cerrar la descripción expandida cuando se hace clic fuera
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (isDescriptionExpanded) {
+                setIsDescriptionExpanded(false);
+            }
+        };
+
+        if (isDescriptionExpanded) {
+            document.addEventListener("click", handleClickOutside);
+        }
+
+        return () => {
+            document.removeEventListener("click", handleClickOutside);
+        };
+    }, [isDescriptionExpanded]);
 
     // Extraer información del producto y calcular valores derivados
     const { styles } = useMemo(() => {
@@ -93,6 +120,31 @@ const TableRow = ({ product, index }) => {
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
+                cursor: "pointer",
+                transition: "all 0.3s ease",
+                position: "relative",
+                borderRadius: "4px",
+                padding: "4px 8px",
+            },
+            descriptionCellExpanded: {
+                fontSize: "13px",
+                color: "#495057",
+                maxWidth: "500px",
+                minWidth: "300px",
+                overflow: "visible",
+                textOverflow: "clip",
+                whiteSpace: "normal",
+                cursor: "pointer",
+                transition: "all 0.3s ease",
+                position: "relative",
+                backgroundColor: "#ffffff",
+                borderRadius: "8px",
+                padding: "12px 16px",
+                border: "2px solid #007bff",
+                boxShadow: "0 4px 12px rgba(0,123,255,0.15)",
+                zIndex: 10,
+                wordWrap: "break-word",
+                lineHeight: "1.4",
             },
         };
 
@@ -154,7 +206,7 @@ const TableRow = ({ product, index }) => {
         const purchasePrice = product.latest_purchase_price;
 
         if (purchasePrice === null || purchasePrice === undefined) {
-            return <span style={{ color: "#6c757d" }}>N/A</span>;
+            return <span style={{ color: "#6c757d" }}>Cargando...</span>;
         }
 
         return (
@@ -240,10 +292,55 @@ const TableRow = ({ product, index }) => {
                 {renderMargin()}
             </td>
             <td
-                style={{ ...styles.cell, ...styles.descriptionCell }}
-                title={desc}
+                style={{
+                    ...styles.cell,
+                    ...(isDescriptionExpanded
+                        ? styles.descriptionCellExpanded
+                        : styles.descriptionCell),
+                }}
+                onClick={handleDescriptionClick}
+                onMouseEnter={(e) => {
+                    if (!isDescriptionExpanded) {
+                        e.target.style.backgroundColor = "#f8f9fa";
+                        e.target.style.border = "1px solid #dee2e6";
+                    }
+                }}
+                onMouseLeave={(e) => {
+                    if (!isDescriptionExpanded) {
+                        e.target.style.backgroundColor = "transparent";
+                        e.target.style.border = "none";
+                    }
+                }}
+                title={
+                    isDescriptionExpanded
+                        ? "Hacer clic para contraer"
+                        : "Hacer clic para expandir"
+                }
             >
-                {desc}
+                <div
+                    style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                    }}
+                >
+                    <span style={{ flex: 1 }}>{desc}</span>
+                    <span
+                        style={{
+                            fontSize: "14px",
+                            fontWeight: "bold",
+                            color: "#007bff",
+                            opacity: isDescriptionExpanded ? 1 : 0.6,
+                            transition: "all 0.3s ease",
+                            cursor: "pointer",
+                            userSelect: "none",
+                            minWidth: "16px",
+                            textAlign: "center",
+                        }}
+                    >
+                        {isDescriptionExpanded ? "−" : "+"}
+                    </span>
+                </div>
             </td>
         </tr>
     );

@@ -5,6 +5,8 @@ const OrderItemsList = ({
     orderItems,
     handleRemoveProduct,
     handleChangeQuantity,
+    handleChangePrice,
+    handleChangeSubtotal,
     getPurchasePrice,
     selectedLocation,
     setSelectedLocation,
@@ -298,16 +300,52 @@ const OrderItemsList = ({
                                                 item.name ||
                                                 "Sin nombre"}
                                         </td>
-                                        <td
-                                            style={{
-                                                color: "#27ae60",
-                                                fontWeight: "600",
-                                            }}
-                                        >
-                                            $
-                                            {getPurchasePrice(
-                                                item
-                                            ).toLocaleString()}
+                                        <td>
+                                            <div
+                                                style={{
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    gap: "4px",
+                                                }}
+                                            >
+                                                <span
+                                                    style={{
+                                                        color: "#27ae60",
+                                                        fontWeight: "600",
+                                                        fontSize: "14px",
+                                                    }}
+                                                >
+                                                    $
+                                                </span>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.01"
+                                                    value={
+                                                        item.purchase_price || 0
+                                                    }
+                                                    onChange={(e) =>
+                                                        handleChangePrice(
+                                                            item.purchase_option,
+                                                            parseFloat(
+                                                                e.target.value
+                                                            ) || 0
+                                                        )
+                                                    }
+                                                    style={{
+                                                        width: "90px",
+                                                        padding: "8px",
+                                                        border: "1px solid #ddd",
+                                                        borderRadius: "4px",
+                                                        textAlign: "center",
+                                                        color: "#27ae60",
+                                                        fontWeight: "600",
+                                                        fontSize: "14px",
+                                                    }}
+                                                    placeholder="0.00"
+                                                    title="Editar precio unitario"
+                                                />
+                                            </div>
                                         </td>
                                         <td>
                                             <input
@@ -331,17 +369,53 @@ const OrderItemsList = ({
                                                 }}
                                             />
                                         </td>
-                                        <td
-                                            style={{
-                                                color: "#27ae60",
-                                                fontWeight: "700",
-                                            }}
-                                        >
-                                            $
-                                            {(
-                                                getPurchasePrice(item) *
-                                                item.quantity
-                                            ).toLocaleString()}
+                                        <td>
+                                            <div
+                                                style={{
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    gap: "4px",
+                                                }}
+                                            >
+                                                <span
+                                                    style={{
+                                                        color: "#27ae60",
+                                                        fontWeight: "700",
+                                                        fontSize: "14px",
+                                                    }}
+                                                >
+                                                    $
+                                                </span>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.01"
+                                                    value={(
+                                                        getPurchasePrice(item) *
+                                                        item.quantity
+                                                    ).toFixed(2)}
+                                                    onChange={(e) =>
+                                                        handleChangeSubtotal(
+                                                            item.purchase_option,
+                                                            parseFloat(
+                                                                e.target.value
+                                                            ) || 0
+                                                        )
+                                                    }
+                                                    style={{
+                                                        width: "90px",
+                                                        padding: "8px",
+                                                        border: "1px solid #ddd",
+                                                        borderRadius: "4px",
+                                                        textAlign: "center",
+                                                        color: "#27ae60",
+                                                        fontWeight: "700",
+                                                        fontSize: "14px",
+                                                    }}
+                                                    placeholder="0.00"
+                                                    title="Editar subtotal (se calculará el precio unitario)"
+                                                />
+                                            </div>
                                         </td>
                                         <td>
                                             <button
@@ -437,6 +511,27 @@ const OrderItemsList = ({
                             "Crear Orden de Compra"
                         )}
                     </button>
+
+                    {/* Información adicional */}
+                    {orderItems.length > 0 && (
+                        <div
+                            style={{
+                                marginTop: "16px",
+                                padding: "12px",
+                                backgroundColor: "#e7f3ff",
+                                borderRadius: "6px",
+                                border: "1px solid #b3d9ff",
+                                color: "#0d6efd",
+                                fontSize: "12px",
+                                fontWeight: "500",
+                                textAlign: "center",
+                            }}
+                        >
+                            💰 Los precios unitarios y subtotales son editables.
+                            Al modificar el subtotal se recalcula el precio
+                            unitario automáticamente.
+                        </div>
+                    )}
                 </div>
             )}
         </div>
