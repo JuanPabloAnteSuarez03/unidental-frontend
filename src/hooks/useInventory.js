@@ -1648,6 +1648,15 @@ const useInventory = () => {
         };
     }, [cacheInventarioData, cachePreciosCompraData]);
 
+    // Al inicio del hook, después de obtener useProducts():
+    useEffect(() => {
+        if (Array.isArray(productsCache) && productsCache.length > 0) {
+            setProducts(productsCache);
+            setProductsWithPlaceholder(productsCache);
+            // El merge con stock se hará automáticamente por el otro useEffect
+        }
+    }, [productsCache]);
+
     return {
         // Datos procesados y estados
         filteredProducts: combinedProducts,

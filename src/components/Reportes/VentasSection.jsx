@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../../context/AuthContext";
-import { 
+import {
     getTodaySales, 
     getSalesInDateRange, 
-    getSalesStatisticsByDays, 
-    getSalesByLocation, 
+    getSalesStatisticsByDays,
+    getSalesByLocation,
     getTopProductsByDays,
     getSalesByDateRange
 } from "../../services/salesService";
@@ -133,8 +133,8 @@ const VentasSection = () => {
             // Si no hay datos con filtros predefinidos, usar estadísticas
             if (salesData.length === 0) {
                 console.log("📊 Usando endpoints de estadísticas");
-                // Cargar datos en paralelo
-                const [statsData, locationData, productsData] = await Promise.all([
+            // Cargar datos en paralelo
+            const [statsData, locationData, productsData] = await Promise.all([
                     getSalesStatisticsByDays(days, authToken).catch(err => {
                         console.warn("⚠️ Error cargando estadísticas:", err);
                         return null;
@@ -147,42 +147,42 @@ const VentasSection = () => {
                         console.warn("⚠️ Error cargando productos top:", err);
                         return [];
                     }),
-                ]);
+            ]);
 
-                console.log("📊 Datos de estadísticas recibidos:", statsData);
-                console.log("📍 Datos de ubicaciones recibidos:", locationData);
-                console.log("🔥 Datos de productos recibidos:", productsData);
+            console.log("📊 Datos de estadísticas recibidos:", statsData);
+            console.log("📍 Datos de ubicaciones recibidos:", locationData);
+            console.log("🔥 Datos de productos recibidos:", productsData);
 
-                // Agregar logging detallado para debug de totales por sede
-                if (locationData && locationData.length > 0) {
-                    console.log("🏢 DETALLE DE VENTAS POR SEDE:");
-                    locationData.forEach((location, index) => {
-                        console.log(
-                            `  ${index + 1}. ${
-                                location.location_name || "Sin nombre"
-                            }:`
-                        );
-                        console.log(`     - ID: ${location.location_id}`);
-                        console.log(
-                            `     - Total Sales: ${location.total_sales || 0}`
-                        );
-                        console.log(
-                            `     - Total Amount: ${
-                                location.total_amount || 0
-                            } (ESTE ES EL TOTAL DE DINERO)`
-                        );
-                        console.log(
-                            `     - Average Sale: ${
-                                location.average_sale || 0
-                            } (ESTE ES EL PROMEDIO)`
-                        );
-                        console.log(
-                            `     - Total Revenue: ${
-                                location.total_revenue || "No disponible"
-                            }`
-                        );
-                    });
-                }
+            // Agregar logging detallado para debug de totales por sede
+            if (locationData && locationData.length > 0) {
+                console.log("🏢 DETALLE DE VENTAS POR SEDE:");
+                locationData.forEach((location, index) => {
+                    console.log(
+                        `  ${index + 1}. ${
+                            location.location_name || "Sin nombre"
+                        }:`
+                    );
+                    console.log(`     - ID: ${location.location_id}`);
+                    console.log(
+                        `     - Total Sales: ${location.total_sales || 0}`
+                    );
+                    console.log(
+                        `     - Total Amount: ${
+                            location.total_amount || 0
+                        } (ESTE ES EL TOTAL DE DINERO)`
+                    );
+                    console.log(
+                        `     - Average Sale: ${
+                            location.average_sale || 0
+                        } (ESTE ES EL PROMEDIO)`
+                    );
+                    console.log(
+                        `     - Total Revenue: ${
+                            location.total_revenue || "No disponible"
+                        }`
+                    );
+                });
+            }
 
                 // Procesar datos para compatibilidad
                 const processedStats = statsData ? {
@@ -1462,7 +1462,7 @@ const VentasSection = () => {
                                                         gap: 6,
                                                     }}>
                                                         <span>{t.icon}</span> {t.label}
-                                                    </span>
+                                            </span>
                                                 );
                                             })()}
                                         </td>
