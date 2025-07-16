@@ -161,7 +161,6 @@ export const createReturn = async (returnData, authToken, signal) => {
                 quantity_returned: parseInt(item.quantity),
                 unit_price: parseFloat(item.unit_price),
             })),
-            ...(returnData.confirm_breakdown ? { confirm_breakdown: true } : {}),
         };
 
         console.log(
@@ -186,16 +185,6 @@ export const createReturn = async (returnData, authToken, signal) => {
                 "Full error data:",
                 JSON.stringify(errorData, null, 2)
             );
-
-            // Manejar 409 ruptura de kits/cajas
-            if (response.status === 409 && errorData) {
-                const breakdownErr = new Error(errorData.message || 'Se requiere confirmación de ruptura');
-                breakdownErr.status = 409;
-                breakdownErr.breakdownRequired = true;
-                breakdownErr.breakdownPlan = errorData.breakdown_plan || [];
-                breakdownErr.raw = errorData;
-                throw breakdownErr;
-            }
 
             // Provide more detailed error information for 400 errors
             if (response.status === 400) {
@@ -414,6 +403,84 @@ export const updateReturn = async (returnId, updateData, authToken, signal) => {
     }
 };
 
+/**
+ * Obtener productos ya devueltos de una venta específica
+ * @param {number} saleId - ID de la venta
+ * @param {string} authToken - Token de autenticación
+ * @returns {Promise<Object>} - Datos de productos devueltos
+ */
+export const getReturnedItemsBySale = async (saleId, authToken) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    if (!saleId) {
+        throw new Error("No sale ID provided");
+    }
+
+    try {
+        const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.RETURNS}returned_items_by_sale/?sale_id=${saleId}`, {
+            headers: {
+                Authorization: `Token ${authToken}`,
+                "Content-Type": "application/json",
+            },
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(
+                errorData.detail ||
+                `Error ${response.status}: ${response.statusText}`
+            );
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error("Error fetching returned items by sale:", error);
+        throw error;
+    }
+};
+
+/**
+ * Obtener resumen de productos devueltos (estadísticas)
+ * @param {Object} params - Parámetros de consulta
+ * @param {string} authToken - Token de autenticación
+ * @returns {Promise<Object>} - Estadísticas de productos devueltos
+ */
+export const getReturnedProductsSummary = async (params = {}, authToken) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+
+    try {
+        const queryParams = new URLSearchParams();
+        if (params.days) queryParams.append('days', params.days);
+        if (params.limit) queryParams.append('limit', params.limit);
+
+        const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.RETURNS}returned_products_summary/${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+        
+        const response = await fetch(url, {
+            headers: {
+                Authorization: `Token ${authToken}`,
+                "Content-Type": "application/json",
+            },
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(
+                errorData.detail ||
+                `Error ${response.status}: ${response.statusText}`
+            );
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error("Error fetching returned products summary:", error);
+        throw error;
+    }
+};
+
 // Export all functions as a service object
 export const returnsService = {
     searchSalesForReturns,
@@ -423,6 +490,8 @@ export const returnsService = {
     getReturnStatistics,
     getTodayReturns,
     updateReturn,
+    getReturnedItemsBySale,
+    getReturnedProductsSummary,
 };
 
 // Default export

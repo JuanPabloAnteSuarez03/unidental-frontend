@@ -4,7 +4,6 @@ import { salesService } from "../services/salesService";
 import { useAuth } from "../context/AuthContext";
 import { useProducts } from "../context/ProductsContext";
 import { FaHistory, FaUndo, FaFileInvoiceDollar } from "react-icons/fa";
-import BreakdownConfirmationModal from "../components/Sales/BreakdownConfirmationModal";
 
 const ReturnsPage = () => {
     const { authToken } = useAuth();
@@ -33,13 +32,6 @@ const ReturnsPage = () => {
     // Error states
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(null);
-
-    // Estado para confirmación de ruptura
-    const [breakdownState, setBreakdownState] = useState({
-        isOpen: false,
-        plan: [],
-        pendingReturnData: null,
-    });
 
     const reasonTranslations = {
         defective: "Producto defectuoso",
@@ -104,24 +96,21 @@ const ReturnsPage = () => {
         setError(null);
         
         try {
-            // Fetch sale details and its return history concurrently
-            const [saleDetails, returnHistory] = await Promise.all([
+            // Fetch sale details and returned items concurrently
+            const [saleDetails, returnedItemsData] = await Promise.all([
                 returnsService.getSaleForReturn(sale.id, authToken),
-                returnsService.getReturnHistory({ original_sale: sale.id }, authToken)
+                returnsService.getReturnedItemsBySale(sale.id, authToken)
             ]);
             
             setSaleDetails(saleDetails);
 
-            // Create a map of returned quantities for each sale_item_id
+            // Create a map of returned quantities for each sale_item_id using the new endpoint
             const returnedQuantitiesMap = {};
-            (returnHistory.results || []).forEach(ret => {
-                (ret.items || []).forEach(returnItem => {
-                    const saleItemId = returnItem.sale_item;
-                    if (saleItemId) {
-                        returnedQuantitiesMap[saleItemId] = (returnedQuantitiesMap[saleItemId] || 0) + returnItem.quantity_returned;
-                    }
+            if (returnedItemsData.returned_items && returnedItemsData.returned_items.length > 0) {
+                returnedItemsData.returned_items.forEach(item => {
+                    returnedQuantitiesMap[item.sale_item_id] = item.total_returned;
                 });
-            });
+            }
 
             // Initialize return items, adjusting for previous returns
             const initialReturnItems = (saleDetails.items || []).map(item => {
@@ -132,13 +121,22 @@ const ReturnsPage = () => {
                     ...item,
                     sale_item_id: item.id,
                     return_quantity: 0,
-                    max_quantity: remainingQuantity, // Correct max quantity
-                    original_quantity: item.quantity, // Keep original for display
-                    already_returned: alreadyReturned // Keep for display
+                    max_quantity: remainingQuantity,
+                    original_quantity: item.quantity,
+                    already_returned: alreadyReturned
                 };
             });
             
             setReturnItems(initialReturnItems);
+
+            // Verificar si hay productos disponibles para devolver
+            const productosDisponibles = initialReturnItems.filter(item => item.max_quantity > 0);
+            if (productosDisponibles.length === 0) {
+                setError("No hay productos disponibles para devolver en esta venta. Todos los productos ya han sido devueltos completamente.");
+                setSelectedSale(null);
+                setSaleDetails(null);
+                setReturnItems([]);
+            }
 
         } catch (error) {
             console.error("Error loading sale details:", error);
@@ -179,6 +177,24 @@ const ReturnsPage = () => {
         setError(null);
         
         try {
+            console.log("🔍 DEBUG - selectedSale:", selectedSale);
+            console.log("🔍 DEBUG - selectedSale.customer:", selectedSale.customer);
+            console.log("🔍 DEBUG - selectedSale.location:", selectedSale.location);
+            console.log("🔍 DEBUG - itemsToReturn:", itemsToReturn);
+            
+            // Validar que los datos requeridos no sean null
+            if (!selectedSale.id) {
+                throw new Error("ID de venta no válido");
+            }
+            
+            if (!selectedSale.customer) {
+                console.warn("⚠️ Cliente es null, enviando null");
+            }
+            
+            if (!selectedSale.location) {
+                throw new Error("Ubicación de venta no válida");
+            }
+            
             const returnData = {
                 original_sale_id: selectedSale.id,
                 customer_id: selectedSale.customer,
@@ -193,58 +209,73 @@ const ReturnsPage = () => {
                 }))
             };
             
-            console.log("Return data being sent:", returnData);
-            console.log("Selected sale:", selectedSale);
-            console.log("Return items:", itemsToReturn);
+            console.log("🔍 DEBUG - Return data being sent:", returnData);
+            console.log("🔍 DEBUG - JSON stringified:", JSON.stringify(returnData, null, 2));
             
-            let result;
-            try {
-                result = await attemptCreateReturn(returnData);
-            } catch (err) {
-                if (err.breakdownRequired) {
-                    setBreakdownState({ isOpen: true, plan: err.breakdownPlan || [], pendingReturnData: returnData });
-                    setIsProcessingReturn(false);
-                    return;
-                }
-                throw err;
-            }
+            const result = await attemptCreateReturn(returnData);
             
-            setSuccess(`Devolución #${result.id} creada. Actualizando venta original...`);
+            setSuccess(`Devolución #${result.id} procesada exitosamente.`);
 
-            // 1. Update original sale items to trigger backend recalculation
-            try {
-                const updatePromises = itemsToReturn.map(item => {
-                    const newQuantity = item.original_quantity - item.return_quantity;
-                    if (newQuantity > 0) {
-                        return salesService.updateSaleItem(item.sale_item_id, { quantity: newQuantity }, authToken);
-                    } else {
-                        return salesService.deleteSaleItem(item.sale_item_id, authToken);
-                    }
-                });
-                
-                await Promise.all(updatePromises);
-                setSuccess(`Devolución #${result.id} procesada y Venta #${selectedSale.id} actualizada.`);
-
-            } catch (updateError) {
-                console.error("Failed to update original sale items:", updateError);
-                setError(`Devolución creada, pero falló la actualización de la venta original: ${updateError.message}`);
-            }
-
-            // 2. Refresh sales list to get updated totals from backend
-            await loadAllSales();
-
-            // 3. Update stock in UI
+            // Update stock in UI
             itemsToReturn.forEach(item => {
                 updateStockAfterSale(item.product, item.return_quantity);
             });
             
-            // 4. Reset form
-            setSelectedSale(null);
-            setSaleDetails(null);
-            setReturnItems([]);
+            // Refresh sales list to get updated totals from backend
+            await loadAllSales();
+
+            // Refresh the current sale details to show updated "Ya devueltos"
+            if (selectedSale) {
+                try {
+                    const [updatedSaleDetails, updatedReturnedItemsData] = await Promise.all([
+                        returnsService.getSaleForReturn(selectedSale.id, authToken),
+                        returnsService.getReturnedItemsBySale(selectedSale.id, authToken)
+                    ]);
+                    
+                    setSaleDetails(updatedSaleDetails);
+
+                    // Recalculate returned quantities using the new endpoint
+                    const returnedQuantitiesMap = {};
+                    if (updatedReturnedItemsData.returned_items && updatedReturnedItemsData.returned_items.length > 0) {
+                        updatedReturnedItemsData.returned_items.forEach(item => {
+                            returnedQuantitiesMap[item.sale_item_id] = item.total_returned;
+                        });
+                    }
+
+                    // Update return items with new "Ya devueltos" values
+                    const updatedReturnItems = (updatedSaleDetails.items || []).map(item => {
+                        const alreadyReturned = returnedQuantitiesMap[item.id] || 0;
+                        const remainingQuantity = item.quantity - alreadyReturned;
+
+                        return {
+                            ...item,
+                            sale_item_id: item.id,
+                            return_quantity: 0, // Reset return quantities
+                            max_quantity: remainingQuantity,
+                            original_quantity: item.quantity,
+                            already_returned: alreadyReturned
+                        };
+                    });
+                    
+                    setReturnItems(updatedReturnItems);
+                    
+                    // Check if all products are now fully returned
+                    const productosDisponibles = updatedReturnItems.filter(item => item.max_quantity > 0);
+                    if (productosDisponibles.length === 0) {
+                        setError("No hay productos disponibles para devolver en esta venta. Todos los productos ya han sido devueltos completamente.");
+                        setSelectedSale(null);
+                        setSaleDetails(null);
+                        setReturnItems([]);
+                    }
+                } catch (refreshError) {
+                    console.error("Error refreshing sale details:", refreshError);
+                    // Continue with reset even if refresh fails
+                }
+            }
+            
+            // Reset form
             setReturnReason("");
             setReturnNotes("");
-            setSearchTerm("");
             
         } catch (error) {
             console.error("Error processing return:", error);
@@ -315,29 +346,6 @@ const ReturnsPage = () => {
     useEffect(() => {
         filterSales(searchTerm);
     }, [searchTerm, filterSales]);
-
-    const handleCancelBreakdown = () => {
-        setBreakdownState({ isOpen: false, plan: [], pendingReturnData: null });
-    };
-
-    const handleConfirmBreakdown = async () => {
-        if (!breakdownState.pendingReturnData) return;
-        const newData = { ...breakdownState.pendingReturnData, confirm_breakdown: true };
-        setBreakdownState(prev => ({ ...prev, isOpen: false }));
-        setIsProcessingReturn(true);
-        try {
-            const result = await attemptCreateReturn(newData);
-            alert(`Devolución creada (desarmando kits) #${result.id}`);
-            // Refresh list
-            await loadAllSales();
-            setSelectedSale(null);
-        } catch (err) {
-            console.error('Error confirm breakdown return:', err);
-            setError(err.message || 'Error al procesar devolución con ruptura');
-        } finally {
-            setIsProcessingReturn(false);
-        }
-    };
 
     return (
         <div
@@ -845,13 +853,6 @@ const ReturnsPage = () => {
                     )}
                 </div>
             )}
-            <BreakdownConfirmationModal
-                isOpen={breakdownState.isOpen}
-                breakdownPlan={breakdownState.plan}
-                message="Se requiere desarmar kits/cajas para procesar la devolución."
-                onCancel={handleCancelBreakdown}
-                onConfirm={handleConfirmBreakdown}
-            />
         </div>
     );
 };

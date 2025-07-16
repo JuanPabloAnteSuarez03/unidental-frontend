@@ -1,0 +1,217 @@
+config:
+  target: 'http://localhost:3000'
+  phases:
+    # Fase de calentamiento - 5 usuarios por 30 segundos
+    - duration: 30
+      arrivalRate: 5
+      name: "Warm up"
+    
+    # Fase de carga normal - 20 usuarios por 2 minutos
+    - duration: 120
+      arrivalRate: 20
+      name: "Normal load"
+    
+    # Fase de carga alta - 50 usuarios por 3 minutos
+    - duration: 180
+      arrivalRate: 50
+      name: "High load"
+    
+    # Fase de estrés - 100 usuarios por 2 minutos
+    - duration: 120
+      arrivalRate: 100
+      name: "Stress test"
+    
+    # Fase de picos - 200 usuarios por 1 minuto
+    - duration: 60
+      arrivalRate: 200
+      name: "Spike test"
+  
+  # Configuración global
+  timeout: 30
+  
+  # Configuración de headers
+  defaults:
+    headers:
+      'Content-Type': 'application/json'
+      'Accept': 'application/json'
+      'User-Agent': 'Artillery/Load-Test'
+  
+  # Configuración de métricas
+  processor: './tests/load/processor.js'
+  
+  # Variables de entorno
+  variables:
+    testUser: 'testuser'
+    testPassword: 'testpass123'
+    loginEndpoint: '/api/auth/token/login/'
+    inventoryEndpoint: '/api/catalogs/products/'
+    salesEndpoint: '/api/sales/sales/'
+
+scenarios:
+  # Escenario 1: Navegación básica sin autenticación
+  - name: "Basic Navigation"
+    weight: 30
+    flow:
+      - get:
+          url: "/"
+          capture:
+            - json: "$"
+              as: "homepage"
+      - get:
+          url: "/login"
+          capture:
+            - json: "$"
+              as: "loginPage"
+      - think: 2
+  
+  # Escenario 2: Proceso de login completo
+  - name: "Authentication Flow"
+    weight: 25
+    flow:
+      - get:
+          url: "/login"
+      - post:
+          url: "{{ loginEndpoint }}"
+          json:
+            username: "{{ testUser }}"
+            password: "{{ testPassword }}"
+          capture:
+            - json: "$.auth_token"
+              as: "authToken"
+      - think: 1
+      - get:
+          url: "/inventario"
+          headers:
+            Authorization: "Token {{ authToken }}"
+  
+  # Escenario 3: Carga intensiva de inventario
+  - name: "Inventory Load"
+    weight: 20
+    flow:
+      - post:
+          url: "{{ loginEndpoint }}"
+          json:
+            username: "{{ testUser }}"
+            password: "{{ testPassword }}"
+          capture:
+            - json: "$.auth_token"
+              as: "authToken"
+      - get:
+          url: "{{ inventoryEndpoint }}"
+          headers:
+            Authorization: "Token {{ authToken }}"
+          qs:
+            page: 1
+            page_size: 25
+      - get:
+          url: "{{ inventoryEndpoint }}"
+          headers:
+            Authorization: "Token {{ authToken }}"
+          qs:
+            page: 2
+            page_size: 25
+      - think: 3
+      - get:
+          url: "/api/inventory/stock/all/"
+          headers:
+            Authorization: "Token {{ authToken }}"
+  
+  # Escenario 4: Flujo de ventas completo
+  - name: "Sales Flow"
+    weight: 15
+    flow:
+      - post:
+          url: "{{ loginEndpoint }}"
+          json:
+            username: "{{ testUser }}"
+            password: "{{ testPassword }}"
+          capture:
+            - json: "$.auth_token"
+              as: "authToken"
+      - get:
+          url: "/api/sales/customers/"
+          headers:
+            Authorization: "Token {{ authToken }}"
+      - get:
+          url: "{{ inventoryEndpoint }}"
+          headers:
+            Authorization: "Token {{ authToken }}"
+          qs:
+            page_size: 10
+      - post:
+          url: "{{ salesEndpoint }}"
+          headers:
+            Authorization: "Token {{ authToken }}"
+          json:
+            customer: 1
+            items: 
+              - product: 1
+                quantity: 2
+                unit_price: 10.00
+            payment_method: "normal"
+            location: 1
+      - think: 2
+  
+  # Escenario 5: Búsquedas y filtros intensivos
+  - name: "Search and Filter"
+    weight: 10
+    flow:
+      - post:
+          url: "{{ loginEndpoint }}"
+          json:
+            username: "{{ testUser }}"
+            password: "{{ testPassword }}"
+          capture:
+            - json: "$.auth_token"
+              as: "authToken"
+      - get:
+          url: "{{ inventoryEndpoint }}"
+          headers:
+            Authorization: "Token {{ authToken }}"
+          qs:
+            search: "producto"
+            page_size: 25
+      - get:
+          url: "{{ inventoryEndpoint }}"
+          headers:
+            Authorization: "Token {{ authToken }}"
+          qs:
+            category: "medicamentos"
+            page_size: 25
+      - get:
+          url: "{{ inventoryEndpoint }}"
+          headers:
+            Authorization: "Token {{ authToken }}"
+          qs:
+            name: "aspirina"
+            page_size: 25
+      - think: 1
+
+# Configuración de reporting
+reporting:
+  # Métricas a capturar
+  metrics:
+    - name: "response_time"
+      summary: "Response time distribution"
+    - name: "error_rate"
+      summary: "Error rate percentage"
+    - name: "throughput"
+      summary: "Requests per second"
+  
+  # Configuración de alertas
+  alerts:
+    - name: "High error rate"
+      condition: "error_rate > 5"
+      action: "stop_test"
+    - name: "Slow response time"
+      condition: "response_time.p95 > 5000"
+      action: "alert"
+    - name: "Low throughput"
+      condition: "throughput < 10"
+      action: "alert"
+
+# Configuración de plugins
+plugins:
+  - artillery-plugin-statsd
+  - artillery-plugin-cloudwatch
+  - artillery-plugin-prometheus 

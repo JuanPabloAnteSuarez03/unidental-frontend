@@ -5,8 +5,10 @@ import { CustomersProvider } from "./context/CustomersContext";
 import { ProductsProvider } from "./context/ProductsContext";
 import MainLayout from "./components/layouts/MainLayout";
 import AppRouter from "./router";
+import useKeepBackendAwake from "./hooks/useKeepBackendAwake";
 
 function App() {
+    useKeepBackendAwake();
     return (
         <BrowserRouter>
             <AuthProvider>
