@@ -196,19 +196,32 @@ export const resetPasswordConfirm = async (uid, token, newPassword) => {
 
 /**
  * Crea un nuevo usuario en el sistema.
- * @param {Object} userData - Objeto con username, password y email.
+ * @param {Object} userData - Objeto con username, password, email y opcionalmente role.
  * @returns {Promise<Object>} - Respuesta del servidor.
  * @throws {Error} Si la respuesta de la red no es exitosa.
  */
-export const registerUser = async (userData) => {
-    const url = `${API_BASE_URL}${API_CONFIG.ENDPOINTS.USERS}`;
+export const registerUser = async (userData, authToken = null) => {
+    // Si incluye role, usar el endpoint de admin, si no, usar el endpoint normal
+    const endpoint = userData.role
+        ? API_CONFIG.ENDPOINTS.ADMIN_CREATE
+        : API_CONFIG.ENDPOINTS.USERS;
+    const url = `${API_BASE_URL}${endpoint}`;
+
+    // Preparar headers
+    const headers = {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+    };
+
+    // Si es endpoint de admin, agregar token de autenticación
+    if (userData.role && authToken) {
+        headers.Authorization = `Token ${authToken}`;
+    }
+
     try {
         const response = await fetch(url, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                Accept: "application/json",
-            },
+            headers,
             body: JSON.stringify(userData),
         });
         if (!response.ok) {
@@ -280,4 +293,3 @@ export const getUsers = async (token) => {
 
 // Podrías añadir más funciones aquí a medida que las necesites, por ejemplo:
 // export const changePassword = async (currentPassword, newPassword, token) => { ... };
-// export const registerUser = async (userData) => { ... };

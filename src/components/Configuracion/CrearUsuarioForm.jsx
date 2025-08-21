@@ -1,11 +1,14 @@
 import React, { useState } from "react";
 import { registerUser } from "../../services/authService";
+import { useAuth } from "../../context/AuthContext";
 
 const CrearUsuarioForm = () => {
+    const { authToken } = useAuth();
     const [form, setForm] = useState({
         username: "",
         password: "",
         email: "",
+        role: "User", // Por defecto "User" (Empleado)
     });
     const [touched, setTouched] = useState({});
     const [submitted, setSubmitted] = useState(false);
@@ -28,6 +31,7 @@ const CrearUsuarioForm = () => {
             username: form.username.trim().length < 3,
             password: form.password.length < 6,
             email: !/^\S+@\S+\.\S+$/.test(form.email),
+            role: !form.role || (form.role !== "User" && form.role !== "Admin"),
         };
     };
 
@@ -42,13 +46,22 @@ const CrearUsuarioForm = () => {
         if (isValid) {
             setLoading(true);
             try {
-                await registerUser({
-                    username: form.username.trim(),
-                    password: form.password,
-                    email: form.email.trim(),
-                });
+                await registerUser(
+                    {
+                        username: form.username.trim(),
+                        password: form.password,
+                        email: form.email.trim(),
+                        role: form.role,
+                    },
+                    authToken
+                );
                 setSuccess("Usuario creado correctamente.");
-                setForm({ username: "", password: "", email: "" });
+                setForm({
+                    username: "",
+                    password: "",
+                    email: "",
+                    role: "User",
+                });
                 setTouched({});
                 setSubmitted(false);
             } catch (err) {
@@ -265,6 +278,66 @@ const CrearUsuarioForm = () => {
                             }}
                         >
                             ⚠️ Ingresa un correo electrónico válido.
+                        </div>
+                    )}
+                </div>
+
+                <div style={{ marginBottom: 32 }}>
+                    <label
+                        htmlFor="role"
+                        style={{
+                            fontWeight: 600,
+                            color: "#34495e",
+                            display: "block",
+                            marginBottom: 8,
+                            fontSize: 15,
+                        }}
+                    >
+                        Rol del usuario
+                    </label>
+                    <select
+                        id="role"
+                        name="role"
+                        value={form.role}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
+                        required
+                        style={{
+                            width: "100%",
+                            padding: "14px 16px",
+                            border:
+                                errors.role && (touched.role || submitted)
+                                    ? "2px solid #e74c3c"
+                                    : "2px solid #e1e8ed",
+                            borderRadius: 8,
+                            fontSize: 16,
+                            outline: "none",
+                            background:
+                                errors.role && (touched.role || submitted)
+                                    ? "#fff6f6"
+                                    : "#fff",
+                            transition: "all 0.3s ease",
+                            boxSizing: "border-box",
+                            cursor: "pointer",
+                        }}
+                        disabled={loading}
+                    >
+                        <option value="User">Empleado</option>
+                        <option value="Admin">Administrador</option>
+                    </select>
+                    {(touched.role || submitted) && errors.role && (
+                        <div
+                            style={{
+                                color: "#e74c3c",
+                                fontSize: 14,
+                                marginTop: 6,
+                                fontWeight: 500,
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 6,
+                            }}
+                        >
+                            ⚠️ Selecciona un rol válido.
                         </div>
                     )}
                 </div>
