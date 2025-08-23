@@ -9,7 +9,7 @@ const API_STOCK_SUMMARY_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.STOC
 const API_CATEGORIES_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.CATEGORIES}`;
 const API_INVENTORY_MOVEMENTS_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.INVENTORY_MOVEMENTS}`;
 const API_LOCATIONS_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.LOCATIONS}`;
-const API_PURCHASE_ITEMS_URL = `${API_CONFIG.BASE_URL}/purchases/items/`; // Corregido
+// API_PURCHASE_ITEMS_URL removido - ahora usamos API_CONFIG.ENDPOINTS.PURCHASE_OPTIONS para obtener precios desde opciones de compra
 const API_SKU_GENERATE_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.SKU_GENERATE}`;
 const API_SKU_VALIDATE_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.SKU_VALIDATE}`;
 const API_SKU_SYSTEM_INFO_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.SKU_SYSTEM_INFO}`;
@@ -1406,9 +1406,11 @@ const getLastSalePrice = async (productId, authToken) => {
 };
 
 /**
- * 🚀 OPTIMIZADA: Obtener TODAS las opciones de compra vigentes de forma paginada
+ * 🚀 CORREGIDA: Obtener precios de compra desde las opciones de compra vigentes
+ * CAMBIO IMPORTANTE: Ahora usa /suppliers/purchase-options/ en lugar de /purchases/items/
+ * para obtener precios directamente de las opciones de compra de cada producto
  * @param {string} authToken - Token de autenticación
- * @returns {Promise<Object>} - Mapa de product_id -> precio más reciente
+ * @returns {Promise<Object>} - Mapa de product_id -> precio de su opción de compra más reciente
  */
 export const getAllPurchasePricesOptimized = async (authToken) => {
     if (!authToken) {
@@ -1426,8 +1428,8 @@ export const getAllPurchasePricesOptimized = async (authToken) => {
         );
 
         while (hasMorePages) {
-            // Obtener items de compra página por página, ordenados por fecha descendente
-            const url = `${API_PURCHASE_ITEMS_URL}?ordering=-order__order_date&page=${currentPage}&page_size=500`;
+            // CORREGIDO: Usar el endpoint de opciones de compra, no items de órdenes
+            const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.PURCHASE_OPTIONS}?is_currently_valid=true&ordering=-valid_from&page=${currentPage}&page_size=500`;
 
             const response = await fetch(url, {
                 headers: {
@@ -1443,29 +1445,30 @@ export const getAllPurchasePricesOptimized = async (authToken) => {
             }
 
             const data = await response.json();
-            const purchaseItems = data.results || [];
+            const purchaseOptions = data.results || [];
 
             // Si no hay más resultados, terminar
-            if (purchaseItems.length === 0) {
+            if (purchaseOptions.length === 0) {
                 hasMorePages = false;
                 break;
             }
 
             console.log(
-                `📦 Procesando página ${currentPage}: ${purchaseItems.length} items de compra...`
+                `📦 Procesando página ${currentPage}: ${purchaseOptions.length} opciones de compra...`
             );
 
-            // Procesar items de esta página
-            for (const item of purchaseItems) {
-                const productId = item.purchase_option?.product;
+            // Procesar opciones de esta página
+            for (const option of purchaseOptions) {
+                const productId = option.product;
 
-                // Solo tomar el primer precio por producto (el más reciente)
+                // Solo tomar el primer precio por producto (el más reciente y válido)
                 if (productId && !pricesMap.hasOwnProperty(productId)) {
-                    pricesMap[productId] = parseFloat(item.unit_price) || 0;
+                    pricesMap[productId] =
+                        parseFloat(option.purchase_price) || 0;
                 }
             }
 
-            totalItemsProcessed += purchaseItems.length;
+            totalItemsProcessed += purchaseOptions.length;
 
             // Verificar si hay más páginas
             hasMorePages = !!data.next;
@@ -1476,7 +1479,7 @@ export const getAllPurchasePricesOptimized = async (authToken) => {
                 console.log(
                     `📊 Progreso: ${
                         Object.keys(pricesMap).length
-                    } productos únicos de ${totalItemsProcessed} items procesados`
+                    } productos únicos de ${totalItemsProcessed} opciones procesadas`
                 );
             }
         }
@@ -1487,7 +1490,7 @@ export const getAllPurchasePricesOptimized = async (authToken) => {
             } productos únicos`
         );
         console.log(
-            `📊 Total procesado: ${totalItemsProcessed} items de compra en ${
+            `📊 Total procesado: ${totalItemsProcessed} opciones de compra en ${
                 currentPage - 1
             } páginas`
         );
@@ -1503,18 +1506,19 @@ export const getAllPurchasePricesOptimized = async (authToken) => {
 };
 
 /**
- * Obtiene el precio de la última compra registrada para un producto.
+ * CORREGIDA: Obtiene el precio de compra desde las opciones de compra válidas para un producto.
+ * CAMBIO IMPORTANTE: Ahora usa /suppliers/purchase-options/ en lugar de /purchases/items/
  * @param {number} productId - ID del producto.
  * @param {string} authToken - Token de autenticación.
- * @returns {Promise<number|null>} - El precio unitario de la última compra o null si no hay registros.
+ * @returns {Promise<number|null>} - El precio de compra de la opción válida más reciente o null si no hay registros.
  */
 export const getLastPurchasePrice = async (productId, authToken) => {
     if (!productId || !authToken) {
         return null;
     }
 
-    // Endpoint para obtener los items de compra, filtrados por producto y ordenados por fecha descendente
-    const url = `${API_PURCHASE_ITEMS_URL}?purchase_option__product__id=${productId}&ordering=-order__order_date`; // Corregido
+    // CORREGIDO: Usar endpoint de opciones de compra válidas para este producto
+    const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.PURCHASE_OPTIONS}?product=${productId}&is_currently_valid=true&ordering=-valid_from`;
 
     try {
         const response = await fetch(url, {
@@ -1531,11 +1535,11 @@ export const getLastPurchasePrice = async (productId, authToken) => {
             return null;
         }
 
-        const purchaseItems = await response.json();
+        const purchaseOptions = await response.json();
 
         // Si hay resultados, el primero es el más reciente
-        if (purchaseItems.results && purchaseItems.results.length > 0) {
-            return parseFloat(purchaseItems.results[0].unit_price);
+        if (purchaseOptions.results && purchaseOptions.results.length > 0) {
+            return parseFloat(purchaseOptions.results[0].purchase_price);
         }
 
         return null;

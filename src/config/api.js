@@ -86,6 +86,10 @@ const API_CONFIG = {
 
         // Compras - Órdenes de compra
         PURCHASE_ORDERS: "/purchases/orders/",
+        PURCHASE_ITEMS: "/purchases/items/",
+
+        // Proveedores - Opciones de compra
+        PURCHASE_OPTIONS: "/suppliers/purchase-options/",
     },
 };
 
