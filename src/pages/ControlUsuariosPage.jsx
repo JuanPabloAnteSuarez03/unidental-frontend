@@ -1,11 +1,7 @@
-import React, { useState } from "react";
-import { useAuth } from "../context/AuthContext";
+import React from "react";
 import CrearUsuarioForm from "../components/Configuracion/CrearUsuarioForm";
-import CerrarSesion from "../components/Configuracion/CerrarSesion";
 
 const ControlUsuariosPage = () => {
-    const [activeView, setActiveView] = useState("crear"); // "crear" o "logout"
-
     return (
         <div
             style={{
@@ -42,7 +38,7 @@ const ControlUsuariosPage = () => {
                             letterSpacing: "-0.5px",
                         }}
                     >
-                        Panel de Configuración
+                        Crear Usuarios
                     </h1>
                     <p
                         style={{
@@ -52,75 +48,11 @@ const ControlUsuariosPage = () => {
                             fontWeight: 500,
                         }}
                     >
-                        Gestiona usuarios y configuración del sistema
+                        Gestiona la creación de nuevos usuarios del sistema
                     </p>
                 </div>
 
-                {/* Botones de navegación mejorados */}
-                <div
-                    style={{
-                        display: "flex",
-                        gap: 12,
-                        marginBottom: 40,
-                        background: "#f8fafc",
-                        padding: "8px",
-                        borderRadius: 12,
-                        border: "1px solid #ecf0f1",
-                        maxWidth: 400,
-                        margin: "0 auto 40px auto",
-                    }}
-                >
-                    <button
-                        onClick={() => setActiveView("crear")}
-                        style={{
-                            flex: 1,
-                            padding: "16px 20px",
-                            background:
-                                activeView === "crear"
-                                    ? "#2c3e50"
-                                    : "transparent",
-                            color: activeView === "crear" ? "#fff" : "#2c3e50",
-                            border: "none",
-                            borderRadius: 8,
-                            fontWeight: 600,
-                            cursor: "pointer",
-                            transition: "all 0.3s ease",
-                            fontSize: 15,
-                            boxShadow:
-                                activeView === "crear"
-                                    ? "0 4px 12px rgba(44,62,80,0.15)"
-                                    : "none",
-                        }}
-                    >
-                        👤 Crear Usuario
-                    </button>
-                    <button
-                        onClick={() => setActiveView("logout")}
-                        style={{
-                            flex: 1,
-                            padding: "16px 20px",
-                            background:
-                                activeView === "logout"
-                                    ? "#e74c3c"
-                                    : "transparent",
-                            color: activeView === "logout" ? "#fff" : "#e74c3c",
-                            border: "none",
-                            borderRadius: 8,
-                            fontWeight: 600,
-                            cursor: "pointer",
-                            transition: "all 0.3s ease",
-                            fontSize: 15,
-                            boxShadow:
-                                activeView === "logout"
-                                    ? "0 4px 12px rgba(231,76,60,0.15)"
-                                    : "none",
-                        }}
-                    >
-                        🚪 Cerrar Sesión
-                    </button>
-                </div>
-
-                {/* Contenido dinámico con mejor espaciado */}
+                {/* Contenido del formulario */}
                 <div
                     style={{
                         minHeight: 400,
@@ -130,11 +62,7 @@ const ControlUsuariosPage = () => {
                         border: "1px solid #ecf0f1",
                     }}
                 >
-                    {activeView === "crear" ? (
-                        <CrearUsuarioForm />
-                    ) : (
-                        <CerrarSesion />
-                    )}
+                    <CrearUsuarioForm />
                 </div>
             </div>
         </div>

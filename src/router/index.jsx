@@ -21,6 +21,8 @@ import OrdenesDeCompraPage from "../pages/OrdenesDeCompraPage";
 import WhatsAppDebtsPage from "../pages/WhatsAppDebtsPage";
 import CreditsSalesWhatsAppPage from "../pages/CreditsSalesWhatsAppPage";
 import ControlUsuariosPage from "../pages/ControlUsuariosPage";
+import AgregarComponentesPage from "../pages/AgregarComponentesPage";
+import CajaPage from "../pages/CajaPage";
 
 import TotalVentasPage from "../pages/TotalVentasPage";
 import ReportesPage from "../pages/ReportesPage";
@@ -36,7 +38,27 @@ const AppRouter = () => {
                 path="/password-reset/confirm/:uid/:token"
                 element={<ResetPasswordConfirmPage />}
             />
-            {/* Rutas protegidas */}
+            {/* Rutas protegidas solo para Admin */}
+            <Route element={<ProtectedRoute adminOnly={true} />}>
+                <Route
+                    path="/configuracion/control-usuarios"
+                    element={<ControlUsuariosPage />}
+                />
+                <Route
+                    path="/configuracion/agregar-componentes"
+                    element={<AgregarComponentesPage />}
+                />
+                <Route
+                    path="/compras/deudas-whatsapp"
+                    element={<WhatsAppDebtsPage />}
+                />
+                <Route
+                    path="/ventas/creditos-whatsapp"
+                    element={<CreditsSalesWhatsAppPage />}
+                />
+                <Route path="/caja" element={<CajaPage />} />
+            </Route>
+            {/* Rutas protegidas para cualquier usuario autenticado */}
             <Route element={<ProtectedRoute />}>
                 <Route path="/inventario" element={<InventoryPage />} />
                 <Route
@@ -62,13 +84,9 @@ const AppRouter = () => {
                 <Route path="/inventario/reportes" element={<ReportesPage />} />
                 <Route path="/ventas" element={<SalesPage />} />
                 <Route path="/ventas/devoluciones" element={<ReturnsPage />} />
-
                 <Route path="/ventas/total" element={<TotalVentasPage />} />
-                {/* Rutas de clientes */}
                 <Route path="/clientes/lista" element={<CustomersListPage />} />
                 <Route path="/clientes/nuevo" element={<NewCustomerPage />} />
-
-                {/* Rutas de proveedores */}
                 <Route
                     path="/compras/proveedores"
                     element={<SuppliersPage />}
@@ -84,21 +102,6 @@ const AppRouter = () => {
                 <Route
                     path="/compras/ordenes"
                     element={<OrdenesDeCompraPage />}
-                />
-                {/* Ruta para deudas con WhatsApp */}
-                <Route
-                    path="/compras/deudas-whatsapp"
-                    element={<WhatsAppDebtsPage />}
-                />
-                {/* Ruta para créditos de ventas con WhatsApp */}
-                <Route
-                    path="/ventas/creditos-whatsapp"
-                    element={<CreditsSalesWhatsAppPage />}
-                />
-                {/* Ruta de configuración: Control de Usuarios */}
-                <Route
-                    path="/configuracion/control-usuarios"
-                    element={<ControlUsuariosPage />}
                 />
                 {/* Ruta temporal para probar paginación */}
                 <Route path="/test-pagination" element={<TestPagination />} />

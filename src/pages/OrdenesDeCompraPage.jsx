@@ -6,6 +6,7 @@ import {
 } from "../services/suppliersService";
 import { useAuth } from "../context/AuthContext";
 import { getLocations } from "../services/inventoryService";
+import API_CONFIG from "../config/api.js";
 
 // Componentes segmentados
 import OrdenesDeCompraHeader from "../components/OrdenesDeCompra/OrdenesDeCompraHeader";
@@ -13,6 +14,7 @@ import OrdenesDeCompraStyles from "../components/OrdenesDeCompra/OrdenesDeCompra
 import NotificationBanner from "../components/OrdenesDeCompra/NotificationBanner";
 import RegistrarOrden from "../components/OrdenesDeCompra/RegistrarOrden";
 import PurchaseOrderModal from "../components/OrdenesDeCompra/PurchaseOrderModal";
+import PurchaseOrderPaymentsModal from "../components/OrdenesDeCompra/PurchaseOrderPaymentsModal";
 
 const OrdenesDeCompraPage = () => {
     const { authToken } = useAuth();
@@ -75,6 +77,11 @@ const OrdenesDeCompraPage = () => {
     const [orderDetailLoading, setOrderDetailLoading] = useState(false);
     const [orderDetailError, setOrderDetailError] = useState("");
 
+    // Estados para el modal de pagos
+    const [showPaymentsModal, setShowPaymentsModal] = useState(false);
+    const [selectedOrderForPayments, setSelectedOrderForPayments] =
+        useState(null);
+
     // Cargar TODOS los proveedores al inicio
     useEffect(() => {
         if (!authToken) return;
@@ -117,7 +124,7 @@ const OrdenesDeCompraPage = () => {
         // Función para cargar todas las opciones de compra del proveedor
         const loadAllPurchaseOptions = async () => {
             const allProducts = [];
-            let nextUrl = `https://unidental-backend.onrender.com/api/suppliers/purchase-options/?supplier=${selectedSupplier.id}&page_size=100`;
+            let nextUrl = `${API_CONFIG.BASE_URL}/suppliers/purchase-options/?supplier=${selectedSupplier.id}&page_size=100`;
             let pageCount = 0;
             const maxPages = 50; // Límite de seguridad
 
@@ -348,30 +355,25 @@ const OrdenesDeCompraPage = () => {
             );
 
             // Verificar que el endpoint existe
+            const endpoint = `${API_CONFIG.BASE_URL}/purchases/orders/`;
             console.log("🔍 Verificando endpoint...");
-            const testResponse = await fetch(
-                "https://unidental-backend.onrender.com/api/purchases/orders/",
-                {
-                    method: "GET",
-                    headers: {
-                        "Content-Type": "application/json",
-                        Authorization: `Token ${authToken}`,
-                    },
-                }
-            );
+            const testResponse = await fetch(endpoint, {
+                method: "GET",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Token ${authToken}`,
+                },
+            });
             console.log("🔍 Test endpoint status:", testResponse.status);
 
-            const response = await fetch(
-                "https://unidental-backend.onrender.com/api/purchases/orders/",
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        Authorization: `Token ${authToken}`,
-                    },
-                    body: JSON.stringify(payload),
-                }
-            );
+            const response = await fetch(endpoint, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Token ${authToken}`,
+                },
+                body: JSON.stringify(payload),
+            });
 
             if (!response.ok) {
                 const responseText = await response.text();
@@ -495,15 +497,13 @@ const OrdenesDeCompraPage = () => {
         setIsLoadingOrders(true);
         setOrdersError("");
         try {
-            const response = await fetch(
-                `https://unidental-backend.onrender.com/api/purchases/orders/?page=${page}&page_size=${ORDERS_PAGE_SIZE}`,
-                {
-                    headers: {
-                        "Content-Type": "application/json",
-                        Authorization: `Token ${authToken}`,
-                    },
-                }
-            );
+            const endpoint = `${API_CONFIG.BASE_URL}/purchases/orders/?page=${page}&page_size=${ORDERS_PAGE_SIZE}`;
+            const response = await fetch(endpoint, {
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Token ${authToken}`,
+                },
+            });
 
             if (!response.ok) {
                 throw new Error(
@@ -570,16 +570,14 @@ const OrdenesDeCompraPage = () => {
 
         try {
             // Obtener los detalles de la orden
-            const response = await fetch(
-                `https://unidental-backend.onrender.com/api/purchases/orders/${order.id}/`,
-                {
-                    method: "GET",
-                    headers: {
-                        Authorization: `Token ${authToken}`,
-                        "Content-Type": "application/json",
-                    },
-                }
-            );
+            const endpoint = `${API_CONFIG.BASE_URL}/purchases/orders/${order.id}/`;
+            const response = await fetch(endpoint, {
+                method: "GET",
+                headers: {
+                    Authorization: `Token ${authToken}`,
+                    "Content-Type": "application/json",
+                },
+            });
 
             if (!response.ok) {
                 throw new Error(
@@ -626,6 +624,22 @@ const OrdenesDeCompraPage = () => {
         setReceiptModalData(null);
     };
 
+    // Funciones para el modal de pagos
+    const handleShowPayments = (order) => {
+        setSelectedOrderForPayments(order);
+        setShowPaymentsModal(true);
+    };
+
+    const handleClosePaymentsModal = () => {
+        setShowPaymentsModal(false);
+        setSelectedOrderForPayments(null);
+    };
+
+    const handlePaymentSuccess = () => {
+        // Recargar las órdenes para actualizar el estado de pago
+        fetchOrders(ordersPage);
+    };
+
     // Lista de acciones disponibles para órdenes pendientes
     const pendingOrderActions = [
         { value: "received", label: "Recibida", endpoint: "mark_received" },
@@ -643,16 +657,14 @@ const OrdenesDeCompraPage = () => {
                 throw new Error("Acción no válida");
             }
 
-            const response = await fetch(
-                `https://unidental-backend.onrender.com/api/purchases/orders/${orderId}/${actionConfig.endpoint}/`,
-                {
-                    method: "POST",
-                    headers: {
-                        Authorization: `Token ${authToken}`,
-                        "Content-Type": "application/json",
-                    },
-                }
-            );
+            const endpoint = `${API_CONFIG.BASE_URL}/purchases/orders/${orderId}/${actionConfig.endpoint}/`;
+            const response = await fetch(endpoint, {
+                method: "POST",
+                headers: {
+                    Authorization: `Token ${authToken}`,
+                    "Content-Type": "application/json",
+                },
+            });
 
             if (!response.ok) {
                 throw new Error(
@@ -701,16 +713,14 @@ const OrdenesDeCompraPage = () => {
         setIsProcessingRedirect(true);
         try {
             // Obtener los detalles completos de la orden
-            const response = await fetch(
-                `https://unidental-backend.onrender.com/api/purchases/orders/${orderId}/`,
-                {
-                    method: "GET",
-                    headers: {
-                        Authorization: `Token ${authToken}`,
-                        "Content-Type": "application/json",
-                    },
-                }
-            );
+            const endpoint = `${API_CONFIG.BASE_URL}/purchases/orders/${orderId}/`;
+            const response = await fetch(endpoint, {
+                method: "GET",
+                headers: {
+                    Authorization: `Token ${authToken}`,
+                    "Content-Type": "application/json",
+                },
+            });
 
             if (!response.ok) {
                 throw new Error(
@@ -1194,6 +1204,15 @@ const OrdenesDeCompraPage = () => {
                                                     fontWeight: "600",
                                                 }}
                                             >
+                                                Estado de Pago
+                                            </th>
+                                            <th
+                                                style={{
+                                                    padding: "16px",
+                                                    textAlign: "left",
+                                                    fontWeight: "600",
+                                                }}
+                                            >
                                                 Creado por
                                             </th>
                                             <th
@@ -1523,6 +1542,42 @@ const OrdenesDeCompraPage = () => {
                                                         color: "#495057",
                                                     }}
                                                 >
+                                                    <span
+                                                        style={{
+                                                            padding: "4px 8px",
+                                                            borderRadius: "4px",
+                                                            fontSize: "12px",
+                                                            fontWeight: "500",
+                                                            backgroundColor:
+                                                                order.payment_status ===
+                                                                "pagada"
+                                                                    ? "#d4edda"
+                                                                    : order.payment_status ===
+                                                                      "parcial"
+                                                                    ? "#fff3cd"
+                                                                    : "#f8d7da",
+                                                            color:
+                                                                order.payment_status ===
+                                                                "pagada"
+                                                                    ? "#155724"
+                                                                    : order.payment_status ===
+                                                                      "parcial"
+                                                                    ? "#856404"
+                                                                    : "#721c24",
+                                                            textTransform:
+                                                                "capitalize",
+                                                        }}
+                                                    >
+                                                        {order.payment_status ||
+                                                            "pendiente"}
+                                                    </span>
+                                                </td>
+                                                <td
+                                                    style={{
+                                                        padding: "16px",
+                                                        color: "#495057",
+                                                    }}
+                                                >
                                                     <div
                                                         style={{
                                                             marginBottom: "4px",
@@ -1592,47 +1647,131 @@ const OrdenesDeCompraPage = () => {
                                                         textAlign: "center",
                                                     }}
                                                 >
-                                                    <button
-                                                        onClick={() =>
-                                                            handleShowReceipt(
-                                                                order
-                                                            )
-                                                        }
+                                                    <div
                                                         style={{
-                                                            padding: "8px 16px",
-                                                            backgroundColor:
-                                                                isLoadingReceipt
-                                                                    ? "#95a5a6"
-                                                                    : "#3498db",
-                                                            color: "white",
-                                                            border: "none",
-                                                            borderRadius: "6px",
-                                                            cursor: isLoadingReceipt
-                                                                ? "not-allowed"
-                                                                : "pointer",
-                                                            fontSize: "14px",
-                                                            fontWeight: "500",
                                                             display: "flex",
-                                                            alignItems:
+                                                            gap: "8px",
+                                                            justifyContent:
                                                                 "center",
-                                                            gap: "6px",
-                                                            opacity:
-                                                                isLoadingReceipt
-                                                                    ? 0.7
-                                                                    : 1,
                                                         }}
                                                     >
-                                                        {isLoadingReceipt ? (
+                                                        <button
+                                                            onClick={() =>
+                                                                handleShowReceipt(
+                                                                    order
+                                                                )
+                                                            }
+                                                            style={{
+                                                                padding:
+                                                                    "8px 16px",
+                                                                backgroundColor:
+                                                                    isLoadingReceipt
+                                                                        ? "#95a5a6"
+                                                                        : "#3498db",
+                                                                color: "white",
+                                                                border: "none",
+                                                                borderRadius:
+                                                                    "6px",
+                                                                cursor: isLoadingReceipt
+                                                                    ? "not-allowed"
+                                                                    : "pointer",
+                                                                fontSize:
+                                                                    "14px",
+                                                                fontWeight:
+                                                                    "500",
+                                                                display: "flex",
+                                                                alignItems:
+                                                                    "center",
+                                                                gap: "6px",
+                                                                opacity:
+                                                                    isLoadingReceipt
+                                                                        ? 0.7
+                                                                        : 1,
+                                                            }}
+                                                        >
+                                                            {isLoadingReceipt ? (
+                                                                <svg
+                                                                    width="16"
+                                                                    height="16"
+                                                                    fill="none"
+                                                                    stroke="currentColor"
+                                                                    viewBox="0 0 24 24"
+                                                                    style={{
+                                                                        animation:
+                                                                            "spin 1s linear infinite",
+                                                                    }}
+                                                                >
+                                                                    <path
+                                                                        strokeLinecap="round"
+                                                                        strokeLinejoin="round"
+                                                                        strokeWidth={
+                                                                            2
+                                                                        }
+                                                                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                                                                    />
+                                                                </svg>
+                                                            ) : (
+                                                                <svg
+                                                                    width="16"
+                                                                    height="16"
+                                                                    fill="none"
+                                                                    stroke="currentColor"
+                                                                    viewBox="0 0 24 24"
+                                                                >
+                                                                    <path
+                                                                        strokeLinecap="round"
+                                                                        strokeLinejoin="round"
+                                                                        strokeWidth={
+                                                                            2
+                                                                        }
+                                                                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                                                                    />
+                                                                    <path
+                                                                        strokeLinecap="round"
+                                                                        strokeLinejoin="round"
+                                                                        strokeWidth={
+                                                                            2
+                                                                        }
+                                                                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                                                                    />
+                                                                </svg>
+                                                            )}
+                                                            {isLoadingReceipt
+                                                                ? "Cargando..."
+                                                                : "Ver Recibo"}
+                                                        </button>
+                                                        <button
+                                                            onClick={() =>
+                                                                handleShowPayments(
+                                                                    order
+                                                                )
+                                                            }
+                                                            style={{
+                                                                padding:
+                                                                    "8px 16px",
+                                                                backgroundColor:
+                                                                    "#27ae60",
+                                                                color: "white",
+                                                                border: "none",
+                                                                borderRadius:
+                                                                    "6px",
+                                                                cursor: "pointer",
+                                                                fontSize:
+                                                                    "14px",
+                                                                fontWeight:
+                                                                    "500",
+                                                                display: "flex",
+                                                                alignItems:
+                                                                    "center",
+                                                                gap: "6px",
+                                                            }}
+                                                        >
                                                             <svg
                                                                 width="16"
                                                                 height="16"
                                                                 fill="none"
                                                                 stroke="currentColor"
                                                                 viewBox="0 0 24 24"
-                                                                style={{
-                                                                    animation:
-                                                                        "spin 1s linear infinite",
-                                                                }}
                                                             >
                                                                 <path
                                                                     strokeLinecap="round"
@@ -1640,39 +1779,12 @@ const OrdenesDeCompraPage = () => {
                                                                     strokeWidth={
                                                                         2
                                                                     }
-                                                                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                                                                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"
                                                                 />
                                                             </svg>
-                                                        ) : (
-                                                            <svg
-                                                                width="16"
-                                                                height="16"
-                                                                fill="none"
-                                                                stroke="currentColor"
-                                                                viewBox="0 0 24 24"
-                                                            >
-                                                                <path
-                                                                    strokeLinecap="round"
-                                                                    strokeLinejoin="round"
-                                                                    strokeWidth={
-                                                                        2
-                                                                    }
-                                                                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                                                                />
-                                                                <path
-                                                                    strokeLinecap="round"
-                                                                    strokeLinejoin="round"
-                                                                    strokeWidth={
-                                                                        2
-                                                                    }
-                                                                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                                                                />
-                                                            </svg>
-                                                        )}
-                                                        {isLoadingReceipt
-                                                            ? "Cargando..."
-                                                            : "Ver Recibo"}
-                                                    </button>
+                                                            Pagos
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}
@@ -2295,6 +2407,14 @@ const OrdenesDeCompraPage = () => {
                     notes={receiptModalData.notes}
                 />
             )}
+
+            {/* Modal de Pagos */}
+            <PurchaseOrderPaymentsModal
+                isOpen={showPaymentsModal}
+                onClose={handleClosePaymentsModal}
+                orderData={selectedOrderForPayments}
+                onPaymentSuccess={handlePaymentSuccess}
+            />
 
             {/* Modal de Procesando Redirección */}
             {isProcessingRedirect && (

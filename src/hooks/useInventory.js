@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { useProducts } from "../context/ProductsContext"; // ✨ NUEVO: Importar contexto de productos
 import inventoryService, {
     getLastPurchasePrice,
+    getAllPurchasePricesOptimized,
 } from "../services/inventoryService";
 import {
     useNameSearch,
@@ -129,6 +130,15 @@ const cargarCachePreciosCompraDesdeStorage = () => {
             const ahora = Date.now();
             const tiempoTranscurrido = ahora - (cache.lastFetch || 0);
 
+            console.log("🔍 Verificando caché de precios:", {
+                tieneDatos: !!cache.pricesData,
+                cantidadPrecios: Object.keys(cache.pricesData || {}).length,
+                tiempoTranscurrido:
+                    Math.round(tiempoTranscurrido / 1000 / 60) + " minutos",
+                expirado:
+                    tiempoTranscurrido >= PURCHASE_PRICES_CACHE_EXPIRY_TIME,
+            });
+
             if (
                 tiempoTranscurrido < PURCHASE_PRICES_CACHE_EXPIRY_TIME &&
                 cache.pricesData &&
@@ -154,6 +164,8 @@ const cargarCachePreciosCompraDesdeStorage = () => {
                 );
                 localStorage.removeItem(PURCHASE_PRICES_CACHE_STORAGE_KEY);
             }
+        } else {
+            console.log("📭 No hay caché de precios guardado en localStorage");
         }
     } catch (error) {
         console.error(
@@ -163,6 +175,7 @@ const cargarCachePreciosCompraDesdeStorage = () => {
         localStorage.removeItem(PURCHASE_PRICES_CACHE_STORAGE_KEY);
     }
 
+    console.log("🆕 Inicializando caché de precios vacío");
     return {
         pricesData: {},
         isLoaded: false,
@@ -337,6 +350,9 @@ const useInventory = () => {
     // Estados de carga y error
     const [isLoadingProducts, setIsLoadingProducts] = useState(false);
     const [isStockLoading, setIsStockLoading] = useState(false);
+    const [isPurchasePricesLoading, setIsPurchasePricesLoading] =
+        useState(false);
+    const [pricesUpdateTrigger, setPricesUpdateTrigger] = useState(0);
     const [error, setError] = useState(null);
 
     // Estado adicional para mantener el total general de productos (sin filtros)
@@ -375,10 +391,14 @@ const useInventory = () => {
     const lastTotalFetch = useRef(0);
     // ✨ NUEVO: Tiempo de la última carga completa de stock
     const lastStockFetch = useRef(0);
+    // 🚀 NUEVO: Ref para controlar si ya se intentó cargar precios de compra
+    const purchasePricesLoadAttempted = useRef(false);
     // AbortController para cancelar peticiones cuando cambian los filtros
     const abortControllerRef = useRef(null);
     // Ref para guardar el último abortController de stock
     const stockAbortControllerRef = useRef(null);
+    // 🚀 NUEVO: Ref para detectar si es la primera carga del componente
+    const isFirstLoad = useRef(true);
 
     // Función optimizada para convertir URLs absolutas a URLs relativas para el proxy
     const convertToProxyUrl = useCallback((url) => {
@@ -475,10 +495,20 @@ const useInventory = () => {
         ]
     );
 
-    // 🚀 NUEVA FUNCIÓN: Cargar todos los precios de compra con cache persistente
+    // 🚀 OPTIMIZADA: Cargar precios de compra con UNA SOLA petición
     const loadAllPurchasePrices = useCallback(
         async (forceRefresh = false) => {
-            console.log("💰 Loading ALL purchase prices data...");
+            console.log(
+                "💰 Loading purchase prices with optimized single request..."
+            );
+
+            // Si ya se intentó cargar y no es un refresh forzado, no volver a intentar
+            if (!forceRefresh && purchasePricesLoadAttempted.current) {
+                console.log(
+                    "💾 Precios de compra ya se intentaron cargar anteriormente, saltando..."
+                );
+                return cachePreciosCompraData.pricesData || {};
+            }
 
             // Si ya tenemos datos en cache persistente y no es un refresh forzado, usar cache
             if (
@@ -489,107 +519,54 @@ const useInventory = () => {
                 console.log(
                     "💾 Usando precios de compra desde cache persistente, no es necesario recargar"
                 );
+                purchasePricesLoadAttempted.current = true;
                 return cachePreciosCompraData.pricesData;
             }
 
             try {
-                setIsStockLoading(true);
+                setIsPurchasePricesLoading(true);
+                // Marcar que se está intentando cargar
+                purchasePricesLoadAttempted.current = true;
 
-                // Obtener todos los productos primero (necesitamos sus IDs)
-                let productIds = [];
-                if (
-                    cacheProductosData.isLoaded &&
-                    cacheProductosData.products.length > 0
-                ) {
-                    productIds = cacheProductosData.products.map(
-                        (product) => product.id
-                    );
-                } else {
-                    // Si no hay cache de productos, obtenerlos
-                    const allProducts = await inventoryService.getAllProducts(
-                        {},
-                        authToken
-                    );
-                    productIds = allProducts.map((product) => product.id);
-                }
-
-                console.log(
-                    `🔍 Cargando precios de compra para ${productIds.length} productos...`
-                );
-
-                // Cargar precios de compra en paralelo (batches para no sobrecargar)
-                const pricesMap = {};
-                const BATCH_SIZE = 20; // Procesar 20 productos a la vez
-                const batches = [];
-
-                for (let i = 0; i < productIds.length; i += BATCH_SIZE) {
-                    const batch = productIds.slice(i, i + BATCH_SIZE);
-                    batches.push(batch);
-                }
-
-                console.log(
-                    `📦 Procesando ${batches.length} lotes de precios de compra...`
-                );
-
-                // Procesar lotes en paralelo (máximo 3 a la vez)
-                const MAX_CONCURRENT_BATCHES = 3;
-                for (
-                    let i = 0;
-                    i < batches.length;
-                    i += MAX_CONCURRENT_BATCHES
-                ) {
-                    const currentBatches = batches.slice(
-                        i,
-                        i + MAX_CONCURRENT_BATCHES
-                    );
-
-                    const batchPromises = currentBatches.map(async (batch) => {
-                        const batchPrices = {};
-
-                        // Procesar cada producto del batch
-                        await Promise.all(
-                            batch.map(async (productId) => {
-                                try {
-                                    const price = await getLastPurchasePrice(
-                                        productId,
-                                        authToken
-                                    );
-                                    if (price !== null) {
-                                        batchPrices[productId] = price;
-                                    }
-                                } catch (error) {
-                                    console.warn(
-                                        `⚠️ Error obteniendo precio para producto ${productId}:`,
-                                        error
-                                    );
-                                }
-                            })
-                        );
-
-                        return batchPrices;
-                    });
-
-                    const batchResults = await Promise.all(batchPromises);
-
-                    // Combinar resultados
-                    batchResults.forEach((batchPrices) => {
-                        Object.assign(pricesMap, batchPrices);
-                    });
-
-                    console.log(
-                        `✅ Lote ${
-                            Math.floor(i / MAX_CONCURRENT_BATCHES) + 1
-                        }/${Math.ceil(
-                            batches.length / MAX_CONCURRENT_BATCHES
-                        )} procesado`
-                    );
-                }
+                // 🚀 NUEVA ESTRATEGIA: Obtener TODAS las opciones de compra vigentes
+                console.log("🚀 Llamando a getAllPurchasePricesOptimized...");
+                const pricesMap = await getAllPurchasePricesOptimized(
+                    authToken
+                ); // Sin límites, obtiene todo
 
                 console.log(
                     `💰 Precios de compra cargados: ${
                         Object.keys(pricesMap).length
-                    } productos con precios`
+                    } productos con precios (optimizado)`
                 );
+
+                if (Object.keys(pricesMap).length === 0) {
+                    console.warn(
+                        "⚠️ No se obtuvieron precios de compra. Marcando como sin precios disponibles."
+                    );
+
+                    // Marcar que se intentó cargar pero no hay precios disponibles
+                    const nuevoCache = {
+                        pricesData: {},
+                        isLoaded: true,
+                        lastFetch: now,
+                        isPartial: false,
+                        noPricesAvailable: true, // Marcar que no hay precios disponibles
+                    };
+
+                    setCachePreciosCompraData(nuevoCache);
+                    guardarCachePreciosCompraEnStorage(nuevoCache);
+
+                    console.log(
+                        "🛑 Carga de precios completada - no hay precios disponibles"
+                    );
+                    return {};
+                } else {
+                    console.log(
+                        "✅ Precios obtenidos correctamente. Primeros 3:",
+                        Object.entries(pricesMap).slice(0, 3)
+                    );
+                }
 
                 // Guardar en cache persistente
                 const now = Date.now();
@@ -597,29 +574,47 @@ const useInventory = () => {
                     pricesData: pricesMap,
                     isLoaded: true,
                     lastFetch: now,
+                    isPartial: false, // Carga completa de una vez
+                    noPricesAvailable: false, // Hay precios disponibles
                 };
 
                 setCachePreciosCompraData(nuevoCache);
                 guardarCachePreciosCompraEnStorage(nuevoCache);
 
                 console.log(
-                    "💾 Precios de compra guardados en cache persistente exitosamente"
+                    "💾 Precios de compra guardados en cache persistente (carga optimizada)"
                 );
+
+                // Asegurar que el flag se actualice después de que los datos estén disponibles
+                purchasePricesLoadAttempted.current = true;
+                console.log(
+                    "✅ Flag purchasePricesLoadAttempted actualizado a true"
+                );
+
+                // Disparar actualización de la UI
+                setPricesUpdateTrigger((prev) => prev + 1);
+                console.log("🔄 Trigger de actualización de precios disparado");
 
                 return pricesMap;
             } catch (error) {
                 console.error("🚨 Error loading purchase prices:", error);
-                throw error;
+                // Marcar como cargado aunque haya error para no volver a intentar
+                const nuevoCache = {
+                    pricesData: {},
+                    isLoaded: true,
+                    lastFetch: Date.now(),
+                };
+                setCachePreciosCompraData(nuevoCache);
+                guardarCachePreciosCompraEnStorage(nuevoCache);
+                return {};
             } finally {
-                setIsStockLoading(false);
+                setIsPurchasePricesLoading(false);
             }
         },
         [
             authToken,
             cachePreciosCompraData.isLoaded,
             cachePreciosCompraData.pricesData,
-            cacheProductosData.isLoaded,
-            cacheProductosData.products,
         ]
     );
 
@@ -630,25 +625,49 @@ const useInventory = () => {
                 return {};
             }
 
+            // Filtrar productos que ya tienen precios en caché
+            const productosSinPrecio = productIds.filter(
+                (id) => !cachePreciosCompraData.pricesData[id]
+            );
+
+            if (productosSinPrecio.length === 0) {
+                console.log(
+                    "✅ Todos los productos ya tienen precios en caché"
+                );
+                return cachePreciosCompraData.pricesData;
+            }
+
             console.log(
-                `💰 Cargando precios de compra para ${productIds.length} productos de la página actual...`
+                `💰 Cargando precios de compra para ${productosSinPrecio.length} productos sin precio...`
             );
 
             try {
+                setIsPurchasePricesLoading(true);
                 const pricesMap = {};
+                let productosSinPrecioEncontrado = 0;
+                let productosConPrecioEncontrado = 0;
 
                 // Cargar precios en paralelo (batches para no sobrecargar)
                 const BATCH_SIZE = 10; // Procesar 10 productos a la vez
                 const batches = [];
 
-                for (let i = 0; i < productIds.length; i += BATCH_SIZE) {
-                    const batch = productIds.slice(i, i + BATCH_SIZE);
+                for (
+                    let i = 0;
+                    i < productosSinPrecio.length;
+                    i += BATCH_SIZE
+                ) {
+                    const batch = productosSinPrecio.slice(i, i + BATCH_SIZE);
                     batches.push(batch);
                 }
 
                 // Procesar lotes en paralelo
                 for (let i = 0; i < batches.length; i++) {
                     const batch = batches[i];
+                    console.log(
+                        `📦 Procesando lote ${i + 1}/${batches.length} con ${
+                            batch.length
+                        } productos`
+                    );
 
                     const batchPromises = batch.map(async (productId) => {
                         try {
@@ -668,19 +687,66 @@ const useInventory = () => {
 
                     const batchResults = await Promise.all(batchPromises);
 
-                    // Agregar resultados al mapa
+                    // Agregar resultados al mapa y contar estadísticas
                     batchResults.forEach(({ productId, price }) => {
-                        if (price !== null) {
+                        if (price !== null && price !== undefined) {
                             pricesMap[productId] = price;
+                            productosConPrecioEncontrado++;
+                        } else {
+                            productosSinPrecioEncontrado++;
                         }
                     });
+
+                    // 🚀 NUEVO: Detectar si no hay precios disponibles y detener la carga
+                    if (
+                        i === 0 &&
+                        productosConPrecioEncontrado === 0 &&
+                        productosSinPrecioEncontrado > 0
+                    ) {
+                        console.warn(
+                            `⚠️ Primer lote sin precios encontrados (${productosSinPrecioEncontrado} productos sin precio). Deteniendo carga de precios.`
+                        );
+
+                        // Marcar que se intentó cargar pero no hay precios disponibles
+                        const nuevoCache = {
+                            pricesData: cachePreciosCompraData.pricesData,
+                            isLoaded: true,
+                            lastFetch: Date.now(),
+                            noPricesAvailable: true, // Marcar que no hay precios disponibles
+                        };
+
+                        setCachePreciosCompraData(nuevoCache);
+                        guardarCachePreciosCompraEnStorage(nuevoCache);
+
+                        console.log(
+                            "🛑 Carga de precios detenida - no hay precios disponibles"
+                        );
+                        return cachePreciosCompraData.pricesData;
+                    }
                 }
 
                 console.log(
-                    `✅ Precios de compra cargados para ${
-                        Object.keys(pricesMap).length
-                    } productos de la página actual`
+                    `✅ Precios de compra cargados: ${productosConPrecioEncontrado} con precio, ${productosSinPrecioEncontrado} sin precio`
                 );
+
+                // Si no se encontraron precios, marcar como cargado pero sin precios disponibles
+                if (productosConPrecioEncontrado === 0) {
+                    console.warn(
+                        "⚠️ No se encontraron precios de compra para ningún producto. Marcando como sin precios disponibles."
+                    );
+
+                    const nuevoCache = {
+                        pricesData: cachePreciosCompraData.pricesData,
+                        isLoaded: true,
+                        lastFetch: Date.now(),
+                        noPricesAvailable: true, // Marcar que no hay precios disponibles
+                    };
+
+                    setCachePreciosCompraData(nuevoCache);
+                    guardarCachePreciosCompraEnStorage(nuevoCache);
+
+                    return cachePreciosCompraData.pricesData;
+                }
 
                 // Actualizar el cache persistente con los nuevos precios
                 const updatedPricesData = {
@@ -692,18 +758,66 @@ const useInventory = () => {
                     pricesData: updatedPricesData,
                     isLoaded: true,
                     lastFetch: Date.now(),
+                    noPricesAvailable: false, // Hay precios disponibles
                 };
+
+                console.log("💾 Guardando precios en caché:", {
+                    preciosExistentes: Object.keys(
+                        cachePreciosCompraData.pricesData
+                    ).length,
+                    preciosNuevos: Object.keys(pricesMap).length,
+                    preciosTotales: Object.keys(updatedPricesData).length,
+                    timestamp: new Date().toLocaleString("es-ES"),
+                });
 
                 setCachePreciosCompraData(nuevoCache);
                 guardarCachePreciosCompraEnStorage(nuevoCache);
 
-                return pricesMap;
+                // Verificar que se guardó correctamente
+                setTimeout(() => {
+                    const cacheVerificado = localStorage.getItem(
+                        "inventory_purchase_prices_cache_data"
+                    );
+                    if (cacheVerificado) {
+                        const parsed = JSON.parse(cacheVerificado);
+                        console.log("✅ Verificación de caché guardado:", {
+                            preciosEnStorage: Object.keys(
+                                parsed.pricesData || {}
+                            ).length,
+                            coincideConEstado:
+                                Object.keys(parsed.pricesData || {}).length ===
+                                Object.keys(updatedPricesData).length,
+                        });
+                    } else {
+                        console.error(
+                            "❌ Error: El caché no se guardó en localStorage"
+                        );
+                    }
+                }, 100);
+
+                // Disparar actualización de la UI para productos de búsqueda
+                setPricesUpdateTrigger((prev) => prev + 1);
+                console.log(
+                    "🔄 Trigger de actualización disparado para productos de búsqueda"
+                );
+
+                // Forzar una actualización inmediata de la UI
+                setTimeout(() => {
+                    console.log(
+                        "⚡ Forzando actualización inmediata de la UI..."
+                    );
+                    setPricesUpdateTrigger((prev) => prev + 1);
+                }, 100);
+
+                return updatedPricesData; // Retornar todos los precios, no solo los nuevos
             } catch (error) {
                 console.error(
                     "🚨 Error loading purchase prices for current page:",
                     error
                 );
-                return {};
+                return cachePreciosCompraData.pricesData; // Retornar caché existente en caso de error
+            } finally {
+                setIsPurchasePricesLoading(false);
             }
         },
         [authToken, cachePreciosCompraData.pricesData]
@@ -733,7 +847,12 @@ const useInventory = () => {
             }
 
             console.log(
-                "🔍 Merging products with global stock and purchase prices data"
+                "🔍 Merging products with global stock and purchase prices data",
+                {
+                    productos: products.length,
+                    preciosDisponibles: Object.keys(purchasePricesMap).length,
+                    preciosCargados: purchasePricesLoadAttempted.current,
+                }
             );
 
             return products.map((product) => {
@@ -750,25 +869,42 @@ const useInventory = () => {
                             : parseInt(stockValue, 10) || 0;
                     enrichedProduct.stockLoading = false;
                 } else {
-                    // Si no hay stock aún, mostrar como cargando solo si el stock global no está listo
+                    // 🔧 MEJORADO: Solo mostrar loading si realmente se está cargando
+                    // No mostrar loading si ya se intentó cargar y simplemente no hay stock para este producto
                     enrichedProduct.stock = 0;
-                    enrichedProduct.stockLoading = !isStockFullyLoaded;
+                    enrichedProduct.stockLoading =
+                        !isStockFullyLoaded && isStockLoading;
                 }
 
                 // 🚀 NUEVO: Agregar precio de compra desde el caché
                 const purchasePrice = purchasePricesMap[product.id];
                 if (purchasePrice !== undefined && purchasePrice !== null) {
                     enrichedProduct.latest_purchase_price = purchasePrice;
+                    enrichedProduct.purchasePriceLoading = false;
                 } else {
-                    // Si no hay precio en cache, intentar cargarlo individualmente
+                    // Si no hay precio en cache, verificar si ya se cargaron los precios
                     enrichedProduct.latest_purchase_price = null;
-                    enrichedProduct.purchasePriceLoading = true;
+
+                    // 🔧 SIMPLIFICADO: Lógica más directa para evitar "Cargando..." falso
+                    const preciosCargados = purchasePricesLoadAttempted.current;
+                    const noHayPreciosDisponibles =
+                        cachePreciosCompraData.noPricesAvailable;
+                    const cargandoActualmente = isPurchasePricesLoading;
+
+                    // Solo mostrar loading si:
+                    // 1. Se están cargando precios AHORA, Y
+                    // 2. No se han intentado cargar antes, Y
+                    // 3. No se ha determinado que no hay precios
+                    enrichedProduct.purchasePriceLoading =
+                        cargandoActualmente &&
+                        !preciosCargados &&
+                        !noHayPreciosDisponibles;
                 }
 
                 return enrichedProduct;
             });
         },
-        [isStockFullyLoaded]
+        [isStockFullyLoaded, cachePreciosCompraData.noPricesAvailable]
     );
 
     // Función para obtener productos de la API con soporte para caché y cancelación
@@ -959,7 +1095,53 @@ const useInventory = () => {
 
                 // 🚀 NUEVO: Cargar precios de compra para los productos de esta página
                 const productIds = products.map((product) => product.id);
-                loadPurchasePricesForProducts(productIds);
+
+                // Verificar si hay filtros activos (búsqueda)
+                const hayFiltrosActivos =
+                    params.name ||
+                    params.sku ||
+                    (params.categories && params.categories.length > 0);
+
+                // 🚀 MEJORADO: Cargar precios de forma más sincronizada
+                const cargarPreciosParaProductos = async () => {
+                    // 🚀 NUEVO: Verificar si ya se determinó que no hay precios disponibles
+                    if (cachePreciosCompraData.noPricesAvailable) {
+                        console.log(
+                            "🛑 No se cargan precios - ya se determinó que no hay precios disponibles"
+                        );
+                        return;
+                    }
+
+                    if (hayFiltrosActivos) {
+                        console.log(
+                            "🔍 Búsqueda detectada, cargando precios específicos..."
+                        );
+                        // Para búsquedas, cargar precios inmediatamente
+                        await loadPurchasePricesForProducts(productIds);
+                    } else {
+                        // Para navegación normal, verificar si faltan precios
+                        console.log(
+                            "📄 Navegación normal, verificando precios en caché..."
+                        );
+                        const productosSinPrecio = productIds.filter(
+                            (id) => !cachePreciosCompraData.pricesData[id]
+                        );
+
+                        if (productosSinPrecio.length > 0) {
+                            console.log(
+                                `⚠️ ${productosSinPrecio.length} productos sin precio, cargando...`
+                            );
+                            await loadPurchasePricesForProducts(productIds);
+                        } else {
+                            console.log(
+                                "✅ Todos los productos tienen precios en caché"
+                            );
+                        }
+                    }
+                };
+
+                // Ejecutar carga de precios y esperar a que termine
+                await cargarPreciosParaProductos();
 
                 // Calcular número de páginas
                 const pageCount = calculateRealisticPageCount(
@@ -1299,6 +1481,17 @@ const useInventory = () => {
                 params.category = selectedCategories;
             }
 
+            // 🚀 NUEVO: Log para verificar paginación con filtros
+            console.log("🔍 Paginación con filtros:", {
+                pagina: pagination.currentPage,
+                filtros: {
+                    nombre: nameFilter,
+                    sku: skuFilter,
+                    categorias: selectedCategories,
+                },
+                parametros: params,
+            });
+
             // Cancelar cualquier solicitud previa
             if (abortControllerRef.current) {
                 abortControllerRef.current.abort();
@@ -1413,6 +1606,7 @@ const useInventory = () => {
         nameFilter,
         skuFilter, // ✨ Agregar skuFilter como dependencia
         selectedCategories,
+        pagination.currentPage, // 🚀 NUEVO: Agregar currentPage como dependencia para que la paginación funcione con filtros
         authToken,
         convertToProxyUrl,
         createProductsWithPlaceholder,
@@ -1423,14 +1617,57 @@ const useInventory = () => {
 
     // Efecto para combinar productos con datos de stock de forma optimizada
     useEffect(() => {
+        console.log("🔄 useEffect de combinación ejecutado", {
+            productos: productsWithPlaceholder.length,
+            preciosDisponibles: Object.keys(cachePreciosCompraData.pricesData)
+                .length,
+            trigger: pricesUpdateTrigger,
+        });
+
         if (productsWithPlaceholder.length > 0) {
-            // Siempre actualizar combinedProducts cuando cambia stock o productos
+            // 🔧 MEJORADO: Siempre actualizar cuando cambien los datos
             const enriched = mergeProductsWithStock(
                 productsWithPlaceholder,
                 allStockData,
                 cachePreciosCompraData.pricesData
             );
             setCombinedProducts(enriched);
+            console.log(
+                "✅ Productos combinados actualizados:",
+                enriched.length
+            );
+
+            // 🔧 NUEVO: Verificar si hay inconsistencias y corregirlas
+            const productosConLoadingFalso = enriched.filter((p) => {
+                const tieneStock = allStockData[p.id] !== undefined;
+                const tienePrecio =
+                    cachePreciosCompraData.pricesData[p.id] !== undefined;
+                const stockCompleto = isStockFullyLoaded;
+                const preciosCompletos =
+                    purchasePricesLoadAttempted.current ||
+                    cachePreciosCompraData.noPricesAvailable;
+
+                return (
+                    (tieneStock && p.stockLoading) ||
+                    (tienePrecio && p.purchasePriceLoading) ||
+                    (stockCompleto && !tieneStock && p.stockLoading) ||
+                    (preciosCompletos && !tienePrecio && p.purchasePriceLoading)
+                );
+            });
+
+            if (productosConLoadingFalso.length > 0) {
+                console.log(
+                    "🔧 Detectadas inconsistencias, re-procesando automáticamente..."
+                );
+                setTimeout(() => {
+                    const reEnriched = mergeProductsWithStock(
+                        productsWithPlaceholder,
+                        allStockData,
+                        cachePreciosCompraData.pricesData
+                    );
+                    setCombinedProducts(reEnriched);
+                }, 100);
+            }
         } else {
             // Si no hay productos, limpiar también los combinados
             setCombinedProducts([]);
@@ -1440,7 +1677,117 @@ const useInventory = () => {
         allStockData,
         mergeProductsWithStock,
         cachePreciosCompraData.pricesData,
+        purchasePricesLoadAttempted.current,
+        pricesUpdateTrigger,
+        isStockFullyLoaded, // 🔧 NUEVO: También reaccionar a cambios de stock completado
+        isPurchasePricesLoading, // 🔧 NUEVO: Y a cambios en carga de precios
     ]);
+
+    // 🚀 NUEVO: Efecto para cargar precios cuando cambian los productos
+    useEffect(() => {
+        if (productsWithPlaceholder.length > 0 && authToken) {
+            const productIds = productsWithPlaceholder.map(
+                (product) => product.id
+            );
+
+            // Verificar si hay productos sin precios
+            const productosSinPrecio = productIds.filter(
+                (id) => !cachePreciosCompraData.pricesData[id]
+            );
+
+            console.log("🔍 Verificando productos de la página actual:", {
+                totalProductos: productIds.length,
+                productosConPrecio:
+                    productIds.length - productosSinPrecio.length,
+                productosSinPrecio: productosSinPrecio.length,
+                preciosEnCache: Object.keys(cachePreciosCompraData.pricesData)
+                    .length,
+            });
+
+            if (productosSinPrecio.length > 0) {
+                // 🚀 NUEVO: Verificar si ya se determinó que no hay precios disponibles
+                if (cachePreciosCompraData.noPricesAvailable) {
+                    console.log(
+                        "🛑 No se cargan precios - ya se determinó que no hay precios disponibles"
+                    );
+                    return;
+                }
+
+                console.log(
+                    `🔄 Detectados ${productosSinPrecio.length} productos sin precio, cargando...`
+                );
+
+                // Cargar precios de forma asíncrona pero sin bloquear la UI
+                const cargarPrecios = async () => {
+                    try {
+                        await loadPurchasePricesForProducts(productIds);
+                        console.log(
+                            "✅ Precios cargados para productos de la página actual"
+                        );
+                    } catch (error) {
+                        console.error(
+                            "❌ Error cargando precios para productos actuales:",
+                            error
+                        );
+                    }
+                };
+
+                cargarPrecios();
+            } else {
+                console.log(
+                    "✅ Todos los productos de la página actual tienen precios"
+                );
+            }
+        }
+    }, [
+        productsWithPlaceholder,
+        authToken,
+        cachePreciosCompraData.pricesData,
+        loadPurchasePricesForProducts,
+    ]);
+
+    // 🚀 NUEVO: Efecto para verificar el estado del caché periódicamente
+    useEffect(() => {
+        const verificarCache = () => {
+            const cacheGuardado = localStorage.getItem(
+                "inventory_purchase_prices_cache_data"
+            );
+            if (cacheGuardado) {
+                try {
+                    const parsed = JSON.parse(cacheGuardado);
+                    const preciosEnStorage = Object.keys(
+                        parsed.pricesData || {}
+                    ).length;
+                    const preciosEnEstado = Object.keys(
+                        cachePreciosCompraData.pricesData
+                    ).length;
+
+                    if (preciosEnStorage !== preciosEnEstado) {
+                        console.warn(
+                            "⚠️ Desincronización detectada en caché de precios:",
+                            {
+                                preciosEnStorage,
+                                preciosEnEstado,
+                                diferencia: preciosEnStorage - preciosEnEstado,
+                            }
+                        );
+
+                        // Recargar desde localStorage si hay desincronización
+                        const cacheRecargado =
+                            cargarCachePreciosCompraDesdeStorage();
+                        setCachePreciosCompraData(cacheRecargado);
+                    }
+                } catch (error) {
+                    console.error("❌ Error verificando caché:", error);
+                }
+            }
+        };
+
+        // Verificar cada 30 segundos
+        const interval = setInterval(verificarCache, 30000);
+
+        return () => clearInterval(interval);
+    }, [cachePreciosCompraData.pricesData]);
 
     // ✨ NUEVO: Efecto para cargar TODO el stock una sola vez al inicio
     useEffect(() => {
@@ -1465,21 +1812,96 @@ const useInventory = () => {
     // 🚀 NUEVO: Efecto para cargar precios de compra una sola vez al inicio
     useEffect(() => {
         if (authToken) {
-            // Si no hay datos en cache persistente de precios, cargar datos
+            // 🚀 NUEVO: Verificar si ya se determinó que no hay precios disponibles
+            if (cachePreciosCompraData.noPricesAvailable) {
+                console.log(
+                    "🛑 No se cargan precios al inicio - ya se determinó que no hay precios disponibles"
+                );
+                purchasePricesLoadAttempted.current = true;
+                return;
+            }
+
+            // Solo cargar si no se ha intentado antes y no hay datos en cache
             if (
-                !cachePreciosCompraData.isLoaded ||
-                Object.keys(cachePreciosCompraData.pricesData).length === 0
+                !purchasePricesLoadAttempted.current &&
+                !cachePreciosCompraData.isLoaded
             ) {
                 loadAllPurchasePrices();
-            } else {
+            } else if (cachePreciosCompraData.isLoaded) {
+                // Si ya está cargado, marcar como intentado
+                purchasePricesLoadAttempted.current = true;
             }
         }
     }, [
         authToken,
         cachePreciosCompraData.isLoaded,
-        cachePreciosCompraData.pricesData,
+        cachePreciosCompraData.noPricesAvailable,
         loadAllPurchasePrices,
     ]);
+
+    // 🚀 NUEVO: Ref para detectar si el usuario regresa a la página
+    const hasReturnedToPage = useRef(false);
+
+    // 🚀 NUEVO: Función para guardar el estado de los filtros en localStorage
+    const saveFiltersState = useCallback(() => {
+        const filtersState = {
+            nameFilter,
+            skuFilter,
+            selectedCategories,
+            timestamp: Date.now(),
+        };
+        localStorage.setItem(
+            "inventory_filters_state",
+            JSON.stringify(filtersState)
+        );
+    }, [nameFilter, skuFilter, selectedCategories]);
+
+    // 🚀 NUEVO: Función para cargar el estado de los filtros desde localStorage
+    const loadFiltersState = useCallback(() => {
+        try {
+            const savedState = localStorage.getItem("inventory_filters_state");
+            if (savedState) {
+                const filtersState = JSON.parse(savedState);
+                const now = Date.now();
+                const timeDiff = now - filtersState.timestamp;
+
+                // Si han pasado menos de 5 minutos, considerar que el usuario regresó
+                if (timeDiff < 5 * 60 * 1000) {
+                    hasReturnedToPage.current = true;
+                    console.log(
+                        "🔄 Detectado regreso a la página con filtros activos"
+                    );
+                }
+            }
+        } catch (error) {
+            console.error("Error al cargar estado de filtros:", error);
+        }
+    }, []);
+
+    // 🚀 NUEVO: Efecto para manejar el evento beforeunload
+    useEffect(() => {
+        const handleBeforeUnload = () => {
+            const hayFiltrosActivos =
+                !!nameFilter ||
+                !!skuFilter ||
+                (selectedCategories && selectedCategories.length > 0);
+
+            if (hayFiltrosActivos) {
+                saveFiltersState();
+            }
+        };
+
+        window.addEventListener("beforeunload", handleBeforeUnload);
+
+        return () => {
+            window.removeEventListener("beforeunload", handleBeforeUnload);
+        };
+    }, [saveFiltersState]);
+
+    // 🚀 NUEVO: Efecto para cargar el estado de filtros al montar el componente
+    useEffect(() => {
+        loadFiltersState();
+    }, [loadFiltersState]);
 
     // Efecto para cargar datos iniciales cuando cambia el token
     useEffect(() => {
@@ -1503,12 +1925,63 @@ const useInventory = () => {
                 console.error("Error al procesar parámetros de URL:", error);
             }
 
-            // 🚀 MODIFICADO: Solo cargar productos generales si NO hay filtros activos
+            // 🚀 NUEVO: Detectar si el usuario regresa a la página con filtros activos
             const hayFiltrosActivos =
                 !!nameFilter ||
                 !!skuFilter ||
                 (selectedCategories && selectedCategories.length > 0);
 
+            // Verificar si el usuario regresa a la página con filtros activos
+            if (
+                hasReturnedToPage.current &&
+                hayFiltrosActivos &&
+                cacheProductosData.isLoaded &&
+                cacheProductosData.products.length > 0
+            ) {
+                console.log(
+                    "🔄 Usuario regresó a la página con filtros activos, reseteando filtros..."
+                );
+
+                // Resetear filtros individualmente
+                resetNameFilter();
+                resetSkuFilter();
+                resetCategoryFilter();
+
+                // Limpiar el flag de regreso
+                hasReturnedToPage.current = false;
+
+                // Limpiar el estado guardado en localStorage
+                localStorage.removeItem("inventory_filters_state");
+
+                // Cargar productos sin filtros desde cache
+                const cachedProducts = cacheProductosData.products;
+                const ITEMS_PER_PAGE = 25;
+                const startIndex = 0;
+                const endIndex = ITEMS_PER_PAGE;
+                const pageProducts = cachedProducts.slice(startIndex, endIndex);
+
+                // Establecer solo los productos de la página actual
+                setProducts(pageProducts);
+                setCount(cacheProductosData.count);
+                setTotalCount(cacheProductosData.count);
+
+                // Crear productos con placeholder para la página actual
+                setProductsWithPlaceholder(pageProducts);
+
+                // Actualizar el estado de paginación
+                const pageCount = calculateRealisticPageCount(
+                    cacheProductosData.count
+                );
+
+                pagination.updatePaginationState(1, pageCount);
+
+                console.log(
+                    `📄 Mostrando página 1 de ${pageCount} (${pageProducts.length} productos) desde cache sin filtros`
+                );
+                return;
+            }
+
+            // 🚀 MODIFICADO: Solo cargar productos generales si NO hay filtros activos
             if (
                 !hayFiltrosActivos &&
                 (!cacheProductosData.isLoaded ||
@@ -1530,12 +2003,21 @@ const useInventory = () => {
 
     // 🚀 NUEVA FUNCIÓN: Refrescar cache de inventario manualmente
     const refrescarCacheInventario = useCallback(() => {
+        console.log("🔄 Iniciando refrescarCacheInventario...");
+
         limpiarCacheInventarioStorage(); // Limpiar cache del localStorage
         limpiarCacheProductosStorage(); // Limpiar cache de productos
         limpiarCachePreciosCompraStorage(); // Limpiar cache de precios de compra
+
+        // Resetear el flag de intentos de carga de precios
+        purchasePricesLoadAttempted.current = false;
+        console.log("🔄 Flags reseteados, iniciando recargas...");
+
         loadAllStock(true); // Forzar recarga de stock
         loadAllPurchasePrices(true); // Forzar recarga de precios de compra
         fetchProducts(null, {}, true); // Forzar recarga de productos
+
+        console.log("✅ refrescarCacheInventario completado");
     }, [loadAllStock, loadAllPurchasePrices, fetchProducts]);
 
     // 🚀 NUEVA FUNCIÓN: Solo eliminar cache sin recargar
@@ -1566,6 +2048,9 @@ const useInventory = () => {
         // Resetear estados de carga
         setAllStockData({});
         setIsStockFullyLoaded(false);
+
+        // Resetear el flag de intentos de carga de precios
+        purchasePricesLoadAttempted.current = false;
 
         console.log("✅ Cache de inventario eliminado exitosamente");
     }, []);
@@ -1649,13 +2134,64 @@ const useInventory = () => {
     }, [cacheInventarioData, cachePreciosCompraData]);
 
     // Al inicio del hook, después de obtener useProducts():
+    // ✨ MODIFICADO: Solo usar productsCache para la carga inicial, NO para sobrescribir paginación
     useEffect(() => {
-        if (Array.isArray(productsCache) && productsCache.length > 0) {
-            setProducts(productsCache);
-            setProductsWithPlaceholder(productsCache);
+        if (
+            Array.isArray(productsCache) &&
+            productsCache.length > 0 &&
+            products.length === 0 && // Solo si no hay productos cargados aún
+            !isLoadingProducts && // Solo si no está cargando
+            pagination.currentPage === 1 && // Solo en la primera página
+            !nameFilter && // Solo sin filtros activos
+            !skuFilter &&
+            (!selectedCategories || selectedCategories.length === 0)
+        ) {
+            console.log(
+                "🏁 Carga inicial desde productsCache para primera página sin filtros"
+            );
+            setProducts(productsCache.slice(0, 25)); // Solo los primeros 25 productos
+            setProductsWithPlaceholder(productsCache.slice(0, 25));
             // El merge con stock se hará automáticamente por el otro useEffect
         }
-    }, [productsCache]);
+    }, [
+        productsCache,
+        products.length,
+        isLoadingProducts,
+        pagination.currentPage,
+        nameFilter,
+        skuFilter,
+        selectedCategories,
+    ]);
+
+    // 🚀 NUEVA FUNCIÓN: Limpiar flag de no precios disponibles para permitir nueva carga
+    const clearNoPricesAvailableFlag = useCallback(() => {
+        console.log("🔄 Limpiando flag de no precios disponibles...");
+
+        const nuevoCache = {
+            ...cachePreciosCompraData,
+            noPricesAvailable: false,
+            isLoaded: false, // Permitir nueva carga
+        };
+
+        setCachePreciosCompraData(nuevoCache);
+        guardarCachePreciosCompraEnStorage(nuevoCache);
+
+        // Resetear el flag de intento
+        purchasePricesLoadAttempted.current = false;
+
+        console.log("✅ Flag de no precios disponibles limpiado");
+    }, [cachePreciosCompraData]);
+
+    // 🚀 NUEVA FUNCIÓN: Forzar recarga de precios de compra
+    const forceReloadPurchasePrices = useCallback(async () => {
+        console.log("🔄 Forzando recarga de precios de compra...");
+
+        // Limpiar flag de no precios disponibles
+        clearNoPricesAvailableFlag();
+
+        // Forzar recarga
+        await loadAllPurchasePrices(true);
+    }, [clearNoPricesAvailableFlag, loadAllPurchasePrices]);
 
     return {
         // Datos procesados y estados
@@ -1665,6 +2201,7 @@ const useInventory = () => {
         // Estado de carga y errores
         isLoading: isLoadingProducts || isStockLoading || isCategoriesLoading,
         isStockLoading,
+        isPurchasePricesLoading,
         error: error || categoriesError,
 
         // Funciones y estado de paginación
@@ -1697,6 +2234,11 @@ const useInventory = () => {
         eliminarCacheInventario,
         obtenerInfoCacheInventario,
         cacheInventarioData,
+
+        // 🚀 NUEVO: Funciones para manejo de precios de compra
+        clearNoPricesAvailableFlag,
+        forceReloadPurchasePrices,
+        cachePreciosCompraData,
     };
 };
 

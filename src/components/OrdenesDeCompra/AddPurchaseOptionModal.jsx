@@ -26,8 +26,12 @@ const AddPurchaseOptionModal = ({ isOpen, onClose, supplierId, onSave }) => {
 
         setIsSubmitting(true);
         try {
-            // Obtener fecha actual para valid_from
-            const currentDate = new Date().toISOString().split("T")[0];
+            // Obtener fecha actual para valid_from usando fecha local (no UTC)
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, "0");
+            const day = String(now.getDate()).padStart(2, "0");
+            const currentDate = `${year}-${month}-${day}`;
 
             const purchaseOptionData = {
                 product: parseInt(selectedProduct.id),

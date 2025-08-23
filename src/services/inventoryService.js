@@ -25,11 +25,11 @@ const convertToProxyUrl = (url) => {
     // If already a relative URL, return as is
     if (url.startsWith("/")) return url;
 
-    // If it's an absolute URL from our backend, convert to relative
+    // If it's an absolute URL from our backend, return as is (no conversion needed)
     const backendBaseUrl = "https://unidental-backend.onrender.com";
     if (url.startsWith(backendBaseUrl)) {
-        // Remove the base URL, keep the path starting with /api
-        return url.replace(backendBaseUrl, "");
+        // Return the absolute URL as is since we're now pointing directly to the backend
+        return url;
     }
 
     // For any other absolute URL, return as is (shouldn't happen in our case)
@@ -455,15 +455,33 @@ export const getStockByLocationFast = async (productId, authToken, signal) => {
         const data = await response.json();
 
         console.log("Raw stock data from fast endpoint:", data);
+        console.log("Data type:", typeof data);
+        console.log("Is array:", Array.isArray(data));
+        console.log("Has results:", data && data.results);
+        console.log("Data keys:", data ? Object.keys(data) : "No data");
+        console.log(
+            "Results length:",
+            data && data.results ? data.results.length : "No results"
+        );
 
         // Construir mapa de ubicaciones
         const locationStockMap = {};
 
         // Si es un array directo, usarlo; si no, usar data.results
         const stockData = Array.isArray(data) ? data : data.results;
+        console.log("Stock data to process:", stockData);
+        console.log("Stock data length:", stockData ? stockData.length : 0);
 
         if (Array.isArray(stockData)) {
-            stockData.forEach((stockEntry) => {
+            console.log("Processing stock entries...");
+            stockData.forEach((stockEntry, index) => {
+                console.log(`Processing entry ${index}:`, stockEntry);
+                console.log(
+                    `Entry ${index} - location:`,
+                    stockEntry.location,
+                    "quantity:",
+                    stockEntry.quantity
+                );
                 if (
                     stockEntry.location !== undefined &&
                     stockEntry.quantity !== undefined
@@ -1388,6 +1406,103 @@ const getLastSalePrice = async (productId, authToken) => {
 };
 
 /**
+ * 🚀 OPTIMIZADA: Obtener TODAS las opciones de compra vigentes de forma paginada
+ * @param {string} authToken - Token de autenticación
+ * @returns {Promise<Object>} - Mapa de product_id -> precio más reciente
+ */
+export const getAllPurchasePricesOptimized = async (authToken) => {
+    if (!authToken) {
+        return {};
+    }
+
+    const pricesMap = {};
+    let currentPage = 1;
+    let hasMorePages = true;
+    let totalItemsProcessed = 0;
+
+    try {
+        console.log(
+            "🚀 Cargando TODAS las opciones de compra vigentes de forma paginada..."
+        );
+
+        while (hasMorePages) {
+            // Obtener items de compra página por página, ordenados por fecha descendente
+            const url = `${API_PURCHASE_ITEMS_URL}?ordering=-order__order_date&page=${currentPage}&page_size=500`;
+
+            const response = await fetch(url, {
+                headers: {
+                    Authorization: `Token ${authToken}`,
+                    "Content-Type": "application/json",
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error(
+                    `Error ${response.status}: ${response.statusText}`
+                );
+            }
+
+            const data = await response.json();
+            const purchaseItems = data.results || [];
+
+            // Si no hay más resultados, terminar
+            if (purchaseItems.length === 0) {
+                hasMorePages = false;
+                break;
+            }
+
+            console.log(
+                `📦 Procesando página ${currentPage}: ${purchaseItems.length} items de compra...`
+            );
+
+            // Procesar items de esta página
+            for (const item of purchaseItems) {
+                const productId = item.purchase_option?.product;
+
+                // Solo tomar el primer precio por producto (el más reciente)
+                if (productId && !pricesMap.hasOwnProperty(productId)) {
+                    pricesMap[productId] = parseFloat(item.unit_price) || 0;
+                }
+            }
+
+            totalItemsProcessed += purchaseItems.length;
+
+            // Verificar si hay más páginas
+            hasMorePages = !!data.next;
+            currentPage++;
+
+            // Log de progreso cada 5 páginas
+            if (currentPage % 5 === 0) {
+                console.log(
+                    `📊 Progreso: ${
+                        Object.keys(pricesMap).length
+                    } productos únicos de ${totalItemsProcessed} items procesados`
+                );
+            }
+        }
+
+        console.log(
+            `✅ Precios de compra obtenidos para ${
+                Object.keys(pricesMap).length
+            } productos únicos`
+        );
+        console.log(
+            `📊 Total procesado: ${totalItemsProcessed} items de compra en ${
+                currentPage - 1
+            } páginas`
+        );
+
+        return pricesMap;
+    } catch (error) {
+        console.error(
+            "❌ Error cargando precios de compra optimizados:",
+            error
+        );
+        return {};
+    }
+};
+
+/**
  * Obtiene el precio de la última compra registrada para un producto.
  * @param {number} productId - ID del producto.
  * @param {string} authToken - Token de autenticación.
@@ -1399,7 +1514,7 @@ export const getLastPurchasePrice = async (productId, authToken) => {
     }
 
     // Endpoint para obtener los items de compra, filtrados por producto y ordenados por fecha descendente
-    const url = `${API_PURCHASE_ITEMS_URL}?product=${productId}&ordering=-order__order_date`; // Corregido
+    const url = `${API_PURCHASE_ITEMS_URL}?purchase_option__product__id=${productId}&ordering=-order__order_date`; // Corregido
 
     try {
         const response = await fetch(url, {
@@ -1539,8 +1654,11 @@ export const getProductStockByLocations = async (productId, authToken) => {
         // Process stock data and accumulate by location
         if (stockResponse && stockResponse.results) {
             stockResponse.results.forEach((stockItem) => {
-                if (stockItem.location && locationMap[stockItem.location]) {
-                    locationMap[stockItem.location].stock +=
+                if (
+                    stockItem.location &&
+                    locationMap[Number(stockItem.location)]
+                ) {
+                    locationMap[Number(stockItem.location)].stock +=
                         parseInt(stockItem.quantity, 10) || 0;
                 }
             });

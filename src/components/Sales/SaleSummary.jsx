@@ -1,13 +1,14 @@
 import React from "react";
 
-const SaleSummary = ({ 
-    totals, 
-    shouldInvoice, 
+const SaleSummary = ({
+    totals,
+    shouldInvoice,
     selectedLocation,
     paymentMethod,
-    onSubmit, 
-    isLoading, 
-    disabled 
+    onSubmit,
+    isLoading,
+    disabled,
+    onGenerateQuote,
 }) => {
     return (
         <div
@@ -48,8 +49,15 @@ const SaleSummary = ({
                     <span style={{ fontSize: "14px", color: "#6c757d" }}>
                         Productos:
                     </span>
-                    <span style={{ fontSize: "14px", fontWeight: "600", color: "#2c3e50" }}>
-                        {totals.itemCount} {totals.itemCount === 1 ? 'producto' : 'productos'}
+                    <span
+                        style={{
+                            fontSize: "14px",
+                            fontWeight: "600",
+                            color: "#2c3e50",
+                        }}
+                    >
+                        {totals.itemCount}{" "}
+                        {totals.itemCount === 1 ? "producto" : "productos"}
                     </span>
                 </div>
 
@@ -66,8 +74,15 @@ const SaleSummary = ({
                     <span style={{ fontSize: "14px", color: "#6c757d" }}>
                         Cantidad total:
                     </span>
-                    <span style={{ fontSize: "14px", fontWeight: "600", color: "#2c3e50" }}>
-                        {totals.totalQuantity} {totals.totalQuantity === 1 ? 'unidad' : 'unidades'}
+                    <span
+                        style={{
+                            fontSize: "14px",
+                            fontWeight: "600",
+                            color: "#2c3e50",
+                        }}
+                    >
+                        {totals.totalQuantity}{" "}
+                        {totals.totalQuantity === 1 ? "unidad" : "unidades"}
                     </span>
                 </div>
 
@@ -84,10 +99,16 @@ const SaleSummary = ({
                     <span style={{ fontSize: "14px", color: "#6c757d" }}>
                         Método de pago:
                     </span>
-                    <span style={{ fontSize: "14px", fontWeight: "600", color: "#2c3e50" }}>
-                        {paymentMethod === 'cash' && "💵 Efectivo"}
-                        {paymentMethod === 'card' && "💳 Tarjeta"}
-                        {paymentMethod === 'credit' && "📝 Crédito"}
+                    <span
+                        style={{
+                            fontSize: "14px",
+                            fontWeight: "600",
+                            color: "#2c3e50",
+                        }}
+                    >
+                        {paymentMethod === "cash" && "💵 Efectivo"}
+                        {paymentMethod === "card" && "💳 Tarjeta"}
+                        {paymentMethod === "credit" && "📝 Crédito"}
                     </span>
                 </div>
 
@@ -104,8 +125,16 @@ const SaleSummary = ({
                     <span style={{ fontSize: "14px", color: "#6c757d" }}>
                         Sede:
                     </span>
-                    <span style={{ fontSize: "14px", fontWeight: "600", color: "#2c3e50" }}>
-                        {selectedLocation ? `🏢 ${selectedLocation.name}` : "❌ No seleccionada"}
+                    <span
+                        style={{
+                            fontSize: "14px",
+                            fontWeight: "600",
+                            color: "#2c3e50",
+                        }}
+                    >
+                        {selectedLocation
+                            ? `🏢 ${selectedLocation.name}`
+                            : "❌ No seleccionada"}
                     </span>
                 </div>
 
@@ -121,7 +150,13 @@ const SaleSummary = ({
                     <span style={{ fontSize: "14px", color: "#6c757d" }}>
                         Factura:
                     </span>
-                    <span style={{ fontSize: "14px", fontWeight: "600", color: "#2c3e50" }}>
+                    <span
+                        style={{
+                            fontSize: "14px",
+                            fontWeight: "600",
+                            color: "#2c3e50",
+                        }}
+                    >
                         {shouldInvoice ? "✅ Requerida" : "❌ No requerida"}
                     </span>
                 </div>
@@ -147,7 +182,13 @@ const SaleSummary = ({
                     <span style={{ fontSize: "14px", color: "#6c757d" }}>
                         Subtotal:
                     </span>
-                    <span style={{ fontSize: "14px", fontWeight: "600", color: "#2c3e50" }}>
+                    <span
+                        style={{
+                            fontSize: "14px",
+                            fontWeight: "600",
+                            color: "#2c3e50",
+                        }}
+                    >
                         ${totals.subtotal}
                     </span>
                 </div>
@@ -165,7 +206,13 @@ const SaleSummary = ({
                         <span style={{ fontSize: "14px", color: "#6c757d" }}>
                             Impuestos:
                         </span>
-                        <span style={{ fontSize: "14px", fontWeight: "600", color: "#2c3e50" }}>
+                        <span
+                            style={{
+                                fontSize: "14px",
+                                fontWeight: "600",
+                                color: "#2c3e50",
+                            }}
+                        >
                             ${totals.tax}
                         </span>
                     </div>
@@ -182,10 +229,22 @@ const SaleSummary = ({
                         marginTop: "8px",
                     }}
                 >
-                    <span style={{ fontSize: "16px", fontWeight: "600", color: "#2c3e50" }}>
+                    <span
+                        style={{
+                            fontSize: "16px",
+                            fontWeight: "600",
+                            color: "#2c3e50",
+                        }}
+                    >
                         Total:
                     </span>
-                    <span style={{ fontSize: "20px", fontWeight: "700", color: "#3498db" }}>
+                    <span
+                        style={{
+                            fontSize: "20px",
+                            fontWeight: "700",
+                            color: "#3498db",
+                        }}
+                    >
                         ${totals.total}
                     </span>
                 </div>
@@ -202,12 +261,25 @@ const SaleSummary = ({
                 }}
             >
                 <div style={{ fontSize: "24px", marginBottom: "8px" }}>
-                    {paymentMethod === "cash" ? "💵" : paymentMethod === "card" ? "💳" : "📝"}
+                    {paymentMethod === "cash"
+                        ? "💵"
+                        : paymentMethod === "card"
+                        ? "💳"
+                        : "📝"}
                 </div>
-                <div style={{ fontSize: "14px", fontWeight: "600", color: "#2c3e50", marginBottom: "4px" }}>
-                    {paymentMethod === "cash" ? "Pago en Efectivo" : 
-                     paymentMethod === "card" ? "Pago con Tarjeta" : 
-                     "Pago con Crédito"}
+                <div
+                    style={{
+                        fontSize: "14px",
+                        fontWeight: "600",
+                        color: "#2c3e50",
+                        marginBottom: "4px",
+                    }}
+                >
+                    {paymentMethod === "cash"
+                        ? "Pago en Efectivo"
+                        : paymentMethod === "card"
+                        ? "Pago con Tarjeta"
+                        : "Pago con Crédito"}
                 </div>
                 {shouldInvoice && (
                     <div style={{ fontSize: "12px", color: "#3498db" }}>
@@ -217,7 +289,14 @@ const SaleSummary = ({
             </div>
 
             {/* Quick Stats */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "20px" }}>
+            <div
+                style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: "12px",
+                    marginBottom: "20px",
+                }}
+            >
                 <div
                     style={{
                         backgroundColor: "#e8f4fd",
@@ -227,7 +306,13 @@ const SaleSummary = ({
                         border: "1px solid #3498db",
                     }}
                 >
-                    <div style={{ fontSize: "18px", fontWeight: "700", color: "#3498db" }}>
+                    <div
+                        style={{
+                            fontSize: "18px",
+                            fontWeight: "700",
+                            color: "#3498db",
+                        }}
+                    >
                         {totals.itemCount}
                     </div>
                     <div style={{ fontSize: "12px", color: "#2c3e50" }}>
@@ -243,7 +328,13 @@ const SaleSummary = ({
                         border: "1px solid #27ae60",
                     }}
                 >
-                    <div style={{ fontSize: "18px", fontWeight: "700", color: "#27ae60" }}>
+                    <div
+                        style={{
+                            fontSize: "18px",
+                            fontWeight: "700",
+                            color: "#27ae60",
+                        }}
+                    >
                         {totals.totalQuantity}
                     </div>
                     <div style={{ fontSize: "12px", color: "#2c3e50" }}>
@@ -255,7 +346,8 @@ const SaleSummary = ({
             {/* Total Display - Large */}
             <div
                 style={{
-                    background: "linear-gradient(135deg, #3498db 0%, #2c3e50 100%)",
+                    background:
+                        "linear-gradient(135deg, #3498db 0%, #2c3e50 100%)",
                     borderRadius: "8px",
                     padding: "20px",
                     color: "white",
@@ -263,16 +355,30 @@ const SaleSummary = ({
                     marginBottom: "20px",
                 }}
             >
-                <div style={{ fontSize: "14px", opacity: "0.9", marginBottom: "4px" }}>
+                <div
+                    style={{
+                        fontSize: "14px",
+                        opacity: "0.9",
+                        marginBottom: "4px",
+                    }}
+                >
                     Total a Pagar
                 </div>
                 <div style={{ fontSize: "28px", fontWeight: "700" }}>
                     ${totals.total}
                 </div>
-                <div style={{ fontSize: "12px", opacity: "0.8", marginTop: "4px" }}>
-                    {paymentMethod === "cash" ? "Pago en efectivo" : 
-                     paymentMethod === "card" ? "Pago con tarjeta" : 
-                     "Pago con crédito"}
+                <div
+                    style={{
+                        fontSize: "12px",
+                        opacity: "0.8",
+                        marginTop: "4px",
+                    }}
+                >
+                    {paymentMethod === "cash"
+                        ? "Pago en efectivo"
+                        : paymentMethod === "card"
+                        ? "Pago con tarjeta"
+                        : "Pago con crédito"}
                 </div>
             </div>
 
@@ -292,9 +398,11 @@ const SaleSummary = ({
                     border: "none",
                     cursor: disabled || isLoading ? "not-allowed" : "pointer",
                     transition: "all 0.2s ease",
-                    backgroundColor: disabled || isLoading ? "#95a5a6" : "#27ae60",
+                    backgroundColor:
+                        disabled || isLoading ? "#95a5a6" : "#27ae60",
                     color: "white",
                     opacity: disabled || isLoading ? 0.7 : 1,
+                    marginBottom: "10px",
                 }}
             >
                 {isLoading ? (
@@ -313,10 +421,35 @@ const SaleSummary = ({
                         Procesando...
                     </>
                 ) : (
-                    <>
-                        ✅ Registrar Venta
-                    </>
+                    <>✅ Registrar Venta</>
                 )}
+            </button>
+
+            {/* Generate Quote Button */}
+            <button
+                onClick={onGenerateQuote}
+                disabled={totals.itemCount === 0 || isLoading}
+                style={{
+                    width: "100%",
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    padding: "12px",
+                    fontSize: "14px",
+                    fontWeight: "600",
+                    borderRadius: "6px",
+                    border: "2px solid #3498db",
+                    cursor:
+                        totals.itemCount === 0 || isLoading
+                            ? "not-allowed"
+                            : "pointer",
+                    transition: "all 0.2s ease",
+                    backgroundColor: "white",
+                    color: "#3498db",
+                    opacity: totals.itemCount === 0 || isLoading ? 0.7 : 1,
+                }}
+            >
+                📋 Generar Cotización
             </button>
 
             {/* Help Text */}
@@ -328,13 +461,13 @@ const SaleSummary = ({
                     marginTop: "12px",
                 }}
             >
-                {disabled ? (
-                    !selectedLocation 
-                        ? "Seleccione una sede y agregue productos para continuar"
-                        : "Agregue productos para continuar"
-                ) : (
-                    "Verifique todos los datos antes de registrar la venta"
-                )}
+                {totals.itemCount === 0
+                    ? "Agregue productos para generar cotización"
+                    : disabled
+                    ? !selectedLocation
+                        ? "Seleccione una sede y complete los datos para registrar la venta"
+                        : "Complete todos los datos para registrar la venta"
+                    : "Verifique todos los datos antes de registrar la venta"}
             </div>
 
             {/* CSS for spinner animation */}
@@ -348,4 +481,4 @@ const SaleSummary = ({
     );
 };
 
-export default SaleSummary; 
+export default SaleSummary;
