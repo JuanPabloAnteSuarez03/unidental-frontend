@@ -1319,6 +1319,46 @@ export const getProductPrices = async (productIds = [], authToken, signal) => {
 };
 
 /**
+ * Get suggested sale price for a product from catalog
+ * @param {number} productId - Product ID
+ * @param {string} authToken - Authentication token
+ * @returns {Promise<Object>} - Price information
+ */
+const getProductSuggestedPrice = async (productId, authToken) => {
+    try {
+        const response = await fetch(
+            `${API_CONFIG.BASE_URL}/catalogs/products/${productId}/`,
+            {
+                headers: {
+                    Authorization: `Token ${authToken}`,
+                    "Content-Type": "application/json",
+                },
+            }
+        );
+
+        if (!response.ok) {
+            return { price: 0, source: "none" };
+        }
+
+        const product = await response.json();
+        const suggestedPrice = parseFloat(product.suggested_sale_price) || 0;
+
+        if (suggestedPrice > 0) {
+            return {
+                price: suggestedPrice,
+                source: "suggested",
+                source_label: "Precio de venta sugerido",
+            };
+        }
+
+        return { price: 0, source: "none" };
+    } catch (error) {
+        console.error("Error fetching suggested price:", error);
+        return { price: 0, source: "none" };
+    }
+};
+
+/**
  * Get intelligent price for a specific product
  * @param {number} productId - Product ID
  * @param {string} authToken - Authentication token
@@ -1334,7 +1374,17 @@ export const getIntelligentPrice = async (productId, authToken) => {
     }
 
     try {
-        // 1. Intentar obtener último precio de venta
+        // 1. NUEVO: Intentar obtener precio de venta sugerido (PRIORIDAD 1)
+        const suggestedPrice = await getProductSuggestedPrice(productId, authToken);
+        if (suggestedPrice.price > 0) {
+            return {
+                price: suggestedPrice.price,
+                source: "suggested",
+                source_label: "Precio de venta sugerido",
+            };
+        }
+
+        // 2. Intentar obtener último precio de venta (PRIORIDAD 2)
         const lastSalePrice = await getLastSalePrice(productId, authToken);
         if (lastSalePrice.price > 0) {
             return {
@@ -1344,7 +1394,7 @@ export const getIntelligentPrice = async (productId, authToken) => {
             };
         }
 
-        // 2. Intentar obtener último precio de compra
+        // 3. Intentar obtener último precio de compra (PRIORIDAD 3)
         const lastPurchasePrice = await getLastPurchasePrice(
             productId,
             authToken
@@ -1357,7 +1407,7 @@ export const getIntelligentPrice = async (productId, authToken) => {
             };
         }
 
-        // 3. Usar precios del producto (fallback)
+        // 4. Usar precios del producto (fallback)
         return await getProductIntelligentPriceFallback(productId, authToken);
     } catch (error) {
         console.error("Error fetching intelligent price:", error);
@@ -1560,30 +1610,38 @@ export const getLastPurchasePrice = async (productId, authToken) => {
  * @returns {Promise<Object>} - Price information
  */
 const getProductIntelligentPriceFallback = async (productId, authToken) => {
-    // 1. Try last purchase price first
-    const lastPurchasePrice = await getLastPurchasePrice(productId, authToken);
-    if (lastPurchasePrice && lastPurchasePrice.price > 0) {
-        return {
-            price: lastPurchasePrice.price,
-            source: "purchase",
-            source_label: "Último precio de compra",
-        };
-    }
+    // 1. Try cost price if available (PRIORIDAD 4)
+    try {
+        const response = await fetch(
+            `${API_CONFIG.BASE_URL}/catalogs/products/${productId}/`,
+            {
+                headers: {
+                    Authorization: `Token ${authToken}`,
+                    "Content-Type": "application/json",
+                },
+            }
+        );
 
-    // 2. Fallback to last sale price
-    const lastSalePrice = await getLastSalePrice(productId, authToken);
-    if (lastSalePrice.price > 0) {
-        return {
-            price: lastSalePrice.price,
-            source: "sale",
-            source_label: "Último precio de venta",
-        };
+        if (response.ok) {
+            const product = await response.json();
+            const costPrice = parseFloat(product.cost_price) || 0;
+            
+            if (costPrice > 0) {
+                return {
+                    price: costPrice,
+                    source: "cost",
+                    source_label: "Precio de costo",
+                };
+            }
+        }
+    } catch (error) {
+        console.error("Error fetching cost price:", error);
     }
 
     return {
         price: 0,
         source: "none",
-        source_label: "No disponible",
+        source_label: "Sin precio disponible",
     };
 };
 
