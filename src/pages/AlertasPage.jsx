@@ -187,6 +187,12 @@ const AlertasPage = () => {
             return;
         }
 
+        // 🔧 MEJORA: Limpiar caché del navegador si hay force refresh
+        if (forceRefresh) {
+            console.log("🔄 Force refresh detectado, limpiando cache...");
+            localStorage.removeItem(CACHE_STORAGE_KEY);
+        }
+
         setIsLoading(true);
         setLoadingMessage("Iniciando carga de datos...");
         try {
@@ -252,7 +258,7 @@ const AlertasPage = () => {
                     );
                 }
 
-                return {
+                const loteExpandido = {
                     ...lote,
                     id: `${lote.id}_${lote.batch_number || "no-batch"}`,
                     producto_nombre: lote.product_name,
@@ -268,6 +274,10 @@ const AlertasPage = () => {
                     dias_efectivos: diasEfectivos,
                     umbral_producto: umbralProducto,
                 };
+
+
+
+                return loteExpandido;
             });
 
             // Ordenar por fecha de vencimiento (más próximos primero)
@@ -450,7 +460,7 @@ const AlertasPage = () => {
                 );
             }
 
-            return {
+            const loteExpandido = {
                 ...lote,
                 id: `${lote.id}_${lote.batch_number || "no-batch"}`,
                 producto_nombre: lote.product_name,
@@ -466,6 +476,10 @@ const AlertasPage = () => {
                 dias_efectivos: diasEfectivos,
                 umbral_producto: umbralProducto,
             };
+
+
+
+            return loteExpandido;
         });
 
         // Ordenar por fecha de vencimiento
@@ -623,6 +637,19 @@ const AlertasPage = () => {
     const cerrarModalUmbral = () => {
         setMostrarModalUmbral(false);
         setProductoSeleccionado(null);
+    };
+
+    // 🔧 NUEVA FUNCIÓN: Limpiar caché y recargar datos
+    const limpiarCacheYRecargar = () => {
+        console.log("🧹 Limpiando caché y recargando datos...");
+        localStorage.removeItem(CACHE_STORAGE_KEY);
+        setCacheData({
+            mapaUmbrales: {},
+            todosLosLotes: [],
+            isLoaded: false,
+            lastFetch: null,
+        });
+        cargarTodosLosDatos(true);
     };
 
     const onUmbralGuardado = (productoActualizado) => {
@@ -1335,6 +1362,28 @@ const AlertasPage = () => {
                     >
                         <span style={{ fontSize: "16px" }}>🔄</span>
                         Recargar Datos
+                    </button>
+                    <button
+                        onClick={limpiarCacheYRecargar}
+                        style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "8px",
+                            padding: "10px 20px",
+                            backgroundColor: "#dc3545",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "6px",
+                            fontSize: "14px",
+                            fontWeight: "600",
+                            cursor: "pointer",
+                            transition: "background-color 0.2s",
+                        }}
+                        title="Limpiar caché del navegador y recargar datos"
+                    >
+                        <span style={{ fontSize: "16px" }}>🧹</span>
+                        Limpiar Caché
                     </button>
                     <button
                         onClick={abrirModalUmbral}

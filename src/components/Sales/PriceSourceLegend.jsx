@@ -5,24 +5,24 @@ const PriceSourceLegend = () => {
 
     const priceTypes = [
         {
+            source: 'suggested',
+            icon: '💡',
+            label: 'Precio de venta sugerido',
+            description: 'Precio recomendado configurado en el producto',
+            priority: 1
+        },
+        {
             source: 'sale',
             icon: '💰',
             label: 'Último precio de venta',
             description: 'El precio al que se vendió este producto por última vez',
-            priority: 1
+            priority: 2
         },
         {
             source: 'purchase',
             icon: '📦',
             label: 'Último precio de compra',
             description: 'El precio al que se compró este producto por última vez',
-            priority: 2
-        },
-        {
-            source: 'suggested',
-            icon: '💡',
-            label: 'Precio de venta sugerido',
-            description: 'Precio recomendado configurado en el producto',
             priority: 3
         },
         {
