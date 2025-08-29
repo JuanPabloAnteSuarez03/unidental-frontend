@@ -208,11 +208,19 @@ const ProductSelector = forwardRef(
                 try {
                     // Ejecutar ambas operaciones en paralelo
                     // Obtener precio inteligente
+                    console.log("🔍 DEBUG PRECIO - Producto seleccionado:", product);
+                    console.log("🔍 DEBUG PRECIO - Product ID:", product.id);
+                    
                     const intelligentPrice =
                         await inventoryService.getIntelligentPrice(
                             product.id,
                             authToken
                         );
+                    
+                    console.log("🔍 DEBUG PRECIO - Resultado completo:", intelligentPrice);
+                    console.log("🔍 DEBUG PRECIO - Source:", intelligentPrice.source);
+                    console.log("🔍 DEBUG PRECIO - Price:", intelligentPrice.price);
+                    console.log("🔍 DEBUG PRECIO - Label:", intelligentPrice.source_label);
 
                     // Usar solo la función rápida de stock
                     console.log(

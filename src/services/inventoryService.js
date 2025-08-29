@@ -1326,6 +1326,9 @@ export const getProductPrices = async (productIds = [], authToken, signal) => {
  */
 const getProductSuggestedPrice = async (productId, authToken) => {
     try {
+        console.log("🔍 DEBUG getProductSuggestedPrice - Product ID:", productId);
+        console.log("🔍 DEBUG - URL:", `${API_CONFIG.BASE_URL}/catalogs/products/${productId}/`);
+        
         const response = await fetch(
             `${API_CONFIG.BASE_URL}/catalogs/products/${productId}/`,
             {
@@ -1336,14 +1339,23 @@ const getProductSuggestedPrice = async (productId, authToken) => {
             }
         );
 
+        console.log("🔍 DEBUG - Response status:", response.status);
+        console.log("🔍 DEBUG - Response ok:", response.ok);
+
         if (!response.ok) {
+            console.log("🔍 DEBUG - Response no ok, retornando precio 0");
             return { price: 0, source: "none" };
         }
 
         const product = await response.json();
-        const suggestedPrice = parseFloat(product.suggested_sale_price) || 0;
+        console.log("🔍 DEBUG - Producto completo del backend:", product);
+        console.log("🔍 DEBUG - sale_price raw:", product.sale_price);
+        
+        const suggestedPrice = parseFloat(product.sale_price) || 0;
+        console.log("🔍 DEBUG - sale_price parseado:", suggestedPrice);
 
         if (suggestedPrice > 0) {
+            console.log("🔍 DEBUG - Retornando precio sugerido:", suggestedPrice);
             return {
                 price: suggestedPrice,
                 source: "suggested",
@@ -1351,9 +1363,10 @@ const getProductSuggestedPrice = async (productId, authToken) => {
             };
         }
 
+        console.log("🔍 DEBUG - Precio sugerido es 0 o inválido");
         return { price: 0, source: "none" };
     } catch (error) {
-        console.error("Error fetching suggested price:", error);
+        console.error("🔍 DEBUG - Error fetching suggested price:", error);
         return { price: 0, source: "none" };
     }
 };
@@ -1374,9 +1387,15 @@ export const getIntelligentPrice = async (productId, authToken) => {
     }
 
     try {
+        console.log("🔍 DEBUG getIntelligentPrice - Product ID:", productId);
+        
         // 1. NUEVO: Intentar obtener precio de venta sugerido (PRIORIDAD 1)
+        console.log("🔍 DEBUG - Paso 1: Buscando precio de venta sugerido...");
         const suggestedPrice = await getProductSuggestedPrice(productId, authToken);
+        console.log("🔍 DEBUG - Precio sugerido encontrado:", suggestedPrice);
+        
         if (suggestedPrice.price > 0) {
+            console.log("🔍 DEBUG - Usando precio sugerido:", suggestedPrice.price);
             return {
                 price: suggestedPrice.price,
                 source: "suggested",
