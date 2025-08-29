@@ -30,6 +30,7 @@ const ProductSearchSelector = ({
         handleSearch,
         resetSearch,
         updateProductsStock,
+        refreshProducts,
     } = useProductSearch();
 
     const [selectedProduct, setSelectedProduct] = useState(initialProduct);
@@ -181,6 +182,37 @@ const ProductSearchSelector = ({
 
     return (
         <div style={{ position: "relative", ...style }} ref={dropdownRef}>
+            {/* Botón de refresco de productos */}
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}>
+                <button
+                    type="button"
+                    onClick={async () => {
+                        try {
+                            await refreshProducts();
+                            setInputValue("");
+                            setSelectedProduct(null);
+                            setShowDropdown(false);
+                            setSelectedIndex(-1);
+                            handleSearch("");
+                        } catch (e) {
+                            console.error("Error al refrescar productos:", e);
+                        }
+                    }}
+                    style={{
+                        background: "#00b894",
+                        color: "white",
+                        border: "none",
+                        borderRadius: 6,
+                        padding: "6px 10px",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: "pointer"
+                    }}
+                    title="Actualizar productos"
+                >
+                    Actualizar
+                </button>
+            </div>
             {/* Producto seleccionado */}
             {showSelectedProduct && selectedProduct && (
                 <div

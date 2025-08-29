@@ -164,6 +164,7 @@ const InventoryPage = () => {
                     <label>Producto origen:</label>
                     <ProductSearchSelector
                         key={refreshKey + "-from"}
+                        showSelectedProduct={false}
                         refreshKey={refreshKey}
                         onProductSelected={(prod) =>
                             setConversionForm((f) => ({
@@ -229,6 +230,7 @@ const InventoryPage = () => {
                     <label style={{ marginTop: 12 }}>Producto destino:</label>
                     <ProductSearchSelector
                         key={refreshKey + "-to"}
+                        showSelectedProduct={false}
                         refreshKey={refreshKey}
                         onProductSelected={(prod) =>
                             setConversionForm((f) => ({
