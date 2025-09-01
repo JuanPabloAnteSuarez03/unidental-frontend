@@ -156,19 +156,50 @@ const MainLayout = ({ children }) => {
                     boxSizing: "border-box",
                 }}
             >
-                <div className="logo-area" style={{ flexShrink: 0 }}>
-                    <h1 style={{ margin: 0, fontSize: "1.8em" }}>
-                        Sistema de Gestión
-                    </h1>
-                    <h2
+                <div
+                    className="logo-area"
+                    style={{
+                        flexShrink: 0,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "12px",
+                    }}
+                >
+                    <div
                         style={{
-                            margin: "0.2em 0 0 0",
-                            fontSize: "1em",
-                            fontWeight: "normal",
+                            backgroundColor: "#ffffff",
+                            padding: "8px",
+                            borderRadius: "12px",
+                            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                            border: "2px solid rgba(255,255,255,0.2)",
                         }}
                     >
-                        Panel Principal
-                    </h2>
+                        <img
+                            src="/img/favicon.png"
+                            alt="Unidental Logo"
+                            style={{
+                                width: "48px",
+                                height: "48px",
+                                objectFit: "contain",
+                                borderRadius: "6px",
+                                display: "block",
+                            }}
+                        />
+                    </div>
+                    <div>
+                        <h1 style={{ margin: 0, fontSize: "1.8em" }}>
+                            Sistema de Gestión
+                        </h1>
+                        <h2
+                            style={{
+                                margin: "0.2em 0 0 0",
+                                fontSize: "1em",
+                                fontWeight: "normal",
+                            }}
+                        >
+                            Panel Principal
+                        </h2>
+                    </div>
                 </div>
                 <nav
                     style={{

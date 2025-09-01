@@ -1298,40 +1298,16 @@ const OrdenesDeCompraPage = () => {
                                                         color: "#495057",
                                                     }}
                                                 >
-                                                    <div
+                                                    <strong
                                                         style={{
-                                                            marginBottom: "4px",
+                                                            color: "#2c3e50",
                                                         }}
                                                     >
-                                                        <strong
-                                                            style={{
-                                                                color: "#2c3e50",
-                                                            }}
-                                                        >
-                                                            {order
-                                                                .destination_details
-                                                                ?.name ||
-                                                                "Sin destino"}
-                                                        </strong>
-                                                    </div>
-                                                    {order.destination_details
-                                                        ?.address && (
-                                                        <div
-                                                            style={{
-                                                                fontSize:
-                                                                    "12px",
-                                                                color: "#6c757d",
-                                                                fontStyle:
-                                                                    "italic",
-                                                            }}
-                                                        >
-                                                            {
-                                                                order
-                                                                    .destination_details
-                                                                    .address
-                                                            }
-                                                        </div>
-                                                    )}
+                                                        {order
+                                                            .destination_details
+                                                            ?.name ||
+                                                            "Sin destino"}
+                                                    </strong>
                                                 </td>
                                                 <td
                                                     style={{
