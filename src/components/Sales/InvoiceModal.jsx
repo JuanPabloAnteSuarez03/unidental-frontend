@@ -1,35 +1,38 @@
 import React from "react";
 import { companyConfig } from "../../config/company";
 
-const InvoiceModal = ({ 
-    isOpen, 
-    onClose, 
-    saleData, 
-    customerData, 
+const InvoiceModal = ({
+    isOpen,
+    onClose,
+    saleData,
+    customerData,
     locationData,
-    saleItems, 
+    saleItems,
     totals,
-    paymentMethod 
+    paymentMethod,
 }) => {
     if (!isOpen) return null;
 
     // Función para generar número de factura formateado
     const getInvoiceNumber = (saleId) => {
-        const paddedId = String(saleId).padStart(6, '0');
+        const paddedId = String(saleId).padStart(6, "0");
         return `${companyConfig.invoicePrefix}-${paddedId}`;
     };
 
     const handlePrint = () => {
         // Crear una nueva ventana con solo el contenido de la factura
-        const printWindow = window.open('', '_blank');
-        const invoiceContent = document.getElementById('invoice-content').innerHTML;
-        
+        const printWindow = window.open("", "_blank");
+        const invoiceContent =
+            document.getElementById("invoice-content").innerHTML;
+
         printWindow.document.write(`
             <!DOCTYPE html>
             <html>
             <head>
                 <meta charset="utf-8">
-                <title>Factura ${getInvoiceNumber(saleData.id)} - ${companyConfig.name}</title>
+                <title>Factura ${getInvoiceNumber(saleData.id)} - ${
+            companyConfig.name
+        }</title>
                 <style>
                     * {
                         box-sizing: border-box;
@@ -181,14 +184,14 @@ const InvoiceModal = ({
             </body>
             </html>
         `);
-        
+
         printWindow.document.close();
-        
+
         // Esperar a que la ventana cargue y luego imprimir
-        printWindow.onload = function() {
+        printWindow.onload = function () {
             printWindow.focus();
             printWindow.print();
-            
+
             // Cerrar la ventana después de imprimir (opcional)
             setTimeout(() => {
                 printWindow.close();
@@ -196,12 +199,12 @@ const InvoiceModal = ({
         };
     };
 
-    const currentDate = new Date().toLocaleDateString('es-CO', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
+    const currentDate = new Date().toLocaleDateString("es-CO", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
     });
 
     return (
@@ -318,45 +321,81 @@ const InvoiceModal = ({
                         >
                             {/* Datos de la empresa */}
                             <div>
-                                <h1
+                                <div
                                     style={{
-                                        margin: "0 0 10px 0",
-                                        fontSize: "28px",
-                                        fontWeight: "700",
-                                        color: "#2c3e50",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        marginBottom: "10px",
                                     }}
                                 >
-                                    {companyConfig.name}
-                                </h1>
-                                <div style={{ fontSize: "14px", color: "#6c757d", lineHeight: 1.5 }}>
+                                    <img
+                                        src="/img/favicon.png"
+                                        alt="Logo"
+                                        style={{
+                                            width: "50px",
+                                            height: "50px",
+                                            marginRight: "15px",
+                                            objectFit: "contain",
+                                        }}
+                                    />
+                                    <h1
+                                        style={{
+                                            margin: "0",
+                                            fontSize: "28px",
+                                            fontWeight: "700",
+                                            color: "#2c3e50",
+                                        }}
+                                    >
+                                        {companyConfig.name}
+                                    </h1>
+                                </div>
+                                <div
+                                    style={{
+                                        fontSize: "14px",
+                                        color: "#6c757d",
+                                        lineHeight: 1.5,
+                                    }}
+                                >
                                     <div>{companyConfig.address}</div>
                                     <div>📞 {companyConfig.phone}</div>
                                     <div>📧 {companyConfig.email}</div>
-                                    <div style={{ fontWeight: "600", marginTop: "5px" }}>
+                                    <div
+                                        style={{
+                                            fontWeight: "600",
+                                            marginTop: "5px",
+                                        }}
+                                    >
                                         {companyConfig.nit}
                                     </div>
                                     {companyConfig.slogan && (
-                                        <div style={{ 
-                                            marginTop: "8px", 
-                                            fontStyle: "italic", 
-                                            fontSize: "12px",
-                                            color: "#3498db" 
-                                        }}>
+                                        <div
+                                            style={{
+                                                marginTop: "8px",
+                                                fontStyle: "italic",
+                                                fontSize: "12px",
+                                                color: "#3498db",
+                                            }}
+                                        >
                                             "{companyConfig.slogan}"
                                         </div>
                                     )}
                                     {locationData && (
-                                        <div style={{ 
-                                            marginTop: "10px", 
-                                            padding: "8px",
-                                            backgroundColor: "#e8f4fd",
-                                            borderRadius: "4px",
-                                            fontSize: "12px",
-                                            color: "#2c3e50" 
-                                        }}>
-                                            <strong>🏢 Sede de Venta:</strong> {locationData.name}
+                                        <div
+                                            style={{
+                                                marginTop: "10px",
+                                                padding: "8px",
+                                                backgroundColor: "#e8f4fd",
+                                                borderRadius: "4px",
+                                                fontSize: "12px",
+                                                color: "#2c3e50",
+                                            }}
+                                        >
+                                            <strong>🏢 Sede de Venta:</strong>{" "}
+                                            {locationData.name}
                                             {locationData.address && (
-                                                <div style={{ marginTop: "2px" }}>
+                                                <div
+                                                    style={{ marginTop: "2px" }}
+                                                >
                                                     📍 {locationData.address}
                                                 </div>
                                             )}
@@ -385,10 +424,27 @@ const InvoiceModal = ({
                                     >
                                         FACTURA
                                     </h2>
-                                    <div style={{ fontSize: "14px", color: "#6c757d", lineHeight: 1.5 }}>
-                                        <div><strong>Número:</strong> {getInvoiceNumber(saleData.id)}</div>
-                                        <div><strong>Fecha:</strong> {currentDate}</div>
-                                        <div><strong>Tipo:</strong> {paymentMethod === "credit" ? "Crédito" : "Normal"}</div>
+                                    <div
+                                        style={{
+                                            fontSize: "14px",
+                                            color: "#6c757d",
+                                            lineHeight: 1.5,
+                                        }}
+                                    >
+                                        <div>
+                                            <strong>Número:</strong>{" "}
+                                            {getInvoiceNumber(saleData.id)}
+                                        </div>
+                                        <div>
+                                            <strong>Fecha:</strong>{" "}
+                                            {currentDate}
+                                        </div>
+                                        <div>
+                                            <strong>Tipo:</strong>{" "}
+                                            {paymentMethod === "credit"
+                                                ? "Crédito"
+                                                : "Normal"}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -414,23 +470,32 @@ const InvoiceModal = ({
                             >
                                 DATOS DEL CLIENTE
                             </h3>
-                            <div style={{ fontSize: "14px", color: "#2c3e50", lineHeight: 1.6 }}>
+                            <div
+                                style={{
+                                    fontSize: "14px",
+                                    color: "#2c3e50",
+                                    lineHeight: 1.6,
+                                }}
+                            >
                                 <div style={{ marginBottom: "5px" }}>
                                     <strong>Nombre:</strong> {customerData.name}
                                 </div>
                                 {customerData.phone && (
                                     <div style={{ marginBottom: "5px" }}>
-                                        <strong>Teléfono:</strong> {customerData.phone}
+                                        <strong>Teléfono:</strong>{" "}
+                                        {customerData.phone}
                                     </div>
                                 )}
                                 {customerData.email && (
                                     <div style={{ marginBottom: "5px" }}>
-                                        <strong>Email:</strong> {customerData.email}
+                                        <strong>Email:</strong>{" "}
+                                        {customerData.email}
                                     </div>
                                 )}
                                 {customerData.notes && (
                                     <div style={{ marginBottom: "5px" }}>
-                                        <strong>Notas:</strong> {customerData.notes}
+                                        <strong>Notas:</strong>{" "}
+                                        {customerData.notes}
                                     </div>
                                 )}
                             </div>
@@ -456,52 +521,153 @@ const InvoiceModal = ({
                                 }}
                             >
                                 <thead>
-                                    <tr style={{ backgroundColor: "#2c3e50", color: "white" }}>
-                                        <th style={{ padding: "12px", textAlign: "left", borderBottom: "1px solid #dee2e6" }}>
+                                    <tr
+                                        style={{
+                                            backgroundColor: "#2c3e50",
+                                            color: "white",
+                                        }}
+                                    >
+                                        <th
+                                            style={{
+                                                padding: "12px",
+                                                textAlign: "left",
+                                                borderBottom:
+                                                    "1px solid #dee2e6",
+                                            }}
+                                        >
                                             Producto
                                         </th>
-                                        <th style={{ padding: "12px", textAlign: "center", borderBottom: "1px solid #dee2e6" }}>
+                                        <th
+                                            style={{
+                                                padding: "12px",
+                                                textAlign: "center",
+                                                borderBottom:
+                                                    "1px solid #dee2e6",
+                                            }}
+                                        >
                                             Cantidad
                                         </th>
-                                        <th style={{ padding: "12px", textAlign: "right", borderBottom: "1px solid #dee2e6" }}>
+                                        <th
+                                            style={{
+                                                padding: "12px",
+                                                textAlign: "right",
+                                                borderBottom:
+                                                    "1px solid #dee2e6",
+                                            }}
+                                        >
                                             Precio Unit.
                                         </th>
-                                        <th style={{ padding: "12px", textAlign: "right", borderBottom: "1px solid #dee2e6" }}>
+                                        <th
+                                            style={{
+                                                padding: "12px",
+                                                textAlign: "right",
+                                                borderBottom:
+                                                    "1px solid #dee2e6",
+                                            }}
+                                        >
                                             Total
                                         </th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {saleItems.map((item, index) => {
-                                        const itemTotal = parseFloat(item.unit_price) * item.quantity;
+                                        const itemTotal =
+                                            parseFloat(item.unit_price) *
+                                            item.quantity;
                                         return (
                                             <tr
                                                 key={index}
                                                 style={{
-                                                    backgroundColor: index % 2 === 0 ? "white" : "#f8f9fa",
+                                                    backgroundColor:
+                                                        index % 2 === 0
+                                                            ? "white"
+                                                            : "#f8f9fa",
                                                 }}
                                             >
-                                                <td style={{ padding: "12px", borderBottom: "1px solid #dee2e6" }}>
-                                                    <div style={{ fontWeight: "600", color: "#2c3e50" }}>
-                                                        {item.product_details.name}
+                                                <td
+                                                    style={{
+                                                        padding: "12px",
+                                                        borderBottom:
+                                                            "1px solid #dee2e6",
+                                                    }}
+                                                >
+                                                    <div
+                                                        style={{
+                                                            fontWeight: "600",
+                                                            color: "#2c3e50",
+                                                        }}
+                                                    >
+                                                        {
+                                                            item.product_details
+                                                                .name
+                                                        }
                                                     </div>
-                                                    <div style={{ fontSize: "12px", color: "#6c757d" }}>
-                                                        SKU: {item.product_details.sku}
+                                                    <div
+                                                        style={{
+                                                            fontSize: "12px",
+                                                            color: "#6c757d",
+                                                        }}
+                                                    >
+                                                        SKU:{" "}
+                                                        {
+                                                            item.product_details
+                                                                .sku
+                                                        }
                                                     </div>
-                                                    {item.product_details.category_name && (
-                                                        <div style={{ fontSize: "12px", color: "#6c757d" }}>
-                                                            Categoría: {item.product_details.category_name}
+                                                    {item.product_details
+                                                        .category_name && (
+                                                        <div
+                                                            style={{
+                                                                fontSize:
+                                                                    "12px",
+                                                                color: "#6c757d",
+                                                            }}
+                                                        >
+                                                            Categoría:{" "}
+                                                            {
+                                                                item
+                                                                    .product_details
+                                                                    .category_name
+                                                            }
                                                         </div>
                                                     )}
                                                 </td>
-                                                <td style={{ padding: "12px", textAlign: "center", borderBottom: "1px solid #dee2e6" }}>
-                                                    {item.quantity} {item.product_details.unit || 'unidades'}
+                                                <td
+                                                    style={{
+                                                        padding: "12px",
+                                                        textAlign: "center",
+                                                        borderBottom:
+                                                            "1px solid #dee2e6",
+                                                    }}
+                                                >
+                                                    {item.quantity}{" "}
+                                                    {item.product_details
+                                                        .unit || "unidades"}
                                                 </td>
-                                                <td style={{ padding: "12px", textAlign: "right", borderBottom: "1px solid #dee2e6" }}>
-                                                    ${Number(item.unit_price).toLocaleString()}
+                                                <td
+                                                    style={{
+                                                        padding: "12px",
+                                                        textAlign: "right",
+                                                        borderBottom:
+                                                            "1px solid #dee2e6",
+                                                    }}
+                                                >
+                                                    $
+                                                    {Number(
+                                                        item.unit_price
+                                                    ).toLocaleString()}
                                                 </td>
-                                                <td style={{ padding: "12px", textAlign: "right", borderBottom: "1px solid #dee2e6", fontWeight: "600" }}>
-                                                    ${itemTotal.toLocaleString()}
+                                                <td
+                                                    style={{
+                                                        padding: "12px",
+                                                        textAlign: "right",
+                                                        borderBottom:
+                                                            "1px solid #dee2e6",
+                                                        fontWeight: "600",
+                                                    }}
+                                                >
+                                                    $
+                                                    {itemTotal.toLocaleString()}
                                                 </td>
                                             </tr>
                                         );
@@ -515,7 +681,10 @@ const InvoiceModal = ({
                             className="invoice-totals-grid"
                             style={{
                                 display: "grid",
-                                gridTemplateColumns: window.innerWidth > 768 ? "1fr 300px" : "1fr",
+                                gridTemplateColumns:
+                                    window.innerWidth > 768
+                                        ? "1fr 300px"
+                                        : "1fr",
                                 gap: "30px",
                                 marginBottom: "30px",
                             }}
@@ -540,10 +709,29 @@ const InvoiceModal = ({
                                     >
                                         INFORMACIÓN ADICIONAL
                                     </h4>
-                                    <div style={{ fontSize: "14px", color: "#6c757d", lineHeight: 1.5 }}>
-                                        <div>• Total de productos: {totals.itemCount}</div>
-                                        <div>• Cantidad total: {totals.totalQuantity} unidades</div>
-                                        <div>• Forma de pago: {paymentMethod === "credit" ? "Crédito" : paymentMethod === "cash" ? "Efectivo" : "Tarjeta"}</div>
+                                    <div
+                                        style={{
+                                            fontSize: "14px",
+                                            color: "#6c757d",
+                                            lineHeight: 1.5,
+                                        }}
+                                    >
+                                        <div>
+                                            • Total de productos:{" "}
+                                            {totals.itemCount}
+                                        </div>
+                                        <div>
+                                            • Cantidad total:{" "}
+                                            {totals.totalQuantity} unidades
+                                        </div>
+                                        <div>
+                                            • Forma de pago:{" "}
+                                            {paymentMethod === "credit"
+                                                ? "Crédito"
+                                                : paymentMethod === "cash"
+                                                ? "Efectivo"
+                                                : "Tarjeta"}
+                                        </div>
                                         <div>• Estado: Venta registrada</div>
                                     </div>
                                 </div>
@@ -568,7 +756,12 @@ const InvoiceModal = ({
                                     >
                                         RESUMEN
                                     </h4>
-                                    <div style={{ fontSize: "14px", lineHeight: 1.6 }}>
+                                    <div
+                                        style={{
+                                            fontSize: "14px",
+                                            lineHeight: 1.6,
+                                        }}
+                                    >
                                         <div
                                             style={{
                                                 display: "flex",
@@ -577,18 +770,29 @@ const InvoiceModal = ({
                                             }}
                                         >
                                             <span>Subtotal:</span>
-                                            <span>${Number(totals.subtotal).toLocaleString()}</span>
+                                            <span>
+                                                $
+                                                {Number(
+                                                    totals.subtotal
+                                                ).toLocaleString()}
+                                            </span>
                                         </div>
                                         {parseFloat(totals.tax) > 0 && (
                                             <div
                                                 style={{
                                                     display: "flex",
-                                                    justifyContent: "space-between",
+                                                    justifyContent:
+                                                        "space-between",
                                                     marginBottom: "8px",
                                                 }}
                                             >
                                                 <span>Impuestos:</span>
-                                                <span>${Number(totals.tax).toLocaleString()}</span>
+                                                <span>
+                                                    $
+                                                    {Number(
+                                                        totals.tax
+                                                    ).toLocaleString()}
+                                                </span>
                                             </div>
                                         )}
                                         <div
@@ -596,13 +800,19 @@ const InvoiceModal = ({
                                                 display: "flex",
                                                 justifyContent: "space-between",
                                                 paddingTop: "10px",
-                                                borderTop: "1px solid rgba(255, 255, 255, 0.3)",
+                                                borderTop:
+                                                    "1px solid rgba(255, 255, 255, 0.3)",
                                                 fontSize: "18px",
                                                 fontWeight: "700",
                                             }}
                                         >
                                             <span>TOTAL:</span>
-                                            <span>${Number(totals.total).toLocaleString()}</span>
+                                            <span>
+                                                $
+                                                {Number(
+                                                    totals.total
+                                                ).toLocaleString()}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
@@ -623,35 +833,52 @@ const InvoiceModal = ({
                                 <strong>¡Gracias por su compra!</strong>
                             </div>
                             <div>
-                                Esta factura fue generada electrónicamente el {currentDate}
+                                Esta factura fue generada electrónicamente el{" "}
+                                {currentDate}
                             </div>
                             <div style={{ marginTop: "10px" }}>
-                                Para cualquier consulta contacte a: {companyConfig.email} | {companyConfig.phone}
+                                Para cualquier consulta contacte a:{" "}
+                                {companyConfig.email} | {companyConfig.phone}
                             </div>
                             {companyConfig.website && (
                                 <div style={{ marginTop: "5px" }}>
                                     🌐 {companyConfig.website}
                                 </div>
                             )}
-                            
+
                             {/* Términos y condiciones */}
-                            {companyConfig.terms && companyConfig.terms.length > 0 && (
-                                <div style={{ 
-                                    marginTop: "15px", 
-                                    fontSize: "10px", 
-                                    color: "#95a5a6",
-                                    textAlign: "left"
-                                }}>
-                                    <div style={{ fontWeight: "600", marginBottom: "5px" }}>
-                                        Términos y Condiciones:
-                                    </div>
-                                    {companyConfig.terms.map((term, index) => (
-                                        <div key={index} style={{ marginBottom: "2px" }}>
-                                            • {term}
+                            {companyConfig.terms &&
+                                companyConfig.terms.length > 0 && (
+                                    <div
+                                        style={{
+                                            marginTop: "15px",
+                                            fontSize: "10px",
+                                            color: "#95a5a6",
+                                            textAlign: "left",
+                                        }}
+                                    >
+                                        <div
+                                            style={{
+                                                fontWeight: "600",
+                                                marginBottom: "5px",
+                                            }}
+                                        >
+                                            Términos y Condiciones:
                                         </div>
-                                    ))}
-                                </div>
-                            )}
+                                        {companyConfig.terms.map(
+                                            (term, index) => (
+                                                <div
+                                                    key={index}
+                                                    style={{
+                                                        marginBottom: "2px",
+                                                    }}
+                                                >
+                                                    • {term}
+                                                </div>
+                                            )
+                                        )}
+                                    </div>
+                                )}
                         </div>
                     </div>
                 </div>
@@ -676,4 +903,4 @@ const InvoiceModal = ({
     );
 };
 
-export default InvoiceModal; 
+export default InvoiceModal;

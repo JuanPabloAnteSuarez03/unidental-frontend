@@ -322,16 +322,34 @@ const PurchaseOrderModal = ({
                         >
                             {/* Datos de la empresa */}
                             <div>
-                                <h1
+                                <div
                                     style={{
-                                        margin: "0 0 10px 0",
-                                        fontSize: "28px",
-                                        fontWeight: "700",
-                                        color: "#2c3e50",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        marginBottom: "10px",
                                     }}
                                 >
-                                    {companyConfig.name}
-                                </h1>
+                                    <img
+                                        src="/img/favicon.png"
+                                        alt="Logo"
+                                        style={{
+                                            width: "50px",
+                                            height: "50px",
+                                            marginRight: "15px",
+                                            objectFit: "contain",
+                                        }}
+                                    />
+                                    <h1
+                                        style={{
+                                            margin: "0",
+                                            fontSize: "28px",
+                                            fontWeight: "700",
+                                            color: "#2c3e50",
+                                        }}
+                                    >
+                                        {companyConfig.name}
+                                    </h1>
+                                </div>
                                 <div
                                     style={{
                                         fontSize: "14px",
@@ -339,17 +357,6 @@ const PurchaseOrderModal = ({
                                         lineHeight: 1.5,
                                     }}
                                 >
-                                    <div>{companyConfig.address}</div>
-                                    <div>📞 {companyConfig.phone}</div>
-                                    <div>📧 {companyConfig.email}</div>
-                                    <div
-                                        style={{
-                                            fontWeight: "600",
-                                            marginTop: "5px",
-                                        }}
-                                    >
-                                        {companyConfig.nit}
-                                    </div>
                                     {companyConfig.slogan && (
                                         <div
                                             style={{
