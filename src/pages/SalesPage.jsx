@@ -1449,6 +1449,7 @@ const SalesPage = () => {
                 saleItems={saleItems}
                 totals={totals}
                 selectedLocation={selectedLocation}
+                selectedCustomer={selectedCustomer}
             />
         </>
     );
