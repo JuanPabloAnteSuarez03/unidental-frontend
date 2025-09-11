@@ -1247,8 +1247,8 @@ const NuevoProductoPage = () => {
                       // limpiar cache persistente de productos del contexto
                       localStorage.removeItem("products_cache_data");
                     }
-                    if (typeof refrescarCacheInventario === 'function') {
-                      await refrescarCacheInventario();
+                  if (typeof refrescarCacheInventario === 'function') {
+                    await refrescarCacheInventario();
                     }
                     setRefreshMsg("Productos actualizados");
                     setRefreshKey(k => k + 1);

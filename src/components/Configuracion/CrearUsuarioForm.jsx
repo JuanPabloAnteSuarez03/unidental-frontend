@@ -11,6 +11,7 @@ const CrearUsuarioForm = () => {
         role: "User", // Por defecto "User" (Empleado)
     });
     const [touched, setTouched] = useState({});
+    const [showPassword, setShowPassword] = useState(false);
     const [submitted, setSubmitted] = useState(false);
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState("");
@@ -174,38 +175,61 @@ const CrearUsuarioForm = () => {
                     >
                         Contraseña
                     </label>
-                    <input
-                        type="password"
-                        id="password"
-                        name="password"
-                        value={form.password}
-                        onChange={handleChange}
-                        onBlur={handleBlur}
-                        required
-                        style={{
-                            width: "100%",
-                            padding: "14px 16px",
-                            border:
-                                errors.password &&
-                                (touched.password || submitted)
-                                    ? "2px solid #e74c3c"
-                                    : "2px solid #e1e8ed",
-                            borderRadius: 8,
-                            fontSize: 16,
-                            outline: "none",
-                            background:
-                                errors.password &&
-                                (touched.password || submitted)
-                                    ? "#fff6f6"
-                                    : "#fff",
-                            transition: "all 0.3s ease",
-                            boxSizing: "border-box",
-                        }}
-                        minLength={6}
-                        autoComplete="new-password"
-                        disabled={loading}
-                        placeholder="Ingresa la contraseña"
-                    />
+                    <div style={{ position: "relative" }}>
+                        <input
+                            type={showPassword ? "text" : "password"}
+                            id="password"
+                            name="password"
+                            value={form.password}
+                            onChange={handleChange}
+                            onBlur={handleBlur}
+                            required
+                            style={{
+                                width: "100%",
+                                padding: "14px 46px 14px 16px",
+                                border:
+                                    errors.password &&
+                                    (touched.password || submitted)
+                                        ? "2px solid #e74c3c"
+                                        : "2px solid #e1e8ed",
+                                borderRadius: 8,
+                                fontSize: 16,
+                                outline: "none",
+                                background:
+                                    errors.password &&
+                                    (touched.password || submitted)
+                                        ? "#fff6f6"
+                                        : "#fff",
+                                transition: "all 0.3s ease",
+                                boxSizing: "border-box",
+                            }}
+                            minLength={6}
+                            autoComplete="new-password"
+                            disabled={loading}
+                            placeholder="Ingresa la contraseña"
+                        />
+                        <button
+                            type="button"
+                            onClick={() => setShowPassword((v) => !v)}
+                            aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                            title={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                            style={{
+                                position: "absolute",
+                                right: 10,
+                                top: "50%",
+                                transform: "translateY(-50%)",
+                                border: "none",
+                                background: "transparent",
+                                cursor: "pointer",
+                                padding: 6,
+                                color: "#6c757d",
+                                fontSize: 16,
+                            }}
+                            disabled={loading}
+                        >
+                            {showPassword ? "🙈" : "👁️"}
+                        </button>
+                    </div>
                     {(touched.password || submitted) && errors.password && (
                         <div
                             style={{

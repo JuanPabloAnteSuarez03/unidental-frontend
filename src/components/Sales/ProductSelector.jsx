@@ -34,6 +34,7 @@ const ProductSelector = forwardRef(
         // Nuevos estados para lotes y productos compuestos
         const [productSalesInfo, setProductSalesInfo] = useState(null);
         const [selectedBatches, setSelectedBatches] = useState([]);
+        const [batchSelectionMode, setBatchSelectionMode] = useState("auto"); // 'auto' | 'manual'
         const [loadingAdvancedInfo, setLoadingAdvancedInfo] = useState(false);
         const [stockByLocation, setStockByLocation] = useState([]);
         const [conversionSuggestions, setConversionSuggestions] =
@@ -439,15 +440,53 @@ const ProductSelector = forwardRef(
             [selectedProduct, selectedLocation, productSalesInfo, authToken]
         );
 
+        // Cambiar modo de selección de lotes
+        const handleBatchModeChange = useCallback((mode) => {
+            setBatchSelectionMode(mode);
+            if (mode === "auto") {
+                // Re-seleccionar automáticamente con FIFO
+                if (productSalesInfo?.requiresBatchControl && quantity > 0) {
+                    selectBatchesAutomatically(quantity);
+                }
+            } else {
+                // Limpiar selección para permitir elección manual
+                setSelectedBatches([]);
+            }
+        }, [productSalesInfo?.requiresBatchControl, quantity, selectBatchesAutomatically]);
+
+        // Manejo de cambio de cantidad manual por lote
+        const handleManualBatchQtyChange = useCallback((batch, newQty) => {
+            const safeQty = Math.max(0, Math.min(parseInt(newQty || 0, 10), batch.quantity || 0));
+            setSelectedBatches((prev) => {
+                const existing = prev.find(b => b.batch_id === (batch.batch_id || batch.id));
+                if (safeQty === 0) {
+                    // quitar si existe
+                    return existing ? prev.filter(b => b.batch_id === undefined ? false : b.batch_id !== (batch.batch_id || batch.id)) : prev;
+                }
+                const updatedEntry = {
+                    batch_id: batch.batch_id || batch.id,
+                    batch_number: batch.batch_number,
+                    selectedQuantity: safeQty,
+                    expiry_date: batch.expiry_date,
+                    stock_id: batch.stock_id,
+                };
+                if (existing) {
+                    return prev.map(b => (b.batch_id === (batch.batch_id || batch.id) ? updatedEntry : b));
+                }
+                return [...prev, updatedEntry];
+            });
+        }, []);
+
         // Efecto para seleccionar lotes automáticamente cuando cambia la cantidad
         useEffect(() => {
-            if (productSalesInfo?.requiresBatchControl && quantity > 0) {
+            if (batchSelectionMode === "auto" && productSalesInfo?.requiresBatchControl && quantity > 0) {
                 selectBatchesAutomatically(quantity);
             }
         }, [
             quantity,
             productSalesInfo?.requiresBatchControl,
             selectBatchesAutomatically,
+            batchSelectionMode,
         ]);
 
         // Handle clearing product selection
@@ -512,9 +551,11 @@ const ProductSelector = forwardRef(
                 return;
             }
 
-            if (!quantity || quantity < 1) {
-                setError("La cantidad debe ser mayor a 0");
-                return;
+            if (batchSelectionMode === "auto") {
+                if (!quantity || quantity < 1) {
+                    setError("La cantidad debe ser mayor a 0");
+                    return;
+                }
             }
 
             if (!selectedLocation) {
@@ -523,7 +564,7 @@ const ProductSelector = forwardRef(
             }
 
             // Validar stock disponible si hay información de stock
-            if (stockInfo && selectedLocation) {
+            if (batchSelectionMode === "auto" && stockInfo && selectedLocation) {
                 const availableStock =
                     stockInfo.availableInLocation !== null
                         ? stockInfo.availableInLocation
@@ -548,7 +589,13 @@ const ProductSelector = forwardRef(
                     0
                 );
 
-                if (totalSelectedFromBatches < quantity) {
+                // En modo manual, la cantidad final la determina la suma de los lotes
+                if (batchSelectionMode === "manual") {
+                    if (totalSelectedFromBatches < 1) {
+                        setError("Debe seleccionar la cantidad a usar por lote");
+                        return;
+                    }
+                } else if (totalSelectedFromBatches < quantity) {
                     setError(
                         `Lotes seleccionados insuficientes. Necesario: ${quantity}, Disponible en lotes: ${totalSelectedFromBatches}`
                     );
@@ -596,9 +643,13 @@ const ProductSelector = forwardRef(
                 // Solo se envía como un producto normal y el backend hace el resto
 
                 // Llamar a la función del padre con datos adicionales
+                const finalQuantity = batchSelectionMode === "manual"
+                    ? selectedBatches.reduce((sum, b) => sum + (b.selectedQuantity || 0), 0)
+                    : quantity;
+
                 onProductAdded(
                     selectedProduct,
-                    quantity,
+                    finalQuantity,
                     parseFloat(unitPrice),
                     additionalData
                 );
@@ -628,6 +679,7 @@ const ProductSelector = forwardRef(
         ]);
 
         const handleQuantityChange = (newQuantity) => {
+            if (batchSelectionMode === "manual") return; // bloquear campo cantidad en modo manual
             setQuantity(newQuantity);
             setErrorStock(null);
             setConversionSuggestions(null);
@@ -1253,6 +1305,7 @@ const ProductSelector = forwardRef(
                                     onChange={(e) =>
                                         handleQuantityChange(e.target.value)
                                     }
+                                    disabled={batchSelectionMode === "manual"}
                                     style={{
                                         width: "100%",
                                         boxSizing: "border-box",
@@ -1399,8 +1452,44 @@ const ProductSelector = forwardRef(
                                                         marginBottom: "6px",
                                                     }}
                                                 >
-                                                    Lotes disponibles (ordenados
-                                                    por FIFO):
+                                                    Lotes disponibles ({batchSelectionMode === "auto" ? "modo automático (FIFO)" : "modo manual"}):
+                                                </div>
+                                                {/* Toggle de modo de selección */}
+                                                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleBatchModeChange("auto")}
+                                                        style={{
+                                                            padding: "6px 10px",
+                                                            borderRadius: 6,
+                                                            border: batchSelectionMode === "auto" ? "2px solid #27ae60" : "1px solid #dee2e6",
+                                                            background: batchSelectionMode === "auto" ? "#e8f5e8" : "white",
+                                                            cursor: "pointer",
+                                                            fontSize: 12,
+                                                            fontWeight: 600,
+                                                            color: "#2c3e50",
+                                                        }}
+                                                        title="Seleccionar lotes automáticamente usando FIFO"
+                                                    >
+                                                        Automático (FIFO)
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleBatchModeChange("manual")}
+                                                        style={{
+                                                            padding: "6px 10px",
+                                                            borderRadius: 6,
+                                                            border: batchSelectionMode === "manual" ? "2px solid #0984e3" : "1px solid #dee2e6",
+                                                            background: batchSelectionMode === "manual" ? "#e8f4fd" : "white",
+                                                            cursor: "pointer",
+                                                            fontSize: 12,
+                                                            fontWeight: 600,
+                                                            color: "#2c3e50",
+                                                        }}
+                                                        title="Seleccionar lotes manualmente"
+                                                    >
+                                                        Manual
+                                                    </button>
                                                 </div>
                                                 {productSalesInfo.batches.map(
                                                     (batch, index) => {
@@ -1524,8 +1613,23 @@ const ProductSelector = forwardRef(
                                                                         }{" "}
                                                                         unidades
                                                                     </div>
-                                                                    {isSelected &&
-                                                                        selectedBatch && (
+                                                                    {batchSelectionMode === "manual" ? (
+                                                                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                                                            <label style={{ fontSize: 12, color: "#2c3e50" }}>Usar:</label>
+                                                                            <input
+                                                                                type="number"
+                                                                                min={0}
+                                                                                max={batch.quantity || 0}
+                                                                                value={selectedBatch?.selectedQuantity || 0}
+                                                                                onChange={(e) => handleManualBatchQtyChange(batch, e.target.value)}
+                                                                                style={{ width: 70, padding: 4, fontSize: 12, border: "1px solid #dee2e6", borderRadius: 4 }}
+                                                                            />
+                                                                            <span style={{ fontSize: 11, color: "#6c757d" }}>
+                                                                                / {batch.quantity || 0}
+                                                                            </span>
+                                                                        </div>
+                                                                    ) : (
+                                                                        isSelected && selectedBatch && (
                                                                             <div
                                                                                 style={{
                                                                                     color: "#27ae60",
@@ -1539,7 +1643,8 @@ const ProductSelector = forwardRef(
                                                                                 }{" "}
                                                                                 unidades
                                                                             </div>
-                                                                        )}
+                                                                        )
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                         );
