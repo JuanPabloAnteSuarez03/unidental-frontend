@@ -137,7 +137,7 @@ const InventoryContent = ({
         {/* Spacer div para empujar el contenido hacia arriba y dejar espacio en blanco abajo */}
         <div style={{ flexGrow: 1, minHeight: "20px" }} />
         {/* Paginación */}
-        {totalGeneralProducts > 0 && totalPages > 1 && (
+        {totalPages >= 1 && (
           <Pagination
             currentPage={currentPage}
             totalPages={totalPages}
