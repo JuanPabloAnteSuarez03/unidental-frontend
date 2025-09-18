@@ -76,6 +76,60 @@ export const getProducts = async (params = {}, authToken, signal) => {
 };
 
 /**
+ * Get products by location (backend-paginated)
+ * @param {Object} opts
+ * @param {number} opts.locationId - Required location id
+ * @param {boolean} [opts.hasStock=true] - Only items with stock if true
+ * @param {string} [opts.search] - search by name/sku/barcode
+ * @param {number} [opts.page=1] - page number
+ * @param {string} authToken
+ * @param {AbortSignal} signal
+ */
+export const getProductsByLocation = async (
+    { locationId, hasStock = true, search, page = 1 } = {},
+    authToken,
+    signal
+) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+    if (!locationId) {
+        throw new Error("locationId is required");
+    }
+
+    const params = new URLSearchParams();
+    params.set("location", String(locationId));
+    params.set("page", String(page));
+    if (search) params.set("search", search);
+    if (hasStock === false) params.set("has_stock", "false");
+
+    const url = `${API_CONFIG.BASE_URL}/catalogs/products/by-location/?${params.toString()}`;
+
+    try {
+        const response = await fetch(url, {
+            headers: {
+                Authorization: `Token ${authToken}`,
+                "Content-Type": "application/json",
+            },
+            signal,
+        });
+
+        if (!response.ok) {
+            throw new Error(`Error ${response.status}: ${response.statusText}`);
+        }
+
+        return await response.json();
+    } catch (error) {
+        if (error.name === "AbortError") {
+            console.log("Request was aborted");
+            return null;
+        }
+        console.error("Error fetching products by location:", error);
+        throw error;
+    }
+};
+
+/**
  * ✨ OPTIMIZADO: Get stock data for products with better batch handling
  * @param {Array} productIds - Optional array of product IDs to filter
  * @param {string} authToken - Authentication token
@@ -1319,6 +1373,59 @@ export const getProductPrices = async (productIds = [], authToken, signal) => {
 };
 
 /**
+ * Get suggested sale price for a product from catalog
+ * @param {number} productId - Product ID
+ * @param {string} authToken - Authentication token
+ * @returns {Promise<Object>} - Price information
+ */
+const getProductSuggestedPrice = async (productId, authToken) => {
+    try {
+        console.log("🔍 DEBUG getProductSuggestedPrice - Product ID:", productId);
+        console.log("🔍 DEBUG - URL:", `${API_CONFIG.BASE_URL}/catalogs/products/${productId}/`);
+        
+        const response = await fetch(
+            `${API_CONFIG.BASE_URL}/catalogs/products/${productId}/`,
+            {
+                headers: {
+                    Authorization: `Token ${authToken}`,
+                    "Content-Type": "application/json",
+                },
+            }
+        );
+
+        console.log("🔍 DEBUG - Response status:", response.status);
+        console.log("🔍 DEBUG - Response ok:", response.ok);
+
+        if (!response.ok) {
+            console.log("🔍 DEBUG - Response no ok, retornando precio 0");
+            return { price: 0, source: "none" };
+        }
+
+        const product = await response.json();
+        console.log("🔍 DEBUG - Producto completo del backend:", product);
+        console.log("🔍 DEBUG - sale_price raw:", product.sale_price);
+        
+        const suggestedPrice = parseFloat(product.sale_price) || 0;
+        console.log("🔍 DEBUG - sale_price parseado:", suggestedPrice);
+
+        if (suggestedPrice > 0) {
+            console.log("🔍 DEBUG - Retornando precio sugerido:", suggestedPrice);
+            return {
+                price: suggestedPrice,
+                source: "suggested",
+                source_label: "Precio de venta sugerido",
+            };
+        }
+
+        console.log("🔍 DEBUG - Precio sugerido es 0 o inválido");
+        return { price: 0, source: "none" };
+    } catch (error) {
+        console.error("🔍 DEBUG - Error fetching suggested price:", error);
+        return { price: 0, source: "none" };
+    }
+};
+
+/**
  * Get intelligent price for a specific product
  * @param {number} productId - Product ID
  * @param {string} authToken - Authentication token
@@ -1334,7 +1441,23 @@ export const getIntelligentPrice = async (productId, authToken) => {
     }
 
     try {
-        // 1. Intentar obtener último precio de venta
+        console.log("🔍 DEBUG getIntelligentPrice - Product ID:", productId);
+        
+        // 1. NUEVO: Intentar obtener precio de venta sugerido (PRIORIDAD 1)
+        console.log("🔍 DEBUG - Paso 1: Buscando precio de venta sugerido...");
+        const suggestedPrice = await getProductSuggestedPrice(productId, authToken);
+        console.log("🔍 DEBUG - Precio sugerido encontrado:", suggestedPrice);
+        
+        if (suggestedPrice.price > 0) {
+            console.log("🔍 DEBUG - Usando precio sugerido:", suggestedPrice.price);
+            return {
+                price: suggestedPrice.price,
+                source: "suggested",
+                source_label: "Precio de venta sugerido",
+            };
+        }
+
+        // 2. Intentar obtener último precio de venta (PRIORIDAD 2)
         const lastSalePrice = await getLastSalePrice(productId, authToken);
         if (lastSalePrice.price > 0) {
             return {
@@ -1344,7 +1467,7 @@ export const getIntelligentPrice = async (productId, authToken) => {
             };
         }
 
-        // 2. Intentar obtener último precio de compra
+        // 3. Intentar obtener último precio de compra (PRIORIDAD 3)
         const lastPurchasePrice = await getLastPurchasePrice(
             productId,
             authToken
@@ -1357,7 +1480,7 @@ export const getIntelligentPrice = async (productId, authToken) => {
             };
         }
 
-        // 3. Usar precios del producto (fallback)
+        // 4. Usar precios del producto (fallback)
         return await getProductIntelligentPriceFallback(productId, authToken);
     } catch (error) {
         console.error("Error fetching intelligent price:", error);
@@ -1560,30 +1683,38 @@ export const getLastPurchasePrice = async (productId, authToken) => {
  * @returns {Promise<Object>} - Price information
  */
 const getProductIntelligentPriceFallback = async (productId, authToken) => {
-    // 1. Try last purchase price first
-    const lastPurchasePrice = await getLastPurchasePrice(productId, authToken);
-    if (lastPurchasePrice && lastPurchasePrice.price > 0) {
-        return {
-            price: lastPurchasePrice.price,
-            source: "purchase",
-            source_label: "Último precio de compra",
-        };
-    }
+    // 1. Try cost price if available (PRIORIDAD 4)
+    try {
+        const response = await fetch(
+            `${API_CONFIG.BASE_URL}/catalogs/products/${productId}/`,
+            {
+                headers: {
+                    Authorization: `Token ${authToken}`,
+                    "Content-Type": "application/json",
+                },
+            }
+        );
 
-    // 2. Fallback to last sale price
-    const lastSalePrice = await getLastSalePrice(productId, authToken);
-    if (lastSalePrice.price > 0) {
-        return {
-            price: lastSalePrice.price,
-            source: "sale",
-            source_label: "Último precio de venta",
-        };
+        if (response.ok) {
+            const product = await response.json();
+            const costPrice = parseFloat(product.cost_price) || 0;
+            
+            if (costPrice > 0) {
+                return {
+                    price: costPrice,
+                    source: "cost",
+                    source_label: "Precio de costo",
+                };
+            }
+        }
+    } catch (error) {
+        console.error("Error fetching cost price:", error);
     }
 
     return {
         price: 0,
         source: "none",
-        source_label: "No disponible",
+        source_label: "Sin precio disponible",
     };
 };
 
@@ -2097,6 +2228,7 @@ export const createSkuType = async (typeData, authToken) => {
 // Export as default
 const inventoryService = {
     getProducts,
+    getProductsByLocation,
     getStockData,
     getAllStock,
     getFilteredStock,

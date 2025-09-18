@@ -358,6 +358,12 @@ const useInventory = () => {
     // Estado adicional para mantener el total general de productos (sin filtros)
     const [totalCount, setTotalCount] = useState(0);
 
+    // 🚀 NUEVO: Filtro por sede (ubicación) para mostrar solo productos con stock en una sede específica
+    const [availableLocations, setAvailableLocations] = useState([]);
+    const [selectedStockLocation, setSelectedStockLocation] = useState(null); // locationId | null
+    const [productIdsWithStockAtLocation, setProductIdsWithStockAtLocation] =
+        useState(null); // Set<number> | null
+
     // ✨ NUEVO: Estado para almacenar TODO el stock (no solo de la página actual)
     const [allStockData, setAllStockData] = useState(() => {
         // Intentar cargar cache desde localStorage al inicializar
@@ -404,17 +410,16 @@ const useInventory = () => {
     const convertToProxyUrl = useCallback((url) => {
         if (!url) return null;
 
-        // If already a relative URL, return as is
+        // Si ya es relativa, devolverla tal cual
         if (url.startsWith("/")) return url;
 
-        // If it's an absolute URL from our backend, convert to relative
+        // Mantener URLs absolutas del backend SIN convertir (evita 404 en páginas siguientes)
         const backendBaseUrl = "https://unidental-backend.onrender.com";
         if (url.startsWith(backendBaseUrl)) {
-            // Remove the base URL, keep the path starting with /api
-            return url.replace(backendBaseUrl, "");
+            return url; // no tocar
         }
 
-        // For any other absolute URL, return as is (shouldn't happen in our case)
+        // Cualquier otra URL absoluta, devolver tal cual
         return url;
     }, []);
 
@@ -908,6 +913,8 @@ const useInventory = () => {
     );
 
     // Función para obtener productos de la API con soporte para caché y cancelación
+    const lastExplicitPageRef = useRef(null);
+
     const fetchProducts = useCallback(
         async (url = null, params = {}, forceRefresh = false) => {
             console.log(`🚀 fetchProducts llamado con:`, {
@@ -939,7 +946,9 @@ const useInventory = () => {
                 !hasPageParam && // NO usar cache si se solicita una página específica
                 !hasFilters && // NO usar cache si hay filtros activos
                 cacheProductosData.isLoaded &&
-                cacheProductosData.products.length > 0
+                cacheProductosData.products.length > 0 &&
+                // Evitar usar el cache de página 1 si venimos de una navegación explícita a otra página
+                !(lastExplicitPageRef.current && lastExplicitPageRef.current > 1)
             ) {
                 console.log(
                     "💾 Usando cache persistente de productos para página 1 (sin filtros)"
@@ -994,7 +1003,8 @@ const useInventory = () => {
             if (
                 cachedData &&
                 now - cachedData.timestamp < CACHE_DURATION &&
-                !hasPageParam
+                !hasPageParam &&
+                !(lastExplicitPageRef.current && lastExplicitPageRef.current > 1)
             ) {
                 console.log("💾 Usando datos en caché temporal para", params);
                 const products = cachedData.data.results || [];
@@ -1015,22 +1025,72 @@ const useInventory = () => {
                         : parseInt(cachedData.data.count, 10) || 0
                 );
 
-                // Extraer número de página
-                let currentPageValue = 1;
-                try {
-                    if (params.page) {
+                // Importante: si no se solicitó una página específica, no forzar currentPage a 1
+                // para evitar "rebotes" al navegar a la última página.
+                // Solo actualizamos el total de páginas cuando se navega con page explícito
+                if (hasPageParam) {
+                    let currentPageValue = 1;
+                    try {
                         currentPageValue = parseInt(params.page, 10);
-                    }
-                } catch (urlError) {
-                    // Ignorar errores de análisis de URL
+                    } catch {}
+                    pagination.updatePaginationState(currentPageValue, pageCount);
                 }
-
-                // Actualizar el estado de paginación usando el hook
-                pagination.updatePaginationState(currentPageValue, pageCount);
 
                 // ✨ YA NO cargar stock aquí - usamos el stock global
 
                 return;
+            }
+
+            // 🔎 Filtro por sede (Norte/Sur): si está activo, realizar paginación local con productsCache
+            if (selectedStockLocation) {
+                try {
+                    setIsLoadingProducts(true);
+
+                    const searchTerm = (() => {
+                        if (skuFilter && skuFilter.length > 0) return skuFilter;
+                        if (nameFilter && nameFilter.length > 0) return nameFilter;
+                        return undefined;
+                    })();
+
+                    const pageToRequest = params.page
+                        ? parseInt(params.page, 10)
+                        : pagination.currentPage || 1;
+
+                    const data = await inventoryService.getProductsByLocation(
+                        {
+                            locationId: selectedStockLocation,
+                            hasStock: true,
+                            search: searchTerm,
+                            page: pageToRequest,
+                        },
+                        authToken,
+                        signal
+                    );
+                    if (!data) return;
+
+                    const results = data.results || [];
+                    setProducts(results);
+                    setProductsWithPlaceholder(
+                        createProductsWithPlaceholder(results)
+                    );
+
+                    const total =
+                        typeof data.count === "number"
+                            ? data.count
+                            : parseInt(data.count, 10) || 0;
+                    setCount(total);
+                    setTotalCount(total);
+
+                    const pageCount = Math.max(
+                        1,
+                        Math.ceil(total / ITEMS_PER_PAGE)
+                    );
+                    pagination.updatePaginationState(pageToRequest, pageCount);
+                    lastExplicitPageRef.current = null;
+                } finally {
+                    setIsLoadingProducts(false);
+                }
+                return; // Evitar llamada al API cuando el filtro por sede está activo
             }
 
             setIsLoadingProducts(true);
@@ -1042,6 +1102,9 @@ const useInventory = () => {
                 console.log(
                     `📡 URL que se construirá: /api/catalogs/products/?page=${params.page}`
                 );
+                try {
+                    lastExplicitPageRef.current = parseInt(params.page, 10);
+                } catch {}
             } else if (hasFilters) {
                 console.log(`🔍 Solicitando productos filtrados al servidor`);
                 console.log(`📡 Parámetros de filtro:`, params);
@@ -1162,6 +1225,9 @@ const useInventory = () => {
 
                 // Actualizar el estado de paginación usando el hook
                 pagination.updatePaginationState(currentPageValue, pageCount);
+
+                // ✅ Petición con éxito, limpiar bandera de navegación explícita
+                lastExplicitPageRef.current = null;
 
                 // Actualizar la caché
                 cache.current.set(cacheKey, {
@@ -1333,6 +1399,8 @@ const useInventory = () => {
                 setCount(skuSearchResults.data.length);
 
                 // No hacer llamada al API
+                // Petición con éxito, limpiar bandera de navegación explícita
+                lastExplicitPageRef.current = null;
                 return;
             }
 
@@ -1461,6 +1529,52 @@ const useInventory = () => {
                 return;
             }
 
+            // 📍 Filtro por sede (Norte/Sur) con paginación local cuando está activo
+            if (selectedStockLocation) {
+                try {
+                    setIsLoadingProducts(true);
+                    const searchTerm = (() => {
+                        if (skuFilter && skuFilter.length > 0) return skuFilter;
+                        if (nameFilter && nameFilter.length > 0) return nameFilter;
+                        return undefined;
+                    })();
+                    const pageToRequest = pagination.currentPage || 1;
+                    const data = await inventoryService.getProductsByLocation(
+                        {
+                            locationId: selectedStockLocation,
+                            hasStock: true,
+                            search: searchTerm,
+                            page: pageToRequest,
+                        },
+                        authToken
+                    );
+                    if (!data) return;
+
+                    const results = data.results || [];
+                    setProducts(results);
+                    setProductsWithPlaceholder(
+                        createProductsWithPlaceholder(results)
+                    );
+
+                    const total =
+                        typeof data.count === "number"
+                            ? data.count
+                            : parseInt(data.count, 10) || 0;
+                    setCount(total);
+                    setTotalCount(total);
+
+                    const pageCount = Math.max(
+                        1,
+                        Math.ceil(total / ITEMS_PER_PAGE)
+                    );
+                    pagination.updatePaginationState(pageToRequest, pageCount);
+                    lastExplicitPageRef.current = null;
+                } finally {
+                    setIsLoadingProducts(false);
+                }
+                return; // Evitar llamada al API cuando el filtro por sede está activo
+            }
+
             // Crear objeto de parámetros para la API
             const params = {
                 page: pagination.currentPage,
@@ -1572,6 +1686,7 @@ const useInventory = () => {
                                 ? data.count
                                 : parseInt(data.count, 10) || 0,
                         lastFetch: Date.now(),
+                        isLoaded: true,
                     };
                     setCacheProductosData(nuevoCacheProductos);
                     guardarCacheProductosEnStorage(nuevoCacheProductos);
@@ -1613,6 +1728,9 @@ const useInventory = () => {
         isCacheInitialized, // ✨ NUEVO: Dependencia del cache
         productsCache, // ✨ NUEVO: Dependencia del cache
         loadAllProducts, // ✨ NUEVO: Dependencia de la función de carga
+        // 🚀 NUEVO: re-ejecutar cuando cambie el filtro de sede o sus IDs
+        selectedStockLocation,
+        productIdsWithStockAtLocation,
     ]);
 
     // Efecto para combinar productos con datos de stock de forma optimizada
@@ -1682,6 +1800,102 @@ const useInventory = () => {
         isStockFullyLoaded, // 🔧 NUEVO: También reaccionar a cambios de stock completado
         isPurchasePricesLoading, // 🔧 NUEVO: Y a cambios en carga de precios
     ]);
+
+    // 🚀 NUEVO: Cargar productos con stock en la sede seleccionada (solo IDs)
+    useEffect(() => {
+        let cancelled = false;
+        const loadProductIdsForLocation = async () => {
+            if (!authToken) return;
+            if (!selectedStockLocation) {
+                setProductIdsWithStockAtLocation(null);
+                return;
+            }
+
+            try {
+                console.log("🏁 [Sede] Cargando productos con stock para sede:", selectedStockLocation);
+                const collectedIds = new Set();
+
+                const processPage = (pageData) => {
+                    (pageData?.results || []).forEach((item) => {
+                        const qty =
+                            typeof item.quantity === "number"
+                                ? item.quantity
+                                : parseInt(item.quantity, 10) || 0;
+                        if (qty > 0 && item.product) {
+                            collectedIds.add(item.product);
+                        }
+                    });
+                };
+
+                // Primera página
+                let data = await inventoryService.getFilteredStock(
+                    { location: selectedStockLocation, page_size: 100 },
+                    authToken
+                );
+                if (data) {
+                    processPage(data);
+                    console.log(
+                        "📥 [Sede] Página 1 cargada:",
+                        data.results ? data.results.length : 0
+                    );
+                }
+
+                // Siguientes páginas
+                let nextUrl = data?.next;
+                while (nextUrl && !cancelled) {
+                    const url = convertToProxyUrl(nextUrl);
+                    const resp = await fetch(url, {
+                        headers: {
+                            Authorization: `Token ${authToken}`,
+                            "Content-Type": "application/json",
+                        },
+                    });
+                    if (!resp.ok) break;
+                    const page = await resp.json();
+                    processPage(page);
+                    nextUrl = page.next;
+                }
+
+                if (!cancelled) {
+                    console.log(
+                        "✅ [Sede] Total productos con stock en sede:",
+                        collectedIds.size
+                    );
+                    setProductIdsWithStockAtLocation(collectedIds);
+                }
+            } catch (e) {
+                if (!cancelled) {
+                    console.error(
+                        "Error loading product IDs for location filter:",
+                        e
+                    );
+                    setProductIdsWithStockAtLocation(new Set());
+                }
+            }
+        };
+
+        loadProductIdsForLocation();
+        return () => {
+            cancelled = true;
+        };
+    }, [selectedStockLocation, authToken, convertToProxyUrl]);
+
+    // 🚀 NUEVO: Cargar catálogo de sedes (ubicaciones) una sola vez
+    const loadLocations = useCallback(async () => {
+        if (!authToken) return;
+        try {
+            const locations = await inventoryService.getLocations(authToken);
+            setAvailableLocations(Array.isArray(locations) ? locations : []);
+        } catch (e) {
+            console.error("Error loading locations:", e);
+            setAvailableLocations([]);
+        }
+    }, [authToken]);
+
+    // Cargar ubicaciones al inicio
+    useEffect(() => {
+        loadLocations();
+    }, [loadLocations]);
 
     // 🚀 NUEVO: Efecto para cargar precios cuando cambian los productos
     useEffect(() => {
@@ -1973,11 +2187,17 @@ const useInventory = () => {
                     cacheProductosData.count
                 );
 
-                pagination.updatePaginationState(1, pageCount);
-
-                console.log(
-                    `📄 Mostrando página 1 de ${pageCount} (${pageProducts.length} productos) desde cache sin filtros`
-                );
+                // ⚠️ No forzar currentPage a 1 si hubo navegación explícita a otra página
+                if (!(lastExplicitPageRef.current && lastExplicitPageRef.current > 1)) {
+                    pagination.updatePaginationState(1, pageCount);
+                    console.log(
+                        `📄 Mostrando página 1 de ${pageCount} (${pageProducts.length} productos) desde cache sin filtros`
+                    );
+                } else {
+                    console.log(
+                        `⏭️ Omitiendo forzar página 1 por navegación explícita previa a ${lastExplicitPageRef.current}`
+                    );
+                }
                 return;
             }
 
@@ -2225,6 +2445,11 @@ const useInventory = () => {
         selectedCategories,
         availableCategories,
         updateSelectedCategories,
+
+        // Filtro por sede
+        availableLocations,
+        selectedStockLocation,
+        setSelectedStockLocation,
 
         // Reseteo de filtros
         resetAllFilters,

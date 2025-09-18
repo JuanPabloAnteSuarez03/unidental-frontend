@@ -5,6 +5,7 @@ import InventoryHeader from "../components/Inventory/InventoryHeader";
 import ErrorMessage from "../components/Inventory/ErrorMessage";
 import InventoryFilters from "../components/Inventory/InventoryFilters";
 import InventoryContent from "../components/Inventory/InventoryContent";
+import InventoryContentByLocation from "../components/Inventory/InventoryContentByLocation";
 import InventoryStyles from "../components/Inventory/InventoryStyles";
 import Modal from "../components/Common/Modal";
 import ProductSearchSelector from "../components/Common/ProductSearchSelector";
@@ -21,6 +22,7 @@ const InventoryPage = () => {
         isLoading,
         isStockLoading, // ✨ Nuevo estado para carga de stock separado
         isPurchasePricesLoading, // 🚀 NUEVO: Estado para carga de precios de compra
+        cachePreciosCompraData,
         error,
         goToNextPage,
         goToPrevPage,
@@ -42,6 +44,11 @@ const InventoryPage = () => {
         selectedCategories,
         availableCategories,
         updateSelectedCategories,
+
+        // 🚀 NUEVO: Filtro por sede
+        availableLocations,
+        selectedStockLocation,
+        setSelectedStockLocation,
 
         // Reseteo de filtros
         resetAllFilters,
@@ -164,6 +171,7 @@ const InventoryPage = () => {
                     <label>Producto origen:</label>
                     <ProductSearchSelector
                         key={refreshKey + "-from"}
+                        showSelectedProduct={false}
                         refreshKey={refreshKey}
                         onProductSelected={(prod) =>
                             setConversionForm((f) => ({
@@ -229,6 +237,7 @@ const InventoryPage = () => {
                     <label style={{ marginTop: 12 }}>Producto destino:</label>
                     <ProductSearchSelector
                         key={refreshKey + "-to"}
+                        showSelectedProduct={false}
                         refreshKey={refreshKey}
                         onProductSelected={(prod) =>
                             setConversionForm((f) => ({
@@ -470,24 +479,36 @@ const InventoryPage = () => {
                     skuFilter={skuFilter} // ✨ NUEVO: Pasar skuFilter
                     selectedCategories={selectedCategories}
                     availableCategories={availableCategories}
+                    availableLocations={availableLocations}
+                    selectedStockLocation={selectedStockLocation}
+                    setSelectedStockLocation={setSelectedStockLocation}
                 />
 
                 {/* Tabla de inventario y paginación */}
-                <InventoryContent
-                    filteredProducts={filteredProducts}
-                    isLoading={isLoading}
-                    isStockLoading={isStockLoading}
-                    isPurchasePricesLoading={isPurchasePricesLoading}
-                    totalGeneralProducts={totalGeneralProducts}
-                    currentPage={currentPage}
-                    totalPages={totalPages}
-                    goToPage={goToPage}
-                    goToNextPage={goToNextPage}
-                    goToPrevPage={goToPrevPage}
-                    hasNextPage={hasNextPage}
-                    hasPrevPage={hasPrevPage}
-                    error={error}
-                />
+                {selectedStockLocation ? (
+                    <InventoryContentByLocation
+                        locationId={selectedStockLocation}
+                        nameFilter={nameFilter}
+                        skuFilter={skuFilter}
+                        purchasePricesMap={cachePreciosCompraData?.pricesData || {}}
+                    />
+                ) : (
+                    <InventoryContent
+                        filteredProducts={filteredProducts}
+                        isLoading={isLoading}
+                        isStockLoading={isStockLoading}
+                        isPurchasePricesLoading={isPurchasePricesLoading}
+                        totalGeneralProducts={totalGeneralProducts}
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        goToPage={goToPage}
+                        goToNextPage={goToNextPage}
+                        goToPrevPage={goToPrevPage}
+                        hasNextPage={hasNextPage}
+                        hasPrevPage={hasPrevPage}
+                        error={error}
+                    />
+                )}
             </div>
         </>
     );

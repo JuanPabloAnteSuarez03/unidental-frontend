@@ -11,10 +11,6 @@ const Pagination = ({
     const [goToPage, setGoToPage] = useState("");
 
     // Validaciones básicas
-    if (totalPages <= 1) {
-        return null;
-    }
-
     if (typeof onPageChange !== "function") {
         console.error("❌ Pagination: onPageChange debe ser una función");
         return null;

@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 function LoginForm({ onLoginSubmit, error, loading }) {
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
 
     const handleSubmit = (event) => {
         event.preventDefault();
@@ -100,16 +101,39 @@ function LoginForm({ onLoginSubmit, error, loading }) {
                 <label htmlFor="password" style={labelStyle}>
                     Contraseña
                 </label>
-                <input
-                    type="password"
-                    name="password"
-                    id="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    style={inputStyle}
-                    disabled={loading}
-                />
+                <div style={{ position: "relative" }}>
+                    <input
+                        type={showPassword ? "text" : "password"}
+                        name="password"
+                        id="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                        style={{ ...inputStyle, paddingRight: 42 }}
+                        disabled={loading}
+                    />
+                    <button
+                        type="button"
+                        onClick={() => setShowPassword((v) => !v)}
+                        aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                        title={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                        style={{
+                            position: "absolute",
+                            right: 8,
+                            top: "50%",
+                            transform: "translateY(-50%)",
+                            background: "transparent",
+                            border: "none",
+                            cursor: "pointer",
+                            color: "#6c757d",
+                            padding: 6,
+                            fontSize: 16,
+                        }}
+                        disabled={loading}
+                    >
+                        {showPassword ? "🙈" : "👁️"}
+                    </button>
+                </div>
             </div>
 
             {error && (
