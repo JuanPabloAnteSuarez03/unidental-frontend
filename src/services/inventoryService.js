@@ -76,6 +76,60 @@ export const getProducts = async (params = {}, authToken, signal) => {
 };
 
 /**
+ * Get products by location (backend-paginated)
+ * @param {Object} opts
+ * @param {number} opts.locationId - Required location id
+ * @param {boolean} [opts.hasStock=true] - Only items with stock if true
+ * @param {string} [opts.search] - search by name/sku/barcode
+ * @param {number} [opts.page=1] - page number
+ * @param {string} authToken
+ * @param {AbortSignal} signal
+ */
+export const getProductsByLocation = async (
+    { locationId, hasStock = true, search, page = 1 } = {},
+    authToken,
+    signal
+) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+    if (!locationId) {
+        throw new Error("locationId is required");
+    }
+
+    const params = new URLSearchParams();
+    params.set("location", String(locationId));
+    params.set("page", String(page));
+    if (search) params.set("search", search);
+    if (hasStock === false) params.set("has_stock", "false");
+
+    const url = `${API_CONFIG.BASE_URL}/catalogs/products/by-location/?${params.toString()}`;
+
+    try {
+        const response = await fetch(url, {
+            headers: {
+                Authorization: `Token ${authToken}`,
+                "Content-Type": "application/json",
+            },
+            signal,
+        });
+
+        if (!response.ok) {
+            throw new Error(`Error ${response.status}: ${response.statusText}`);
+        }
+
+        return await response.json();
+    } catch (error) {
+        if (error.name === "AbortError") {
+            console.log("Request was aborted");
+            return null;
+        }
+        console.error("Error fetching products by location:", error);
+        throw error;
+    }
+};
+
+/**
  * ✨ OPTIMIZADO: Get stock data for products with better batch handling
  * @param {Array} productIds - Optional array of product IDs to filter
  * @param {string} authToken - Authentication token
@@ -2174,6 +2228,7 @@ export const createSkuType = async (typeData, authToken) => {
 // Export as default
 const inventoryService = {
     getProducts,
+    getProductsByLocation,
     getStockData,
     getAllStock,
     getFilteredStock,
