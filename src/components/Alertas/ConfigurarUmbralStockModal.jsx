@@ -252,7 +252,7 @@ const ConfigurarUmbralStockModal = ({ isOpen, onClose }) => {
                             placeholder="Buscar producto por nombre, SKU o código..."
                             showSelectedProduct={true}
                             allowClearSelection={true}
-                            maxResults={10}
+                            maxResults={50}
                         />
                     </div>
                     {/* Configuración de umbral */}

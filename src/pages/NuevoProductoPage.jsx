@@ -1277,7 +1277,7 @@ const NuevoProductoPage = () => {
                   onProductSelected={prod => setConversionForm(f => ({ ...f, to_product: prod }))}
                   placeholder="Buscar producto destino por nombre, SKU o código..."
                   minSearchLength={2}
-                  maxResults={10}
+                  maxResults={50}
                 />
                 {conversionForm.to_product && (
                   <div style={{ marginTop: 8, color: '#2c3e50', border: '1px solid #2ecc71', borderRadius: 8, padding: 8, background: '#eafaf1', display: 'flex', alignItems: 'center', gap: 8 }}>

@@ -571,7 +571,7 @@ const RequestTransferModalV2 = ({
                                     initialProduct={selectedProduct}
                                     showSelectedProduct={true}
                                     allowClearSelection={true}
-                                    maxResults={10}
+                                    maxResults={50}
                                 />
                             </div>
                         </div>

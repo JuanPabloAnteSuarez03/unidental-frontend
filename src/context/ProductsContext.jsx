@@ -208,13 +208,6 @@ export const ProductsProvider = ({ children }) => {
 
             const term = searchTerm.toLowerCase().trim();
 
-            // ✨ OPTIMIZACIÓN: Limitar la búsqueda a términos de al menos 3 caracteres
-            // para búsquedas generales (excepto SKUs específicos que pueden ser cortos)
-            if (term.length < 3 && !term.includes("-")) {
-                console.log("Search term too short, returning limited results");
-                return productsCache.slice(0, 20); // Mostrar solo primeros 20 como muestra
-            }
-
             const results = productsCache.filter((product) => {
                 // ✨ OPTIMIZACIÓN: Primero verificar el SKU que es más rápido
                 const sku = (product.sku || "").toLowerCase();
