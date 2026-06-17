@@ -2,12 +2,8 @@
 
 // Configuración centralizada para endpoints API
 const API_CONFIG = {
-    // En desarrollo, usar el proxy de Vite (/api)
-    // En producción, usar la URL completa
-    BASE_URL: import.meta.env.DEV
-        ? "/api"
-        : import.meta.env.VITE_API_URL ||
-          "https://unidental-backend.onrender.com/api",
+    // Usar URL directa del backend en producción
+    BASE_URL: "https://unidental-backend.onrender.com/api",
 
     // Endpoints específicos
     ENDPOINTS: {
@@ -17,7 +13,8 @@ const API_CONFIG = {
         USER_PROFILE: "/auth/users/me/",
         RESET_PASSWORD: "/auth/users/reset_password/",
         RESET_PASSWORD_CONFIRM: "/auth/users/reset_password_confirm/",
-        USERS: "/auth/users/", // <-- endpoint para crear usuarios
+        USERS: "/auth/users/", // <-- endpoint para crear usuarios normales
+        ADMIN_CREATE: "/core/users/admin-create/", // <-- endpoint para crear usuarios admin
 
         // Inventario
         INVENTORY: "/catalogs/products/",
@@ -30,6 +27,9 @@ const API_CONFIG = {
         CATEGORIES: "/catalogs/categories/",
         INVENTORY_MOVEMENTS: "/inventory/movements/",
         LOCATIONS: "/inventory/locations/",
+
+        // Cajas de efectivo
+        CASHES: "/cash/cashes/",
 
         // Endpoints para SKU
         SKU_GENERATE: "/catalogs/sku/generate/",
@@ -86,6 +86,10 @@ const API_CONFIG = {
 
         // Compras - Órdenes de compra
         PURCHASE_ORDERS: "/purchases/orders/",
+        PURCHASE_ITEMS: "/purchases/items/",
+
+        // Proveedores - Opciones de compra
+        PURCHASE_OPTIONS: "/suppliers/purchase-options/",
     },
 };
 

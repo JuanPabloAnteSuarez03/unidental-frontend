@@ -15,9 +15,11 @@ const usePagination = (fetchProducts) => {
      * @param {number} pages - Total de páginas
      */
     const updatePaginationState = useCallback((page, pages) => {
-        console.log(`📄 Actualizando paginación: página ${page} de ${pages}`);
-        setCurrentPage(page);
-        setTotalPages(pages);
+        const safePage = Math.max(1, Number.isFinite(page) ? page : 1);
+        const safePages = Math.max(1, Number.isFinite(pages) ? pages : 1);
+        console.log(`📄 Actualizando paginación: página ${safePage} de ${safePages}`);
+        setCurrentPage(safePage);
+        setTotalPages(safePages);
     }, []);
 
     /**

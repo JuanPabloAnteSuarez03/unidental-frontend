@@ -1242,11 +1242,21 @@ const NuevoProductoPage = () => {
               <p>Por ejemplo: de caja a unidad, blister, etc.</p>
               <button
                 onClick={async () => {
+                  try {
+                    if (window?.localStorage) {
+                      // limpiar cache persistente de productos del contexto
+                      localStorage.removeItem("products_cache_data");
+                    }
                   if (typeof refrescarCacheInventario === 'function') {
                     await refrescarCacheInventario();
+                    }
                     setRefreshMsg("Productos actualizados");
                     setRefreshKey(k => k + 1);
                     setTimeout(() => setRefreshMsg(""), 2000);
+                  } catch (e) {
+                    console.error('Error refrescando productos:', e);
+                    setRefreshMsg("Error al actualizar productos");
+                    setTimeout(() => setRefreshMsg(""), 2500);
                   }
                 }}
                 style={{ marginBottom: 10, background: '#00b894', color: 'white', border: 'none', borderRadius: 6, padding: '6px 16px', fontWeight: 600, cursor: 'pointer' }}
@@ -1262,6 +1272,7 @@ const NuevoProductoPage = () => {
                 <label>Producto destino:</label>
                 <ProductSearchSelector
                   key={refreshKey + '-to'}
+                  showSelectedProduct={false}
                   refreshKey={refreshKey}
                   onProductSelected={prod => setConversionForm(f => ({ ...f, to_product: prod }))}
                   placeholder="Buscar producto destino por nombre, SKU o código..."

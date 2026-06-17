@@ -58,6 +58,17 @@ const useProductSearch = () => {
             updateStockAfterSale(soldItems);
     }, [updateStockAfterSale]);
 
+    // Forzar refresco del cache de productos desde el contexto
+    const refreshProducts = useCallback(async () => {
+        try {
+            if (typeof window !== "undefined" && window.localStorage) {
+                // limpiar cache persistente para forzar fetch fresco
+                window.localStorage.removeItem("products_cache_data");
+            }
+        } catch {}
+        return loadAllProducts(true);
+    }, [loadAllProducts]);
+
     return {
         // Estado de búsqueda
         searchTerm,
@@ -70,6 +81,7 @@ const useProductSearch = () => {
         handleSearch,
         resetSearch,
         updateProductsStock,
+        refreshProducts,
 
         // Info del cache del contexto
         getCacheInfo,

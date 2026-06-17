@@ -111,6 +111,8 @@ const ConfigurarUmbralModal = ({
         try {
             const totalDays = getDaysFromUmbral();
 
+
+
             const response = await fetch(
                 `https://unidental-backend.onrender.com/api/catalogs/products/${selectedProduct.id}/`,
                 {

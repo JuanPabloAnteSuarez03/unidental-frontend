@@ -98,32 +98,15 @@ const InventoryHeader = ({
                                 color: "white",
                                 border: "none",
                                 borderRadius: "6px",
-                                cursor: isLoading ? "not-allowed" : "pointer",
                                 fontSize: "14px",
-                                fontWeight: "600",
+                                fontWeight: "500",
+                                cursor: isLoading ? "not-allowed" : "pointer",
                                 opacity: isLoading ? 0.6 : 1,
                                 transition: "all 0.2s ease",
                             }}
-                            title="Actualizar datos de inventario desde el servidor"
-                            onMouseEnter={(e) => {
-                                if (!isLoading) {
-                                    e.target.style.backgroundColor = "#0056b3";
-                                }
-                            }}
-                            onMouseLeave={(e) => {
-                                if (!isLoading) {
-                                    e.target.style.backgroundColor = "#007bff";
-                                }
-                            }}
+                            title="Actualizar datos del inventario"
                         >
-                            <i
-                                className={`fas ${
-                                    isLoading
-                                        ? "fa-spinner fa-spin"
-                                        : "fa-sync-alt"
-                                }`}
-                            ></i>
-                            {isLoading ? "Actualizando..." : "Actualizar"}
+                            🔄 Actualizar
                         </button>
                     )}
                 </div>

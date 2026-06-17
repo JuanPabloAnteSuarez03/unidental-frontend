@@ -66,7 +66,11 @@ const MultipleProductsMovementForm = ({
 
     const getTotalUnits = () => {
         return multipleProducts.reduce((sum, p) => {
-            if (p.requiresBatchControl && p.batchesData.length > 0) {
+            if (
+                p.requiresBatchControl &&
+                p.batchesData &&
+                p.batchesData.length > 0
+            ) {
                 // Para productos con lotes, sumar las cantidades de todos los lotes
                 const batchesTotal = p.batchesData.reduce((batchSum, batch) => {
                     const quantity = parseInt(batch.quantity || 0);
@@ -82,7 +86,10 @@ const MultipleProductsMovementForm = ({
     };
 
     const getTotalBatches = () =>
-        multipleProducts.reduce((sum, p) => sum + p.batchesData.length, 0);
+        multipleProducts.reduce(
+            (sum, p) => sum + (p.batchesData ? p.batchesData.length : 0),
+            0
+        );
 
     return (
         <div

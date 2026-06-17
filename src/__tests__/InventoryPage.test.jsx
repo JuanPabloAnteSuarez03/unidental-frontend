@@ -10,6 +10,15 @@ jest.mock("../hooks/useInventory", () => ({
     default: jest.fn(),
 }));
 
+// Mock para useAuth
+jest.mock("../context/AuthContext", () => ({
+    useAuth: jest.fn(() => ({
+        authToken: "mock-auth-token",
+        currentUser: { id: 1, name: "Test User" },
+        isLoading: false,
+    })),
+}));
+
 jest.mock("../components/SearchFilters/SearchFiltersContainer", () => {
     return {
         __esModule: true,
