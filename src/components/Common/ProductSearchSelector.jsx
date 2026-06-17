@@ -7,7 +7,7 @@ const ProductSearchSelector = ({
     placeholder = "Buscar producto por nombre, SKU o código...",
     showSelectedProduct = true,
     allowClearSelection = true,
-    maxResults = 20,
+    maxResults = 50,
     minSearchLength = 2,
     debounceMs = 300,
     disabled = false,
@@ -43,16 +43,17 @@ const ProductSearchSelector = ({
     const inputRef = useRef(null);
     const debounceTimerRef = useRef(null);
 
-    // Effect para establecer producto inicial o limpiar selección
+    // Effect para establecer producto inicial
     useEffect(() => {
-        setSelectedProduct(initialProduct);
-        if (!initialProduct) {
+        if (initialProduct) {
+            setSelectedProduct(initialProduct);
+        } else {
+            setSelectedProduct(null);
             setInputValue("");
             setShowDropdown(false);
             setSelectedIndex(-1);
-            resetSearch();
         }
-    }, [initialProduct, resetSearch]);
+    }, [initialProduct]);
 
     // Función de debounce para la búsqueda
     const debouncedSearch = useCallback((term) => {
@@ -551,4 +552,4 @@ const ProductSearchSelector = ({
     );
 };
 
-export default ProductSearchSelector; 
+export default ProductSearchSelector;
