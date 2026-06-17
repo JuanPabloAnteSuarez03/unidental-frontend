@@ -479,6 +479,7 @@ export const PAYMENT_FREQUENCIES = {
 export const PAYMENT_METHODS = {
     cash: { value: 'cash', label: 'Efectivo', icon: '💵' },
     card: { value: 'card', label: 'Tarjeta', icon: '💳' },
+    transfer: { value: 'transfer', label: 'Transferencia', icon: '💸' },
     credit: { value: 'credit', label: 'Crédito', icon: '📝' }
 };
 

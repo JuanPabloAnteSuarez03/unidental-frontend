@@ -43,12 +43,16 @@ const ProductSearchSelector = ({
     const inputRef = useRef(null);
     const debounceTimerRef = useRef(null);
 
-    // Effect para establecer producto inicial
+    // Effect para establecer producto inicial o limpiar selección
     useEffect(() => {
-        if (initialProduct) {
-            setSelectedProduct(initialProduct);
+        setSelectedProduct(initialProduct);
+        if (!initialProduct) {
+            setInputValue("");
+            setShowDropdown(false);
+            setSelectedIndex(-1);
+            resetSearch();
         }
-    }, [initialProduct]);
+    }, [initialProduct, resetSearch]);
 
     // Función de debounce para la búsqueda
     const debouncedSearch = useCallback((term) => {
