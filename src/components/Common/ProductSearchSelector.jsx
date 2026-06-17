@@ -552,4 +552,4 @@ const ProductSearchSelector = ({
     );
 };
 
-export default ProductSearchSelector; 
+export default ProductSearchSelector;
