@@ -8,6 +8,10 @@ const InventoryFilters = ({
     skuFilter, // ✨ NUEVO: Agregar skuFilter prop
     selectedCategories,
     availableCategories,
+    // 🚀 NUEVO: props de sede
+    availableLocations = [],
+    selectedStockLocation = null,
+    setSelectedStockLocation = () => {},
 }) => {
     return (
         <div
@@ -59,6 +63,44 @@ const InventoryFilters = ({
                 availableCategories={availableCategories}
                 isCategoriesLoading={false}
             />
+
+            {/* 🚀 NUEVO: Filtro por sede Norte/Sur */}
+            <div style={{ marginTop: 12 }}>
+                <label
+                    htmlFor="location-filter"
+                    style={{
+                        display: "block",
+                        marginBottom: 6,
+                        fontSize: 14,
+                        fontWeight: 600,
+                        color: "#2c3e50",
+                    }}
+                >
+                    Filtrar por sede (stock):
+                </label>
+                <select
+                    id="location-filter"
+                    value={selectedStockLocation || ""}
+                    onChange={(e) => {
+                        const value = e.target.value;
+                        setSelectedStockLocation(value ? Number(value) : null);
+                    }}
+                    style={{
+                        padding: "8px 12px",
+                        border: "1px solid #dee2e6",
+                        borderRadius: 6,
+                        minWidth: 240,
+                        background: "#fff",
+                    }}
+                >
+                    <option value="">Todas las sedes</option>
+                    {availableLocations.map((loc) => (
+                        <option key={loc.id} value={loc.id}>
+                            {loc.name}
+                        </option>
+                    ))}
+                </select>
+            </div>
         </div>
     );
 };

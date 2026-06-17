@@ -1,37 +1,34 @@
 import React from "react";
 import { companyConfig } from "../../config/company";
 
-const PurchaseOrderModal = ({
+const QuoteModal = ({
     isOpen,
     onClose,
-    orderData,
-    supplierData,
-    locationData,
-    orderItems,
+    saleItems,
     totals,
-    notes,
+    selectedLocation,
+    selectedCustomer,
 }) => {
     if (!isOpen) return null;
 
-    // Función para generar número de orden formateado
-    const getOrderNumber = (orderId) => {
-        const paddedId = String(orderId).padStart(6, "0");
-        return `${companyConfig.orderPrefix || "OC"}-${paddedId}`;
+    // Función para generar número de cotización formateado
+    const getQuoteNumber = () => {
+        const timestamp = Date.now();
+        const paddedId = String(timestamp).slice(-6);
+        return `${companyConfig.receiptPrefix || "COT"}-${paddedId}`;
     };
 
     const handlePrint = () => {
-        // Crear una nueva ventana con solo el contenido de la orden
+        // Crear una nueva ventana con solo el contenido de la cotización
         const printWindow = window.open("", "_blank");
-        const orderContent = document.getElementById(
-            "purchase-order-content"
-        ).innerHTML;
+        const quoteContent = document.getElementById("quote-content").innerHTML;
 
         printWindow.document.write(`
             <!DOCTYPE html>
             <html>
             <head>
                 <meta charset="utf-8">
-                <title>Orden de Compra ${getOrderNumber(orderData.id)} - ${
+                <title>Cotización ${getQuoteNumber()} - ${
             companyConfig.name
         }</title>
                 <style>
@@ -50,7 +47,7 @@ const PurchaseOrderModal = ({
                         padding: 20px;
                     }
                     
-                    .order-header-grid {
+                    .quote-header-grid {
                         display: grid;
                         grid-template-columns: 1fr 1fr;
                         gap: 30px;
@@ -59,7 +56,7 @@ const PurchaseOrderModal = ({
                         border-bottom: 2px solid #2c3e50;
                     }
                     
-                    .order-totals-grid {
+                    .quote-totals-grid {
                         display: grid;
                         grid-template-columns: 1fr 300px;
                         gap: 30px;
@@ -162,11 +159,11 @@ const PurchaseOrderModal = ({
                             padding: 0;
                         }
                         
-                        .order-header-grid {
+                        .quote-header-grid {
                             break-inside: avoid;
                         }
                         
-                        .order-totals-grid {
+                        .quote-totals-grid {
                             grid-template-columns: 1fr;
                         }
                         
@@ -181,7 +178,7 @@ const PurchaseOrderModal = ({
                 </style>
             </head>
             <body>
-                ${orderContent}
+                ${quoteContent}
             </body>
             </html>
         `);
@@ -262,7 +259,7 @@ const PurchaseOrderModal = ({
                                 color: "#2c3e50",
                             }}
                         >
-                            📋 Orden de Compra
+                            📋 Cotización
                         </h2>
                         <div style={{ display: "flex", gap: "10px" }}>
                             <button
@@ -277,7 +274,7 @@ const PurchaseOrderModal = ({
                                     fontSize: "14px",
                                     fontWeight: "500",
                                 }}
-                                title="Imprimir orden de compra"
+                                title="Imprimir cotización"
                             >
                                 🖨️ Imprimir
                             </button>
@@ -299,18 +296,18 @@ const PurchaseOrderModal = ({
                         </div>
                     </div>
 
-                    {/* Content - Purchase Order */}
+                    {/* Content - Quote */}
                     <div
                         style={{
                             padding: "40px",
                             overflow: "auto",
                             maxHeight: "calc(90vh - 80px)",
                         }}
-                        id="purchase-order-content"
+                        id="quote-content"
                     >
-                        {/* Header de la Orden */}
+                        {/* Header de la Cotización */}
                         <div
-                            className="order-header-grid"
+                            className="quote-header-grid"
                             style={{
                                 display: "grid",
                                 gridTemplateColumns: "1fr 1fr",
@@ -369,7 +366,7 @@ const PurchaseOrderModal = ({
                                             "{companyConfig.slogan}"
                                         </div>
                                     )}
-                                    {locationData && (
+                                    {selectedLocation && (
                                         <div
                                             style={{
                                                 marginTop: "10px",
@@ -380,13 +377,14 @@ const PurchaseOrderModal = ({
                                                 color: "#2c3e50",
                                             }}
                                         >
-                                            <strong>🏢 Sede de Destino:</strong>{" "}
-                                            {locationData.name}
-                                            {locationData.address && (
+                                            <strong>🏢 Sede:</strong>{" "}
+                                            {selectedLocation.name}
+                                            {selectedLocation.address && (
                                                 <div
                                                     style={{ marginTop: "2px" }}
                                                 >
-                                                    📍 {locationData.address}
+                                                    📍{" "}
+                                                    {selectedLocation.address}
                                                 </div>
                                             )}
                                         </div>
@@ -394,7 +392,7 @@ const PurchaseOrderModal = ({
                                 </div>
                             </div>
 
-                            {/* Datos de la orden */}
+                            {/* Datos de la cotización */}
                             <div style={{ textAlign: "right" }}>
                                 <div
                                     style={{
@@ -412,7 +410,7 @@ const PurchaseOrderModal = ({
                                             color: "#2c3e50",
                                         }}
                                     >
-                                        ORDEN DE COMPRA
+                                        COTIZACIÓN
                                     </h2>
                                     <div
                                         style={{
@@ -423,78 +421,76 @@ const PurchaseOrderModal = ({
                                     >
                                         <div>
                                             <strong>Número:</strong>{" "}
-                                            {getOrderNumber(orderData.id)}
+                                            {getQuoteNumber()}
                                         </div>
                                         <div>
                                             <strong>Fecha:</strong>{" "}
                                             {currentDate}
-                                        </div>
-                                        <div>
-                                            <strong>Estado:</strong>{" "}
-                                            {orderData.status_display ||
-                                                "Pendiente"}
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Datos del proveedor */}
-                        <div
-                            style={{
-                                marginBottom: "30px",
-                                padding: "20px",
-                                backgroundColor: "#f8f9fa",
-                                borderRadius: "6px",
-                                border: "1px solid #dee2e6",
-                            }}
-                        >
-                            <h3
-                                style={{
-                                    margin: "0 0 15px 0",
-                                    fontSize: "18px",
-                                    fontWeight: "600",
-                                    color: "#2c3e50",
-                                }}
-                            >
-                                DATOS DEL PROVEEDOR
-                            </h3>
+                        {/* Datos del cliente */}
+                        {selectedCustomer && (
                             <div
                                 style={{
-                                    fontSize: "14px",
-                                    color: "#2c3e50",
-                                    lineHeight: 1.6,
+                                    marginBottom: "30px",
+                                    padding: "20px",
+                                    backgroundColor: "#f8f9fa",
+                                    borderRadius: "6px",
+                                    border: "1px solid #dee2e6",
                                 }}
                             >
-                                <div style={{ marginBottom: "5px" }}>
-                                    <strong>Nombre:</strong> {supplierData.name}
+                                <h3
+                                    style={{
+                                        margin: "0 0 15px 0",
+                                        fontSize: "18px",
+                                        fontWeight: "600",
+                                        color: "#2c3e50",
+                                    }}
+                                >
+                                    DATOS DEL CLIENTE
+                                </h3>
+                                <div
+                                    style={{
+                                        fontSize: "14px",
+                                        color: "#2c3e50",
+                                        lineHeight: 1.6,
+                                    }}
+                                >
+                                    <div style={{ marginBottom: "5px" }}>
+                                        <strong>Nombre:</strong>{" "}
+                                        {selectedCustomer.name}
+                                    </div>
+                                    {selectedCustomer.phone && (
+                                        <div style={{ marginBottom: "5px" }}>
+                                            <strong>Teléfono:</strong>{" "}
+                                            {selectedCustomer.phone}
+                                        </div>
+                                    )}
+                                    {selectedCustomer.email && (
+                                        <div style={{ marginBottom: "5px" }}>
+                                            <strong>Email:</strong>{" "}
+                                            {selectedCustomer.email}
+                                        </div>
+                                    )}
+                                    {selectedCustomer.address && (
+                                        <div style={{ marginBottom: "5px" }}>
+                                            <strong>Dirección:</strong>{" "}
+                                            {selectedCustomer.address}
+                                        </div>
+                                    )}
+                                    {selectedCustomer.document_number && (
+                                        <div style={{ marginBottom: "5px" }}>
+                                            <strong>Documento:</strong>{" "}
+                                            {selectedCustomer.document_number}
+                                        </div>
+                                    )}
                                 </div>
-                                {supplierData.phone && (
-                                    <div style={{ marginBottom: "5px" }}>
-                                        <strong>Teléfono:</strong>{" "}
-                                        {supplierData.phone}
-                                    </div>
-                                )}
-                                {supplierData.email && (
-                                    <div style={{ marginBottom: "5px" }}>
-                                        <strong>Email:</strong>{" "}
-                                        {supplierData.email}
-                                    </div>
-                                )}
-                                {supplierData.address && (
-                                    <div style={{ marginBottom: "5px" }}>
-                                        <strong>Dirección:</strong>{" "}
-                                        {supplierData.address}
-                                    </div>
-                                )}
-                                {supplierData.notes && (
-                                    <div style={{ marginBottom: "5px" }}>
-                                        <strong>Notas:</strong>{" "}
-                                        {supplierData.notes}
-                                    </div>
-                                )}
                             </div>
-                        </div>
+                        )}
 
                         {/* Tabla de productos */}
                         <div style={{ marginBottom: "30px" }}>
@@ -565,19 +561,10 @@ const PurchaseOrderModal = ({
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {orderItems.map((item, index) => {
-                                        // Usar los campos correctos de la API
-                                        const quantity =
-                                            item.quantity_requested ||
-                                            item.quantity ||
-                                            0;
-                                        const unitPrice =
-                                            item.unit_price ||
-                                            item.purchase_price ||
-                                            0;
+                                    {saleItems.map((item, index) => {
                                         const itemTotal =
-                                            parseFloat(unitPrice) *
-                                            parseFloat(quantity);
+                                            parseFloat(item.unit_price) *
+                                            item.quantity;
 
                                         return (
                                             <tr
@@ -602,26 +589,30 @@ const PurchaseOrderModal = ({
                                                             color: "#2c3e50",
                                                         }}
                                                     >
-                                                        {item
-                                                            .purchase_option_details
-                                                            ?.product_name ||
+                                                        {item.product_details
+                                                            ?.name ||
                                                             item.product_name ||
-                                                            item.name}
+                                                            "Producto sin nombre"}
                                                     </div>
-                                                    <div
-                                                        style={{
-                                                            fontSize: "12px",
-                                                            color: "#6c757d",
-                                                        }}
-                                                    >
-                                                        SKU:{" "}
-                                                        {item
-                                                            .purchase_option_details
-                                                            ?.product_sku ||
-                                                            item.sku ||
-                                                            item.product_sku}
-                                                    </div>
-                                                    {item.category_name && (
+                                                    {item.product_details
+                                                        ?.sku && (
+                                                        <div
+                                                            style={{
+                                                                fontSize:
+                                                                    "12px",
+                                                                color: "#6c757d",
+                                                            }}
+                                                        >
+                                                            SKU:{" "}
+                                                            {
+                                                                item
+                                                                    .product_details
+                                                                    .sku
+                                                            }
+                                                        </div>
+                                                    )}
+                                                    {item.product_details
+                                                        ?.category_name && (
                                                         <div
                                                             style={{
                                                                 fontSize:
@@ -630,10 +621,15 @@ const PurchaseOrderModal = ({
                                                             }}
                                                         >
                                                             Categoría:{" "}
-                                                            {item.category_name}
+                                                            {
+                                                                item
+                                                                    .product_details
+                                                                    .category_name
+                                                            }
                                                         </div>
                                                     )}
-                                                    {item.brand && (
+                                                    {item.product_details
+                                                        ?.brand && (
                                                         <div
                                                             style={{
                                                                 fontSize:
@@ -641,7 +637,12 @@ const PurchaseOrderModal = ({
                                                                 color: "#6c757d",
                                                             }}
                                                         >
-                                                            Marca: {item.brand}
+                                                            Marca:{" "}
+                                                            {
+                                                                item
+                                                                    .product_details
+                                                                    .brand
+                                                            }
                                                         </div>
                                                     )}
                                                 </td>
@@ -653,8 +654,7 @@ const PurchaseOrderModal = ({
                                                             "1px solid #dee2e6",
                                                     }}
                                                 >
-                                                    {quantity}{" "}
-                                                    {item.unit || "unidades"}
+                                                    {item.quantity} unidades
                                                 </td>
                                                 <td
                                                     style={{
@@ -666,7 +666,7 @@ const PurchaseOrderModal = ({
                                                 >
                                                     $
                                                     {Number(
-                                                        unitPrice
+                                                        item.unit_price
                                                     ).toLocaleString()}
                                                 </td>
                                                 <td
@@ -690,7 +690,7 @@ const PurchaseOrderModal = ({
 
                         {/* Totales */}
                         <div
-                            className="order-totals-grid"
+                            className="quote-totals-grid"
                             style={{
                                 display: "grid",
                                 gridTemplateColumns:
@@ -730,38 +730,18 @@ const PurchaseOrderModal = ({
                                     >
                                         <div>
                                             • Total de productos:{" "}
-                                            {orderItems.length}
+                                            {saleItems.length}
                                         </div>
                                         <div>
                                             • Cantidad total:{" "}
-                                            {orderItems.reduce(
+                                            {saleItems.reduce(
                                                 (sum, item) =>
-                                                    sum +
-                                                    (item.quantity_requested ||
-                                                        item.quantity ||
-                                                        0),
+                                                    sum + item.quantity,
                                                 0
                                             )}{" "}
                                             unidades
                                         </div>
-                                        <div>• Tipo: Orden de compra</div>
-                                        <div>
-                                            • Estado:{" "}
-                                            {orderData.status_display ||
-                                                "Pendiente"}
-                                        </div>
-                                        {notes && (
-                                            <div
-                                                style={{
-                                                    marginTop: "10px",
-                                                    padding: "10px",
-                                                    backgroundColor: "white",
-                                                    borderRadius: "4px",
-                                                }}
-                                            >
-                                                <strong>Notas:</strong> {notes}
-                                            </div>
-                                        )}
+                                        <div>• Tipo: Cotización</div>
                                     </div>
                                 </div>
                             </div>
@@ -802,29 +782,10 @@ const PurchaseOrderModal = ({
                                             <span>
                                                 $
                                                 {Number(
-                                                    totals.subtotal ||
-                                                        totals.total
+                                                    totals.total
                                                 ).toLocaleString()}
                                             </span>
                                         </div>
-                                        {parseFloat(totals.tax || 0) > 0 && (
-                                            <div
-                                                style={{
-                                                    display: "flex",
-                                                    justifyContent:
-                                                        "space-between",
-                                                    marginBottom: "8px",
-                                                }}
-                                            >
-                                                <span>Impuestos:</span>
-                                                <span>
-                                                    $
-                                                    {Number(
-                                                        totals.tax
-                                                    ).toLocaleString()}
-                                                </span>
-                                            </div>
-                                        )}
                                         <div
                                             style={{
                                                 display: "flex",
@@ -860,16 +821,13 @@ const PurchaseOrderModal = ({
                             }}
                         >
                             <div style={{ marginBottom: "10px" }}>
-                                <strong>¡Gracias por su servicio!</strong>
+                                <strong>¡Gracias por su confianza!</strong>
                             </div>
                             <div>
-                                Esta orden de compra fue generada
-                                electrónicamente el {currentDate}
+                                Esta cotización fue generada electrónicamente el{" "}
+                                {currentDate}
                             </div>
-                            <div style={{ marginTop: "10px" }}>
-                                Para cualquier consulta contacte a:{" "}
-                                {companyConfig.email} | {companyConfig.phone}
-                            </div>
+
                             {companyConfig.website && (
                                 <div style={{ marginTop: "5px" }}>
                                     🌐 {companyConfig.website}
@@ -918,12 +876,12 @@ const PurchaseOrderModal = ({
             <style>
                 {`
                     @media (max-width: 768px) {
-                        .order-header-grid {
+                        .quote-header-grid {
                             grid-template-columns: 1fr !important;
                             gap: 20px !important;
                         }
                         
-                        .order-totals-grid {
+                        .quote-totals-grid {
                             grid-template-columns: 1fr !important;
                         }
                     }
@@ -933,4 +891,4 @@ const PurchaseOrderModal = ({
     );
 };
 
-export default PurchaseOrderModal;
+export default QuoteModal;

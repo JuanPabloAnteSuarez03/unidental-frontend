@@ -14,9 +14,9 @@ import inventoryService from "../../services/inventoryService";
 import batchesService from "../../services/batchesService";
 // ❌ REMOVIDO: import compositeProductsService from "../../services/compositeProductsService";
 import advancedInventoryService from "../../services/advancedInventoryService";
-import { getAvailableConversions } from '../../services/conversionService';
+import { getAvailableConversions } from "../../services/conversionService";
 import ConversionSuggestionsModal from "./ConversionSuggestionsModal";
-import { getConversionSuggestions } from '../../services/conversionService';
+import { getConversionSuggestions } from "../../services/conversionService";
 import { useProducts } from "../../context/ProductsContext";
 
 const ProductSelector = forwardRef(
@@ -34,15 +34,18 @@ const ProductSelector = forwardRef(
         // Nuevos estados para lotes y productos compuestos
         const [productSalesInfo, setProductSalesInfo] = useState(null);
         const [selectedBatches, setSelectedBatches] = useState([]);
+        const [batchSelectionMode, setBatchSelectionMode] = useState("auto"); // 'auto' | 'manual'
         const [loadingAdvancedInfo, setLoadingAdvancedInfo] = useState(false);
         const [stockByLocation, setStockByLocation] = useState([]);
-        const [conversionSuggestions, setConversionSuggestions] = useState(null);
+        const [conversionSuggestions, setConversionSuggestions] =
+            useState(null);
         const [showConversionModal, setShowConversionModal] = useState(false);
         const [conversionError, setConversionError] = useState(null);
 
         // Cambia el estado de error a errorStock para distinguirlo
         const [errorStock, setErrorStock] = useState(null);
-        const [isRefreshingAfterConversion, setIsRefreshingAfterConversion] = useState(false);
+        const [isRefreshingAfterConversion, setIsRefreshingAfterConversion] =
+            useState(false);
 
         const updateProductsStockRef = useRef(null);
 
@@ -206,20 +209,52 @@ const ProductSelector = forwardRef(
                 try {
                     // Ejecutar ambas operaciones en paralelo
                     // Obtener precio inteligente
+                    console.log("🔍 DEBUG PRECIO - Producto seleccionado:", product);
+                    console.log("🔍 DEBUG PRECIO - Product ID:", product.id);
+                    
                     const intelligentPrice =
                         await inventoryService.getIntelligentPrice(
                             product.id,
                             authToken
                         );
+                    
+                    console.log("🔍 DEBUG PRECIO - Resultado completo:", intelligentPrice);
+                    console.log("🔍 DEBUG PRECIO - Source:", intelligentPrice.source);
+                    console.log("🔍 DEBUG PRECIO - Price:", intelligentPrice.price);
+                    console.log("🔍 DEBUG PRECIO - Label:", intelligentPrice.source_label);
 
                     // Usar solo la función rápida de stock
-                    console.log("Getting stock for product:", product.id);
+                    console.log(
+                        "🔍 DEBUG: Getting stock for product:",
+                        product.id
+                    );
+                    console.log(
+                        "🔍 DEBUG: Auth token:",
+                        authToken ? "Present" : "Missing"
+                    );
+                    console.log(
+                        "🔍 DEBUG: This is the FIXED version with Number() conversion"
+                    );
                     const locationStockMap =
                         await inventoryService.getStockByLocationFast(
                             product.id,
                             authToken
                         );
                     console.log("Stock search result:", locationStockMap);
+                    console.log(
+                        "Location stock map keys:",
+                        Object.keys(locationStockMap)
+                    );
+                    console.log(
+                        "Location stock map values:",
+                        Object.values(locationStockMap)
+                    );
+                    console.log("Selected location:", selectedLocation);
+                    console.log("Selected location ID:", selectedLocation?.id);
+                    console.log(
+                        "Selected location ID type:",
+                        typeof selectedLocation?.id
+                    );
 
                     console.log("Location stock map:", locationStockMap);
 
@@ -258,19 +293,20 @@ const ProductSelector = forwardRef(
                         let availableInLocation = null;
                         if (
                             selectedLocation &&
-                            locationStockMap[selectedLocation.id] !== undefined
+                            locationStockMap[Number(selectedLocation.id)] !==
+                                undefined
                         ) {
                             availableInLocation =
-                                locationStockMap[selectedLocation.id];
+                                locationStockMap[Number(selectedLocation.id)];
                             console.log(
-                                "Stock in selected location:",
+                                "✅ FIXED: Stock in selected location:",
                                 availableInLocation
                             );
                         } else if (selectedLocation) {
                             // La sede seleccionada no tiene stock de este producto
                             availableInLocation = 0;
                             console.log(
-                                "Selected location has no stock for this product"
+                                "❌ FIXED: Selected location has no stock for this product"
                             );
                         }
 
@@ -304,7 +340,11 @@ const ProductSelector = forwardRef(
                     }
 
                     // Obtener stock por sede igual que la tabla principal
-                    const stockLocations = await inventoryService.getProductStockByLocations(product.id, authToken);
+                    const stockLocations =
+                        await inventoryService.getProductStockByLocations(
+                            product.id,
+                            authToken
+                        );
                     setStockByLocation(stockLocations);
 
                     // Cargar información avanzada si hay ubicación seleccionada
@@ -400,15 +440,53 @@ const ProductSelector = forwardRef(
             [selectedProduct, selectedLocation, productSalesInfo, authToken]
         );
 
+        // Cambiar modo de selección de lotes
+        const handleBatchModeChange = useCallback((mode) => {
+            setBatchSelectionMode(mode);
+            if (mode === "auto") {
+                // Re-seleccionar automáticamente con FIFO
+                if (productSalesInfo?.requiresBatchControl && quantity > 0) {
+                    selectBatchesAutomatically(quantity);
+                }
+            } else {
+                // Limpiar selección para permitir elección manual
+                setSelectedBatches([]);
+            }
+        }, [productSalesInfo?.requiresBatchControl, quantity, selectBatchesAutomatically]);
+
+        // Manejo de cambio de cantidad manual por lote
+        const handleManualBatchQtyChange = useCallback((batch, newQty) => {
+            const safeQty = Math.max(0, Math.min(parseInt(newQty || 0, 10), batch.quantity || 0));
+            setSelectedBatches((prev) => {
+                const existing = prev.find(b => b.batch_id === (batch.batch_id || batch.id));
+                if (safeQty === 0) {
+                    // quitar si existe
+                    return existing ? prev.filter(b => b.batch_id === undefined ? false : b.batch_id !== (batch.batch_id || batch.id)) : prev;
+                }
+                const updatedEntry = {
+                    batch_id: batch.batch_id || batch.id,
+                    batch_number: batch.batch_number,
+                    selectedQuantity: safeQty,
+                    expiry_date: batch.expiry_date,
+                    stock_id: batch.stock_id,
+                };
+                if (existing) {
+                    return prev.map(b => (b.batch_id === (batch.batch_id || batch.id) ? updatedEntry : b));
+                }
+                return [...prev, updatedEntry];
+            });
+        }, []);
+
         // Efecto para seleccionar lotes automáticamente cuando cambia la cantidad
         useEffect(() => {
-            if (productSalesInfo?.requiresBatchControl && quantity > 0) {
+            if (batchSelectionMode === "auto" && productSalesInfo?.requiresBatchControl && quantity > 0) {
                 selectBatchesAutomatically(quantity);
             }
         }, [
             quantity,
             productSalesInfo?.requiresBatchControl,
             selectBatchesAutomatically,
+            batchSelectionMode,
         ]);
 
         // Handle clearing product selection
@@ -473,9 +551,11 @@ const ProductSelector = forwardRef(
                 return;
             }
 
-            if (!quantity || quantity < 1) {
-                setError("La cantidad debe ser mayor a 0");
-                return;
+            if (batchSelectionMode === "auto") {
+                if (!quantity || quantity < 1) {
+                    setError("La cantidad debe ser mayor a 0");
+                    return;
+                }
             }
 
             if (!selectedLocation) {
@@ -484,7 +564,7 @@ const ProductSelector = forwardRef(
             }
 
             // Validar stock disponible si hay información de stock
-            if (stockInfo && selectedLocation) {
+            if (batchSelectionMode === "auto" && stockInfo && selectedLocation) {
                 const availableStock =
                     stockInfo.availableInLocation !== null
                         ? stockInfo.availableInLocation
@@ -509,7 +589,13 @@ const ProductSelector = forwardRef(
                     0
                 );
 
-                if (totalSelectedFromBatches < quantity) {
+                // En modo manual, la cantidad final la determina la suma de los lotes
+                if (batchSelectionMode === "manual") {
+                    if (totalSelectedFromBatches < 1) {
+                        setError("Debe seleccionar la cantidad a usar por lote");
+                        return;
+                    }
+                } else if (totalSelectedFromBatches < quantity) {
                     setError(
                         `Lotes seleccionados insuficientes. Necesario: ${quantity}, Disponible en lotes: ${totalSelectedFromBatches}`
                     );
@@ -557,9 +643,13 @@ const ProductSelector = forwardRef(
                 // Solo se envía como un producto normal y el backend hace el resto
 
                 // Llamar a la función del padre con datos adicionales
+                const finalQuantity = batchSelectionMode === "manual"
+                    ? selectedBatches.reduce((sum, b) => sum + (b.selectedQuantity || 0), 0)
+                    : quantity;
+
                 onProductAdded(
                     selectedProduct,
-                    quantity,
+                    finalQuantity,
                     parseFloat(unitPrice),
                     additionalData
                 );
@@ -589,6 +679,7 @@ const ProductSelector = forwardRef(
         ]);
 
         const handleQuantityChange = (newQuantity) => {
+            if (batchSelectionMode === "manual") return; // bloquear campo cantidad en modo manual
             setQuantity(newQuantity);
             setErrorStock(null);
             setConversionSuggestions(null);
@@ -601,14 +692,26 @@ const ProductSelector = forwardRef(
                 selectedLocation &&
                 productSalesInfo.batches
             ) {
-                const stockEnSede = productSalesInfo.batches.reduce((sum, batch) => sum + (batch.quantity || 0), 0);
+                const stockEnSede = productSalesInfo.batches.reduce(
+                    (sum, batch) => sum + (batch.quantity || 0),
+                    0
+                );
                 if (parseInt(newQuantity) > stockEnSede) {
                     // Consultar sugerencias de conversión
                     (async () => {
-                        console.log('Intentando consultar sugerencias de conversión...');
+                        console.log(
+                            "Intentando consultar sugerencias de conversión..."
+                        );
                         try {
-                            const suggestions = await getAvailableConversions(selectedProduct.id, selectedLocation.id, authToken);
-                            console.log('Sugerencias de conversión:', suggestions);
+                            const suggestions = await getAvailableConversions(
+                                selectedProduct.id,
+                                selectedLocation.id,
+                                authToken
+                            );
+                            console.log(
+                                "Sugerencias de conversión:",
+                                suggestions
+                            );
                             if (suggestions && suggestions.length > 0) {
                                 setConversionSuggestions(suggestions);
                                 setShowConversionModal(true);
@@ -616,12 +719,16 @@ const ProductSelector = forwardRef(
                             } else {
                                 setConversionSuggestions(null);
                                 setShowConversionModal(false);
-                                setErrorStock(`Stock insuficiente. Disponible en ${selectedLocation.name}: ${stockEnSede} unidades (sin sugerencias de conversión)`);
+                                setErrorStock(
+                                    `Stock insuficiente. Disponible en ${selectedLocation.name}: ${stockEnSede} unidades (sin sugerencias de conversión)`
+                                );
                             }
                         } catch (err) {
                             setConversionSuggestions(null);
                             setShowConversionModal(false);
-                            setErrorStock('Error consultando sugerencias de conversión');
+                            setErrorStock(
+                                "Error consultando sugerencias de conversión"
+                            );
                         }
                     })();
                 } else {
@@ -640,27 +747,45 @@ const ProductSelector = forwardRef(
                 selectedLocation &&
                 productSalesInfo.batches
             ) {
-                const stockEnSede = productSalesInfo.batches.reduce((sum, batch) => sum + (batch.quantity || 0), 0);
+                const stockEnSede = productSalesInfo.batches.reduce(
+                    (sum, batch) => sum + (batch.quantity || 0),
+                    0
+                );
                 if (parseInt(quantity) > stockEnSede) {
                     // Consultar sugerencias de conversión (POST)
                     (async () => {
-                        console.log('Intentando consultar sugerencias de conversión...');
+                        console.log(
+                            "Intentando consultar sugerencias de conversión..."
+                        );
                         try {
-                            const resp = await getConversionSuggestions(selectedProduct.id, parseInt(quantity), selectedLocation.id, authToken);
-                            console.log('Respuesta sugerencias:', resp);
-                            if (resp && resp.suggestions && resp.suggestions.length > 0) {
+                            const resp = await getConversionSuggestions(
+                                selectedProduct.id,
+                                parseInt(quantity),
+                                selectedLocation.id,
+                                authToken
+                            );
+                            console.log("Respuesta sugerencias:", resp);
+                            if (
+                                resp &&
+                                resp.suggestions &&
+                                resp.suggestions.length > 0
+                            ) {
                                 setConversionSuggestions(resp.suggestions);
                                 setShowConversionModal(true);
                                 setErrorStock(null);
                             } else {
                                 setConversionSuggestions(null);
                                 setShowConversionModal(false);
-                                setErrorStock(`Stock insuficiente. Disponible en ${selectedLocation.name}: ${stockEnSede} unidades (sin sugerencias de conversión)`);
+                                setErrorStock(
+                                    `Stock insuficiente. Disponible en ${selectedLocation.name}: ${stockEnSede} unidades (sin sugerencias de conversión)`
+                                );
                             }
                         } catch (err) {
                             setConversionSuggestions(null);
                             setShowConversionModal(false);
-                            setErrorStock('Error consultando sugerencias de conversión');
+                            setErrorStock(
+                                "Error consultando sugerencias de conversión"
+                            );
                         }
                     })();
                 } else {
@@ -679,51 +804,89 @@ const ProductSelector = forwardRef(
         const { refreshCache } = useProducts();
 
         // Handler para conversión exitosa
-        const handleConversionSuccess = useCallback(async (suggestion, batch, result) => {
-            setIsRefreshingAfterConversion(true);
-            await refreshCache();
-            // Volver a cargar el producto seleccionado y su stock/lotes
-            if (selectedProduct) {
-                await handleProductSelected(selectedProduct);
-            }
-            setShowConversionModal(false);
-            setConversionSuggestions(null);
-            setErrorStock(null);
-            // Volver a intentar agregar la cantidad original automáticamente
-            setTimeout(async () => {
-                await handleAddToSale();
-                setIsRefreshingAfterConversion(false);
-            }, 500); // Pequeño delay para asegurar que el stock se refresque
-            // Mensaje de éxito
-            // (alert eliminado)
-        }, [refreshCache, selectedProduct, handleProductSelected, handleAddToSale]);
+        const handleConversionSuccess = useCallback(
+            async (suggestion, batch, result) => {
+                setIsRefreshingAfterConversion(true);
+                await refreshCache();
+                // Volver a cargar el producto seleccionado y su stock/lotes
+                if (selectedProduct) {
+                    await handleProductSelected(selectedProduct);
+                }
+                setShowConversionModal(false);
+                setConversionSuggestions(null);
+                setErrorStock(null);
+                // Volver a intentar agregar la cantidad original automáticamente
+                setTimeout(async () => {
+                    await handleAddToSale();
+                    setIsRefreshingAfterConversion(false);
+                }, 500); // Pequeño delay para asegurar que el stock se refresque
+                // Mensaje de éxito
+                // (alert eliminado)
+            },
+            [
+                refreshCache,
+                selectedProduct,
+                handleProductSelected,
+                handleAddToSale,
+            ]
+        );
 
         return (
-            <div style={{ position: 'relative' }}>
+            <div style={{ position: "relative" }}>
                 {isRefreshingAfterConversion && (
-                    <div style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        width: '100%',
-                        height: '100%',
-                        background: 'rgba(255,255,255,0.7)',
-                        zIndex: 100,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        borderRadius: 12,
-                    }}>
+                    <div
+                        style={{
+                            position: "absolute",
+                            top: 0,
+                            left: 0,
+                            width: "100%",
+                            height: "100%",
+                            background: "rgba(255,255,255,0.7)",
+                            zIndex: 100,
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            borderRadius: 12,
+                        }}
+                    >
                         <div className="spinner" style={{ marginBottom: 12 }}>
-                            <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <circle cx="20" cy="20" r="18" stroke="#007bff" strokeWidth="4" strokeDasharray="90 60" strokeLinecap="round">
-                                    <animateTransform attributeName="transform" type="rotate" repeatCount="indefinite" dur="1s" from="0 20 20" to="360 20 20" />
+                            <svg
+                                width="40"
+                                height="40"
+                                viewBox="0 0 40 40"
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg"
+                            >
+                                <circle
+                                    cx="20"
+                                    cy="20"
+                                    r="18"
+                                    stroke="#007bff"
+                                    strokeWidth="4"
+                                    strokeDasharray="90 60"
+                                    strokeLinecap="round"
+                                >
+                                    <animateTransform
+                                        attributeName="transform"
+                                        type="rotate"
+                                        repeatCount="indefinite"
+                                        dur="1s"
+                                        from="0 20 20"
+                                        to="360 20 20"
+                                    />
                                 </circle>
                             </svg>
                         </div>
-                        <div style={{ color: '#007bff', fontWeight: 600, fontSize: 16 }}>
-                            Actualizando stock y agregando producto a la venta...
+                        <div
+                            style={{
+                                color: "#007bff",
+                                fontWeight: 600,
+                                fontSize: 16,
+                            }}
+                        >
+                            Actualizando stock y agregando producto a la
+                            venta...
                         </div>
                     </div>
                 )}
@@ -743,7 +906,9 @@ const ProductSelector = forwardRef(
                     </div>
                 )}
                 {errorStock && !showConversionModal && (
-                    <div style={{ color: 'red', marginBottom: 8 }}>{errorStock}</div>
+                    <div style={{ color: "red", marginBottom: 8 }}>
+                        {errorStock}
+                    </div>
                 )}
 
                 {/* Price Source Legend */}
@@ -961,21 +1126,35 @@ const ProductSelector = forwardRef(
 
                                         {/* Stock en la sede seleccionada */}
                                         {selectedLocation && (
-                                                <div
-                                                    style={{
-                                                        fontSize: "13px",
-                                                        color: "#155724",
-                                                        marginBottom: "4px",
-                                                    }}
-                                                >
-                                                <strong>{selectedLocation.name}:</strong> {
+                                            <div
+                                                style={{
+                                                    fontSize: "13px",
+                                                    color: "#155724",
+                                                    marginBottom: "4px",
+                                                }}
+                                            >
+                                                <strong>
+                                                    {selectedLocation.name}:
+                                                </strong>{" "}
+                                                {
                                                     // Siempre usar la suma de los lotes activos en la sede seleccionada si existen
-                                                    productSalesInfo?.requiresBatchControl && productSalesInfo?.batches && productSalesInfo.batches.length > 0
-                                                        ? productSalesInfo.batches.reduce((sum, batch) => sum + (batch.quantity || 0), 0)
-                                                        : stockInfo?.availableInLocation ?? 0
-                                                } unidades
-                                                </div>
-                                            )}
+                                                    productSalesInfo?.requiresBatchControl &&
+                                                    productSalesInfo?.batches &&
+                                                    productSalesInfo.batches
+                                                        .length > 0
+                                                        ? productSalesInfo.batches.reduce(
+                                                              (sum, batch) =>
+                                                                  sum +
+                                                                  (batch.quantity ||
+                                                                      0),
+                                                              0
+                                                          )
+                                                        : stockInfo?.availableInLocation ??
+                                                          0
+                                                }{" "}
+                                                unidades
+                                            </div>
+                                        )}
 
                                         {/* Stock total */}
                                         <div
@@ -984,38 +1163,78 @@ const ProductSelector = forwardRef(
                                                 color: "#6c757d",
                                             }}
                                         >
-                                            Stock total: {stockByLocation.reduce((sum, loc) => sum + (loc.stock || 0), 0)} unidades
+                                            Stock total:{" "}
+                                            {stockByLocation.reduce(
+                                                (sum, loc) =>
+                                                    sum + (loc.stock || 0),
+                                                0
+                                            )}{" "}
+                                            unidades
                                         </div>
 
                                         {/* Desglose por ubicaciones si hay múltiples */}
                                         {stockByLocation.length > 1 && (
-                                            <div style={{ fontSize: "11px", color: "#6c757d", marginTop: "4px" }}>
+                                            <div
+                                                style={{
+                                                    fontSize: "11px",
+                                                    color: "#6c757d",
+                                                    marginTop: "4px",
+                                                }}
+                                            >
                                                 <details>
-                                                    <summary style={{ cursor: "pointer", fontWeight: "500" }}>
-                                                        Ver stock en todas las sedes ({stockByLocation.length})
+                                                    <summary
+                                                        style={{
+                                                            cursor: "pointer",
+                                                            fontWeight: "500",
+                                                        }}
+                                                    >
+                                                        Ver stock en todas las
+                                                        sedes (
+                                                        {stockByLocation.length}
+                                                        )
                                                     </summary>
-                                                    <div style={{ marginTop: "8px", paddingLeft: "12px" }}>
-                                                        {stockByLocation.map((loc) => (
+                                                    <div
+                                                        style={{
+                                                            marginTop: "8px",
+                                                            paddingLeft: "12px",
+                                                        }}
+                                                    >
+                                                        {stockByLocation.map(
+                                                            (loc) => (
                                                                 <div
-                                                                key={loc.id}
+                                                                    key={loc.id}
                                                                     style={{
                                                                         margin: "4px 0",
-                                                                    padding: "4px 8px",
+                                                                        padding:
+                                                                            "4px 8px",
                                                                         backgroundColor:
-                                                                        selectedLocation?.id == loc.id
+                                                                            selectedLocation?.id ==
+                                                                            loc.id
                                                                                 ? "#e8f4fd"
                                                                                 : "#f8f9fa",
-                                                                    borderRadius: "4px",
+                                                                        borderRadius:
+                                                                            "4px",
                                                                         border:
-                                                                        selectedLocation?.id == loc.id
+                                                                            selectedLocation?.id ==
+                                                                            loc.id
                                                                                 ? "1px solid #3498db"
                                                                                 : "1px solid #dee2e6",
                                                                     }}
                                                                 >
-                                                                <strong>{loc.name}</strong>: {loc.stock} unidades
-                                                                {selectedLocation?.id == loc.id && " (sede actual)"}
+                                                                    <strong>
+                                                                        {
+                                                                            loc.name
+                                                                        }
+                                                                    </strong>
+                                                                    :{" "}
+                                                                    {loc.stock}{" "}
+                                                                    unidades
+                                                                    {selectedLocation?.id ==
+                                                                        loc.id &&
+                                                                        " (sede actual)"}
                                                                 </div>
-                                                        ))}
+                                                            )
+                                                        )}
                                                     </div>
                                                 </details>
                                             </div>
@@ -1083,7 +1302,10 @@ const ProductSelector = forwardRef(
                                     type="number"
                                     min="1"
                                     value={quantity}
-                                    onChange={e => handleQuantityChange(e.target.value)}
+                                    onChange={(e) =>
+                                        handleQuantityChange(e.target.value)
+                                    }
+                                    disabled={batchSelectionMode === "manual"}
                                     style={{
                                         width: "100%",
                                         boxSizing: "border-box",
@@ -1230,8 +1452,44 @@ const ProductSelector = forwardRef(
                                                         marginBottom: "6px",
                                                     }}
                                                 >
-                                                    Lotes disponibles (ordenados
-                                                    por FIFO):
+                                                    Lotes disponibles ({batchSelectionMode === "auto" ? "modo automático (FIFO)" : "modo manual"}):
+                                                </div>
+                                                {/* Toggle de modo de selección */}
+                                                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleBatchModeChange("auto")}
+                                                        style={{
+                                                            padding: "6px 10px",
+                                                            borderRadius: 6,
+                                                            border: batchSelectionMode === "auto" ? "2px solid #27ae60" : "1px solid #dee2e6",
+                                                            background: batchSelectionMode === "auto" ? "#e8f5e8" : "white",
+                                                            cursor: "pointer",
+                                                            fontSize: 12,
+                                                            fontWeight: 600,
+                                                            color: "#2c3e50",
+                                                        }}
+                                                        title="Seleccionar lotes automáticamente usando FIFO"
+                                                    >
+                                                        Automático (FIFO)
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleBatchModeChange("manual")}
+                                                        style={{
+                                                            padding: "6px 10px",
+                                                            borderRadius: 6,
+                                                            border: batchSelectionMode === "manual" ? "2px solid #0984e3" : "1px solid #dee2e6",
+                                                            background: batchSelectionMode === "manual" ? "#e8f4fd" : "white",
+                                                            cursor: "pointer",
+                                                            fontSize: 12,
+                                                            fontWeight: 600,
+                                                            color: "#2c3e50",
+                                                        }}
+                                                        title="Seleccionar lotes manualmente"
+                                                    >
+                                                        Manual
+                                                    </button>
                                                 </div>
                                                 {productSalesInfo.batches.map(
                                                     (batch, index) => {
@@ -1355,8 +1613,23 @@ const ProductSelector = forwardRef(
                                                                         }{" "}
                                                                         unidades
                                                                     </div>
-                                                                    {isSelected &&
-                                                                        selectedBatch && (
+                                                                    {batchSelectionMode === "manual" ? (
+                                                                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                                                            <label style={{ fontSize: 12, color: "#2c3e50" }}>Usar:</label>
+                                                                            <input
+                                                                                type="number"
+                                                                                min={0}
+                                                                                max={batch.quantity || 0}
+                                                                                value={selectedBatch?.selectedQuantity || 0}
+                                                                                onChange={(e) => handleManualBatchQtyChange(batch, e.target.value)}
+                                                                                style={{ width: 70, padding: 4, fontSize: 12, border: "1px solid #dee2e6", borderRadius: 4 }}
+                                                                            />
+                                                                            <span style={{ fontSize: 11, color: "#6c757d" }}>
+                                                                                / {batch.quantity || 0}
+                                                                            </span>
+                                                                        </div>
+                                                                    ) : (
+                                                                        isSelected && selectedBatch && (
                                                                             <div
                                                                                 style={{
                                                                                     color: "#27ae60",
@@ -1370,7 +1643,8 @@ const ProductSelector = forwardRef(
                                                                                 }{" "}
                                                                                 unidades
                                                                             </div>
-                                                                        )}
+                                                                        )
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                         );
@@ -1616,7 +1890,25 @@ const ProductSelector = forwardRef(
                 {showConversionModal && conversionSuggestions && (
                     <ConversionSuggestionsModal
                         isOpen={showConversionModal}
-                        error={{ suggestions: conversionSuggestions, product: selectedProduct?.name, required: quantity, available: productSalesInfo?.batches?.reduce((sum, batch) => sum + (batch.quantity || 0), 0) || 0, deficit: Math.max(0, quantity - (productSalesInfo?.batches?.reduce((sum, batch) => sum + (batch.quantity || 0), 0) || 0)) }}
+                        error={{
+                            suggestions: conversionSuggestions,
+                            product: selectedProduct?.name,
+                            required: quantity,
+                            available:
+                                productSalesInfo?.batches?.reduce(
+                                    (sum, batch) => sum + (batch.quantity || 0),
+                                    0
+                                ) || 0,
+                            deficit: Math.max(
+                                0,
+                                quantity -
+                                    (productSalesInfo?.batches?.reduce(
+                                        (sum, batch) =>
+                                            sum + (batch.quantity || 0),
+                                        0
+                                    ) || 0)
+                            ),
+                        }}
                         locationId={selectedLocation?.id}
                         onCancel={() => setShowConversionModal(false)}
                         onConfirm={handleConversionSuccess}

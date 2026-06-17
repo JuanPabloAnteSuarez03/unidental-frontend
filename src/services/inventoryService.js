@@ -9,7 +9,7 @@ const API_STOCK_SUMMARY_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.STOC
 const API_CATEGORIES_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.CATEGORIES}`;
 const API_INVENTORY_MOVEMENTS_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.INVENTORY_MOVEMENTS}`;
 const API_LOCATIONS_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.LOCATIONS}`;
-const API_PURCHASE_ITEMS_URL = `${API_CONFIG.BASE_URL}/purchases/items/`; // Corregido
+// API_PURCHASE_ITEMS_URL removido - ahora usamos API_CONFIG.ENDPOINTS.PURCHASE_OPTIONS para obtener precios desde opciones de compra
 const API_SKU_GENERATE_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.SKU_GENERATE}`;
 const API_SKU_VALIDATE_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.SKU_VALIDATE}`;
 const API_SKU_SYSTEM_INFO_URL = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.SKU_SYSTEM_INFO}`;
@@ -25,11 +25,11 @@ const convertToProxyUrl = (url) => {
     // If already a relative URL, return as is
     if (url.startsWith("/")) return url;
 
-    // If it's an absolute URL from our backend, convert to relative
+    // If it's an absolute URL from our backend, return as is (no conversion needed)
     const backendBaseUrl = "https://unidental-backend.onrender.com";
     if (url.startsWith(backendBaseUrl)) {
-        // Remove the base URL, keep the path starting with /api
-        return url.replace(backendBaseUrl, "");
+        // Return the absolute URL as is since we're now pointing directly to the backend
+        return url;
     }
 
     // For any other absolute URL, return as is (shouldn't happen in our case)
@@ -71,6 +71,60 @@ export const getProducts = async (params = {}, authToken, signal) => {
             return null;
         }
         console.error("Error fetching products:", error);
+        throw error;
+    }
+};
+
+/**
+ * Get products by location (backend-paginated)
+ * @param {Object} opts
+ * @param {number} opts.locationId - Required location id
+ * @param {boolean} [opts.hasStock=true] - Only items with stock if true
+ * @param {string} [opts.search] - search by name/sku/barcode
+ * @param {number} [opts.page=1] - page number
+ * @param {string} authToken
+ * @param {AbortSignal} signal
+ */
+export const getProductsByLocation = async (
+    { locationId, hasStock = true, search, page = 1 } = {},
+    authToken,
+    signal
+) => {
+    if (!authToken) {
+        throw new Error("No authentication token provided");
+    }
+    if (!locationId) {
+        throw new Error("locationId is required");
+    }
+
+    const params = new URLSearchParams();
+    params.set("location", String(locationId));
+    params.set("page", String(page));
+    if (search) params.set("search", search);
+    if (hasStock === false) params.set("has_stock", "false");
+
+    const url = `${API_CONFIG.BASE_URL}/catalogs/products/by-location/?${params.toString()}`;
+
+    try {
+        const response = await fetch(url, {
+            headers: {
+                Authorization: `Token ${authToken}`,
+                "Content-Type": "application/json",
+            },
+            signal,
+        });
+
+        if (!response.ok) {
+            throw new Error(`Error ${response.status}: ${response.statusText}`);
+        }
+
+        return await response.json();
+    } catch (error) {
+        if (error.name === "AbortError") {
+            console.log("Request was aborted");
+            return null;
+        }
+        console.error("Error fetching products by location:", error);
         throw error;
     }
 };
@@ -455,15 +509,33 @@ export const getStockByLocationFast = async (productId, authToken, signal) => {
         const data = await response.json();
 
         console.log("Raw stock data from fast endpoint:", data);
+        console.log("Data type:", typeof data);
+        console.log("Is array:", Array.isArray(data));
+        console.log("Has results:", data && data.results);
+        console.log("Data keys:", data ? Object.keys(data) : "No data");
+        console.log(
+            "Results length:",
+            data && data.results ? data.results.length : "No results"
+        );
 
         // Construir mapa de ubicaciones
         const locationStockMap = {};
 
         // Si es un array directo, usarlo; si no, usar data.results
         const stockData = Array.isArray(data) ? data : data.results;
+        console.log("Stock data to process:", stockData);
+        console.log("Stock data length:", stockData ? stockData.length : 0);
 
         if (Array.isArray(stockData)) {
-            stockData.forEach((stockEntry) => {
+            console.log("Processing stock entries...");
+            stockData.forEach((stockEntry, index) => {
+                console.log(`Processing entry ${index}:`, stockEntry);
+                console.log(
+                    `Entry ${index} - location:`,
+                    stockEntry.location,
+                    "quantity:",
+                    stockEntry.quantity
+                );
                 if (
                     stockEntry.location !== undefined &&
                     stockEntry.quantity !== undefined
@@ -1301,6 +1373,59 @@ export const getProductPrices = async (productIds = [], authToken, signal) => {
 };
 
 /**
+ * Get suggested sale price for a product from catalog
+ * @param {number} productId - Product ID
+ * @param {string} authToken - Authentication token
+ * @returns {Promise<Object>} - Price information
+ */
+const getProductSuggestedPrice = async (productId, authToken) => {
+    try {
+        console.log("🔍 DEBUG getProductSuggestedPrice - Product ID:", productId);
+        console.log("🔍 DEBUG - URL:", `${API_CONFIG.BASE_URL}/catalogs/products/${productId}/`);
+        
+        const response = await fetch(
+            `${API_CONFIG.BASE_URL}/catalogs/products/${productId}/`,
+            {
+                headers: {
+                    Authorization: `Token ${authToken}`,
+                    "Content-Type": "application/json",
+                },
+            }
+        );
+
+        console.log("🔍 DEBUG - Response status:", response.status);
+        console.log("🔍 DEBUG - Response ok:", response.ok);
+
+        if (!response.ok) {
+            console.log("🔍 DEBUG - Response no ok, retornando precio 0");
+            return { price: 0, source: "none" };
+        }
+
+        const product = await response.json();
+        console.log("🔍 DEBUG - Producto completo del backend:", product);
+        console.log("🔍 DEBUG - sale_price raw:", product.sale_price);
+        
+        const suggestedPrice = parseFloat(product.sale_price) || 0;
+        console.log("🔍 DEBUG - sale_price parseado:", suggestedPrice);
+
+        if (suggestedPrice > 0) {
+            console.log("🔍 DEBUG - Retornando precio sugerido:", suggestedPrice);
+            return {
+                price: suggestedPrice,
+                source: "suggested",
+                source_label: "Precio de venta sugerido",
+            };
+        }
+
+        console.log("🔍 DEBUG - Precio sugerido es 0 o inválido");
+        return { price: 0, source: "none" };
+    } catch (error) {
+        console.error("🔍 DEBUG - Error fetching suggested price:", error);
+        return { price: 0, source: "none" };
+    }
+};
+
+/**
  * Get intelligent price for a specific product
  * @param {number} productId - Product ID
  * @param {string} authToken - Authentication token
@@ -1316,7 +1441,23 @@ export const getIntelligentPrice = async (productId, authToken) => {
     }
 
     try {
-        // 1. Intentar obtener último precio de venta
+        console.log("🔍 DEBUG getIntelligentPrice - Product ID:", productId);
+        
+        // 1. NUEVO: Intentar obtener precio de venta sugerido (PRIORIDAD 1)
+        console.log("🔍 DEBUG - Paso 1: Buscando precio de venta sugerido...");
+        const suggestedPrice = await getProductSuggestedPrice(productId, authToken);
+        console.log("🔍 DEBUG - Precio sugerido encontrado:", suggestedPrice);
+        
+        if (suggestedPrice.price > 0) {
+            console.log("🔍 DEBUG - Usando precio sugerido:", suggestedPrice.price);
+            return {
+                price: suggestedPrice.price,
+                source: "suggested",
+                source_label: "Precio de venta sugerido",
+            };
+        }
+
+        // 2. Intentar obtener último precio de venta (PRIORIDAD 2)
         const lastSalePrice = await getLastSalePrice(productId, authToken);
         if (lastSalePrice.price > 0) {
             return {
@@ -1326,7 +1467,7 @@ export const getIntelligentPrice = async (productId, authToken) => {
             };
         }
 
-        // 2. Intentar obtener último precio de compra
+        // 3. Intentar obtener último precio de compra (PRIORIDAD 3)
         const lastPurchasePrice = await getLastPurchasePrice(
             productId,
             authToken
@@ -1339,7 +1480,7 @@ export const getIntelligentPrice = async (productId, authToken) => {
             };
         }
 
-        // 3. Usar precios del producto (fallback)
+        // 4. Usar precios del producto (fallback)
         return await getProductIntelligentPriceFallback(productId, authToken);
     } catch (error) {
         console.error("Error fetching intelligent price:", error);
@@ -1388,18 +1529,119 @@ const getLastSalePrice = async (productId, authToken) => {
 };
 
 /**
- * Obtiene el precio de la última compra registrada para un producto.
+ * 🚀 CORREGIDA: Obtener precios de compra desde las opciones de compra vigentes
+ * CAMBIO IMPORTANTE: Ahora usa /suppliers/purchase-options/ en lugar de /purchases/items/
+ * para obtener precios directamente de las opciones de compra de cada producto
+ * @param {string} authToken - Token de autenticación
+ * @returns {Promise<Object>} - Mapa de product_id -> precio de su opción de compra más reciente
+ */
+export const getAllPurchasePricesOptimized = async (authToken) => {
+    if (!authToken) {
+        return {};
+    }
+
+    const pricesMap = {};
+    let currentPage = 1;
+    let hasMorePages = true;
+    let totalItemsProcessed = 0;
+
+    try {
+        console.log(
+            "🚀 Cargando TODAS las opciones de compra vigentes de forma paginada..."
+        );
+
+        while (hasMorePages) {
+            // CORREGIDO: Usar el endpoint de opciones de compra, no items de órdenes
+            const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.PURCHASE_OPTIONS}?is_currently_valid=true&ordering=-valid_from&page=${currentPage}&page_size=500`;
+
+            const response = await fetch(url, {
+                headers: {
+                    Authorization: `Token ${authToken}`,
+                    "Content-Type": "application/json",
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error(
+                    `Error ${response.status}: ${response.statusText}`
+                );
+            }
+
+            const data = await response.json();
+            const purchaseOptions = data.results || [];
+
+            // Si no hay más resultados, terminar
+            if (purchaseOptions.length === 0) {
+                hasMorePages = false;
+                break;
+            }
+
+            console.log(
+                `📦 Procesando página ${currentPage}: ${purchaseOptions.length} opciones de compra...`
+            );
+
+            // Procesar opciones de esta página
+            for (const option of purchaseOptions) {
+                const productId = option.product;
+
+                // Solo tomar el primer precio por producto (el más reciente y válido)
+                if (productId && !pricesMap.hasOwnProperty(productId)) {
+                    pricesMap[productId] =
+                        parseFloat(option.purchase_price) || 0;
+                }
+            }
+
+            totalItemsProcessed += purchaseOptions.length;
+
+            // Verificar si hay más páginas
+            hasMorePages = !!data.next;
+            currentPage++;
+
+            // Log de progreso cada 5 páginas
+            if (currentPage % 5 === 0) {
+                console.log(
+                    `📊 Progreso: ${
+                        Object.keys(pricesMap).length
+                    } productos únicos de ${totalItemsProcessed} opciones procesadas`
+                );
+            }
+        }
+
+        console.log(
+            `✅ Precios de compra obtenidos para ${
+                Object.keys(pricesMap).length
+            } productos únicos`
+        );
+        console.log(
+            `📊 Total procesado: ${totalItemsProcessed} opciones de compra en ${
+                currentPage - 1
+            } páginas`
+        );
+
+        return pricesMap;
+    } catch (error) {
+        console.error(
+            "❌ Error cargando precios de compra optimizados:",
+            error
+        );
+        return {};
+    }
+};
+
+/**
+ * CORREGIDA: Obtiene el precio de compra desde las opciones de compra válidas para un producto.
+ * CAMBIO IMPORTANTE: Ahora usa /suppliers/purchase-options/ en lugar de /purchases/items/
  * @param {number} productId - ID del producto.
  * @param {string} authToken - Token de autenticación.
- * @returns {Promise<number|null>} - El precio unitario de la última compra o null si no hay registros.
+ * @returns {Promise<number|null>} - El precio de compra de la opción válida más reciente o null si no hay registros.
  */
 export const getLastPurchasePrice = async (productId, authToken) => {
     if (!productId || !authToken) {
         return null;
     }
 
-    // Endpoint para obtener los items de compra, filtrados por producto y ordenados por fecha descendente
-    const url = `${API_PURCHASE_ITEMS_URL}?product=${productId}&ordering=-order__order_date`; // Corregido
+    // CORREGIDO: Usar endpoint de opciones de compra válidas para este producto
+    const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.PURCHASE_OPTIONS}?product=${productId}&is_currently_valid=true&ordering=-valid_from`;
 
     try {
         const response = await fetch(url, {
@@ -1416,11 +1658,11 @@ export const getLastPurchasePrice = async (productId, authToken) => {
             return null;
         }
 
-        const purchaseItems = await response.json();
+        const purchaseOptions = await response.json();
 
         // Si hay resultados, el primero es el más reciente
-        if (purchaseItems.results && purchaseItems.results.length > 0) {
-            return parseFloat(purchaseItems.results[0].unit_price);
+        if (purchaseOptions.results && purchaseOptions.results.length > 0) {
+            return parseFloat(purchaseOptions.results[0].purchase_price);
         }
 
         return null;
@@ -1441,30 +1683,38 @@ export const getLastPurchasePrice = async (productId, authToken) => {
  * @returns {Promise<Object>} - Price information
  */
 const getProductIntelligentPriceFallback = async (productId, authToken) => {
-    // 1. Try last purchase price first
-    const lastPurchasePrice = await getLastPurchasePrice(productId, authToken);
-    if (lastPurchasePrice && lastPurchasePrice.price > 0) {
-        return {
-            price: lastPurchasePrice.price,
-            source: "purchase",
-            source_label: "Último precio de compra",
-        };
-    }
+    // 1. Try cost price if available (PRIORIDAD 4)
+    try {
+        const response = await fetch(
+            `${API_CONFIG.BASE_URL}/catalogs/products/${productId}/`,
+            {
+                headers: {
+                    Authorization: `Token ${authToken}`,
+                    "Content-Type": "application/json",
+                },
+            }
+        );
 
-    // 2. Fallback to last sale price
-    const lastSalePrice = await getLastSalePrice(productId, authToken);
-    if (lastSalePrice.price > 0) {
-        return {
-            price: lastSalePrice.price,
-            source: "sale",
-            source_label: "Último precio de venta",
-        };
+        if (response.ok) {
+            const product = await response.json();
+            const costPrice = parseFloat(product.cost_price) || 0;
+            
+            if (costPrice > 0) {
+                return {
+                    price: costPrice,
+                    source: "cost",
+                    source_label: "Precio de costo",
+                };
+            }
+        }
+    } catch (error) {
+        console.error("Error fetching cost price:", error);
     }
 
     return {
         price: 0,
         source: "none",
-        source_label: "No disponible",
+        source_label: "Sin precio disponible",
     };
 };
 
@@ -1539,8 +1789,11 @@ export const getProductStockByLocations = async (productId, authToken) => {
         // Process stock data and accumulate by location
         if (stockResponse && stockResponse.results) {
             stockResponse.results.forEach((stockItem) => {
-                if (stockItem.location && locationMap[stockItem.location]) {
-                    locationMap[stockItem.location].stock +=
+                if (
+                    stockItem.location &&
+                    locationMap[Number(stockItem.location)]
+                ) {
+                    locationMap[Number(stockItem.location)].stock +=
                         parseInt(stockItem.quantity, 10) || 0;
                 }
             });
@@ -1975,6 +2228,7 @@ export const createSkuType = async (typeData, authToken) => {
 // Export as default
 const inventoryService = {
     getProducts,
+    getProductsByLocation,
     getStockData,
     getAllStock,
     getFilteredStock,

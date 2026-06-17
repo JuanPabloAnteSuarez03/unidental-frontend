@@ -1,10 +1,10 @@
 // Configuración de datos de la empresa para facturas
 export const companyConfig = {
     name: "UNIDENTAL",
-    address: "Calle Principal #123, Ciudad",
-    phone: "+57 (1) 234-5678",
-    email: "contacto@unidental.com",
-    nit: "NIT: 900123456-7",
+    address: "Dirección de la empresa",
+    phone: "Teléfono de contacto",
+    email: "email@empresa.com",
+    nit: "NIT: XXXXXXXXX-X",
     website: "www.unidental.com",
 
     // Información adicional para facturas
