@@ -127,24 +127,6 @@ const ProductSelector = forwardRef(
             stockInfo?.allLocations,
         ]);
 
-        // Efecto adicional para reaccionar inmediatamente a cambios de ubicación
-        useEffect(() => {
-            // Si hay un producto seleccionado y información de stock, actualizar inmediatamente
-            if (selectedProduct && stockInfo?.allLocations) {
-                const newAvailableInLocation =
-                    selectedLocation &&
-                    stockInfo.allLocations[selectedLocation.id] !== undefined
-                        ? stockInfo.allLocations[selectedLocation.id]
-                        : 0;
-
-                setStockInfo((prevInfo) => ({
-                    ...prevInfo,
-                    availableInLocation: newAvailableInLocation,
-                    locationName: selectedLocation?.name || null,
-                }));
-            }
-        }, [selectedLocation]);
-
         // Función para cargar información avanzada del producto
         const loadAdvancedProductInfo = useCallback(
             async (product, locationId) => {
@@ -933,7 +915,7 @@ const ProductSelector = forwardRef(
                         onSelectionCleared={handleSelectionCleared}
                         onUpdateProductsStock={handleUpdateProductsStock}
                         placeholder="Buscar producto por nombre, SKU o código..."
-                        maxResults={20}
+                        maxResults={50}
                         initialProduct={selectedProduct}
                         showSelectedProduct={true}
                         allowClearSelection={true}
