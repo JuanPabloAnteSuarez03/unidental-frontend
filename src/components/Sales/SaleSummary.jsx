@@ -85,8 +85,9 @@ const SaleSummary = ({
                         Método de pago:
                     </span>
                     <span style={{ fontSize: "14px", fontWeight: "600", color: "#2c3e50" }}>
-                        {paymentMethod === 'cash' && "💵 Efectivo"}
+                        {(paymentMethod === 'cash' || paymentMethod === 'normal') && "💵 Efectivo"}
                         {paymentMethod === 'card' && "💳 Tarjeta"}
+                        {paymentMethod === 'transfer' && "💸 Transferencia"}
                         {paymentMethod === 'credit' && "📝 Crédito"}
                     </span>
                 </div>
@@ -202,11 +203,12 @@ const SaleSummary = ({
                 }}
             >
                 <div style={{ fontSize: "24px", marginBottom: "8px" }}>
-                    {paymentMethod === "cash" ? "💵" : paymentMethod === "card" ? "💳" : "📝"}
+                    {(paymentMethod === "cash" || paymentMethod === "normal") ? "💵" : paymentMethod === "card" ? "💳" : paymentMethod === "transfer" ? "💸" : "📝"}
                 </div>
                 <div style={{ fontSize: "14px", fontWeight: "600", color: "#2c3e50", marginBottom: "4px" }}>
-                    {paymentMethod === "cash" ? "Pago en Efectivo" : 
+                    {(paymentMethod === "cash" || paymentMethod === "normal") ? "Pago en Efectivo" : 
                      paymentMethod === "card" ? "Pago con Tarjeta" : 
+                     paymentMethod === "transfer" ? "Pago por Transferencia" :
                      "Pago con Crédito"}
                 </div>
                 {shouldInvoice && (
@@ -270,8 +272,9 @@ const SaleSummary = ({
                     ${totals.total}
                 </div>
                 <div style={{ fontSize: "12px", opacity: "0.8", marginTop: "4px" }}>
-                    {paymentMethod === "cash" ? "Pago en efectivo" : 
+                    {(paymentMethod === "cash" || paymentMethod === "normal") ? "Pago en efectivo" : 
                      paymentMethod === "card" ? "Pago con tarjeta" : 
+                     paymentMethod === "transfer" ? "Pago por transferencia" :
                      "Pago con crédito"}
                 </div>
             </div>

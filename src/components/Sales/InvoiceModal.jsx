@@ -543,7 +543,7 @@ const InvoiceModal = ({
                                     <div style={{ fontSize: "14px", color: "#6c757d", lineHeight: 1.5 }}>
                                         <div>• Total de productos: {totals.itemCount}</div>
                                         <div>• Cantidad total: {totals.totalQuantity} unidades</div>
-                                        <div>• Forma de pago: {paymentMethod === "credit" ? "Crédito" : paymentMethod === "cash" ? "Efectivo" : "Tarjeta"}</div>
+                                        <div>• Forma de pago: {paymentMethod === "credit" ? "Crédito" : (paymentMethod === "cash" || paymentMethod === "normal") ? "Efectivo" : paymentMethod === "transfer" ? "Transferencia" : "Tarjeta"}</div>
                                         <div>• Estado: Venta registrada</div>
                                     </div>
                                 </div>

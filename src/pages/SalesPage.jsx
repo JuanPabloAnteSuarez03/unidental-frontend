@@ -722,10 +722,11 @@ const SalesPage = () => {
       }
     });
 
+    const fixedPaymentMethod = paymentMethod === "cash" ? "normal" : paymentMethod;
     const saleData = {
       customer: selectedCustomer ? selectedCustomer.id : null,
       location: selectedLocation.id,
-      sale_type: paymentMethod, // Puede ser 'normal', 'card', 'credit'
+      sale_type: fixedPaymentMethod,
       should_invoice: shouldInvoice,
       items: mappedItems,
     };

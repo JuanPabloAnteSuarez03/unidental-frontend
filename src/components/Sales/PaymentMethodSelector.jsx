@@ -6,6 +6,9 @@ const PaymentMethodSelector = ({
     onMethodChange, 
     disabled = false 
 }) => {
+    // Normalizar 'normal' (valor de base de datos) a 'cash' para la UI del selector
+    const activeMethod = selectedMethod === 'normal' ? 'cash' : selectedMethod;
+
     const handleMethodChange = (method) => {
         if (!disabled) {
             onMethodChange(method);
@@ -29,7 +32,7 @@ const PaymentMethodSelector = ({
             <div
                 style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gridTemplateColumns: 'repeat(4, 1fr)',
                     gap: '12px',
                 }}
             >
@@ -41,18 +44,18 @@ const PaymentMethodSelector = ({
                         disabled={disabled}
                         style={{
                             padding: '16px 12px',
-                            border: selectedMethod === method.value 
+                            border: activeMethod === method.value 
                                 ? '2px solid #3498db' 
                                 : '1px solid #dee2e6',
                             borderRadius: '8px',
-                            backgroundColor: selectedMethod === method.value 
+                            backgroundColor: activeMethod === method.value 
                                 ? '#e8f4fd' 
                                 : disabled 
                                     ? '#f8f9fa' 
                                     : 'white',
                             color: disabled 
                                 ? '#6c757d' 
-                                : selectedMethod === method.value 
+                                : activeMethod === method.value 
                                     ? '#2c3e50' 
                                     : '#6c757d',
                             cursor: disabled ? 'not-allowed' : 'pointer',
@@ -65,7 +68,7 @@ const PaymentMethodSelector = ({
                             gap: '6px',
                             textAlign: 'center',
                             position: 'relative',
-                            ...(selectedMethod === method.value && {
+                            ...(activeMethod === method.value && {
                                 boxShadow: '0 0 0 3px rgba(52, 152, 219, 0.1)',
                             }),
                             ...(disabled && {
@@ -73,13 +76,13 @@ const PaymentMethodSelector = ({
                             }),
                         }}
                         onMouseEnter={(e) => {
-                            if (!disabled && selectedMethod !== method.value) {
+                            if (!disabled && activeMethod !== method.value) {
                                 e.target.style.backgroundColor = '#f8f9fa';
                                 e.target.style.borderColor = '#adb5bd';
                             }
                         }}
                         onMouseLeave={(e) => {
-                            if (!disabled && selectedMethod !== method.value) {
+                            if (!disabled && activeMethod !== method.value) {
                                 e.target.style.backgroundColor = 'white';
                                 e.target.style.borderColor = '#dee2e6';
                             }
@@ -93,7 +96,7 @@ const PaymentMethodSelector = ({
                         </span>
                         
                         {/* Indicador de selección */}
-                        {selectedMethod === method.value && (
+                        {activeMethod === method.value && (
                             <div
                                 style={{
                                     position: 'absolute',
@@ -118,7 +121,7 @@ const PaymentMethodSelector = ({
             </div>
             
             {/* Descripción del método seleccionado */}
-            {selectedMethod && (
+            {activeMethod && (
                 <div
                     style={{
                         marginTop: '12px',
@@ -130,13 +133,16 @@ const PaymentMethodSelector = ({
                         color: '#6c757d',
                     }}
                 >
-                    {selectedMethod === 'cash' && (
+                    {activeMethod === 'cash' && (
                         <span>💡 Pago inmediato en efectivo. La venta se registra como completada.</span>
                     )}
-                    {selectedMethod === 'card' && (
+                    {activeMethod === 'card' && (
                         <span>💡 Pago inmediato con tarjeta. La venta se registra como completada.</span>
                     )}
-                    {selectedMethod === 'credit' && (
+                    {activeMethod === 'transfer' && (
+                        <span>💡 Pago inmediato por transferencia bancaria. La venta se registra como completada.</span>
+                    )}
+                    {activeMethod === 'credit' && (
                         <span>💡 Sistema de crédito especial. Configure las cuotas y fechas de pago.</span>
                     )}
                 </div>
@@ -145,4 +151,4 @@ const PaymentMethodSelector = ({
     );
 };
 
-export default PaymentMethodSelector; 
+export default PaymentMethodSelector;

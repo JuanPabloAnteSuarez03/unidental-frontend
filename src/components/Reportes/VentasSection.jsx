@@ -464,6 +464,7 @@ const VentasSection = () => {
     const getSaleTypeLabel = (type) => {
         if (type === 'normal') return { label: 'Efectivo', color: '#27ae60', bg: '#eafaf1', icon: '💵' };
         if (type === 'card') return { label: 'Tarjeta', color: '#0984e3', bg: '#e3f2fd', icon: '💳' };
+        if (type === 'transfer') return { label: 'Transferencia', color: '#9b59b6', bg: '#f5eef8', icon: '💸' };
         if (type === 'credit') return { label: 'Crédito', color: '#fdcb6e', bg: '#fffbe6', icon: '📝' };
         return { label: type, color: '#636e72', bg: '#f1f2f6', icon: '❓' };
     };
