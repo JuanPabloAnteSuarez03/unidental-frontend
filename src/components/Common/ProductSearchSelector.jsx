@@ -7,7 +7,7 @@ const ProductSearchSelector = ({
     placeholder = "Buscar producto por nombre, SKU o código...",
     showSelectedProduct = true,
     allowClearSelection = true,
-    maxResults = 20,
+    maxResults = 50,
     minSearchLength = 2,
     debounceMs = 300,
     disabled = false,
@@ -30,6 +30,7 @@ const ProductSearchSelector = ({
         handleSearch,
         resetSearch,
         updateProductsStock,
+        refreshProducts,
     } = useProductSearch();
 
     const [selectedProduct, setSelectedProduct] = useState(initialProduct);
@@ -42,16 +43,17 @@ const ProductSearchSelector = ({
     const inputRef = useRef(null);
     const debounceTimerRef = useRef(null);
 
-    // Effect para establecer producto inicial o limpiar selección
+    // Effect para establecer producto inicial
     useEffect(() => {
-        setSelectedProduct(initialProduct);
-        if (!initialProduct) {
+        if (initialProduct) {
+            setSelectedProduct(initialProduct);
+        } else {
+            setSelectedProduct(null);
             setInputValue("");
             setShowDropdown(false);
             setSelectedIndex(-1);
-            resetSearch();
         }
-    }, [initialProduct, resetSearch]);
+    }, [initialProduct]);
 
     // Función de debounce para la búsqueda
     const debouncedSearch = useCallback((term) => {
@@ -185,6 +187,37 @@ const ProductSearchSelector = ({
 
     return (
         <div style={{ position: "relative", ...style }} ref={dropdownRef}>
+            {/* Botón de refresco de productos */}
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}>
+                <button
+                    type="button"
+                    onClick={async () => {
+                        try {
+                            await refreshProducts();
+                            setInputValue("");
+                            setSelectedProduct(null);
+                            setShowDropdown(false);
+                            setSelectedIndex(-1);
+                            handleSearch("");
+                        } catch (e) {
+                            console.error("Error al refrescar productos:", e);
+                        }
+                    }}
+                    style={{
+                        background: "#00b894",
+                        color: "white",
+                        border: "none",
+                        borderRadius: 6,
+                        padding: "6px 10px",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: "pointer"
+                    }}
+                    title="Actualizar productos"
+                >
+                    Actualizar
+                </button>
+            </div>
             {/* Producto seleccionado */}
             {showSelectedProduct && selectedProduct && (
                 <div
