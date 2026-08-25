@@ -3,9 +3,9 @@ import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 function ProtectedRoute({ adminOnly = false }) {
-    const { authToken, isLoading, currentUser } = useAuth();
+    const { authToken, currentUser } = useAuth();
 
-    if (isLoading && !authToken) {
+    if (authToken && !currentUser) {
         return (
             <div className="flex justify-center items-center h-screen">
                 <p>Verificando autenticación...</p>

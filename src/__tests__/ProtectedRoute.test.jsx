@@ -16,12 +16,12 @@ describe("ProtectedRoute", () => {
     const TestLogin = () => <div>Login Page</div>;
 
     // Configuración de rutas para probar ProtectedRoute
-    const TestRoutes = () => (
+    const TestRoutes = ({ adminOnly = false } = {}) => (
         <MemoryRouter initialEntries={["/protected"]}>
             <Routes>
                 <Route path="/" element={<TestLanding />} />
                 <Route path="/login" element={<TestLogin />} />
-                <Route element={<ProtectedRoute />}>
+                <Route element={<ProtectedRoute adminOnly={adminOnly} />}>
                     <Route path="/protected" element={<TestProtected />} />
                 </Route>
             </Routes>
@@ -34,10 +34,11 @@ describe("ProtectedRoute", () => {
     });
 
     test("renderiza el contenido protegido cuando el usuario está autenticado", () => {
-        // Simular un usuario autenticado
+        // Simular un usuario autenticado con sus datos ya cargados
         useAuth.mockReturnValue({
             authToken: "fake-token",
             isLoading: false,
+            currentUser: { role: "User" },
         });
 
         render(<TestRoutes />);
@@ -54,6 +55,7 @@ describe("ProtectedRoute", () => {
         useAuth.mockReturnValue({
             authToken: null,
             isLoading: false,
+            currentUser: null,
         });
 
         render(<TestRoutes />);
@@ -65,11 +67,12 @@ describe("ProtectedRoute", () => {
         expect(screen.queryByText("Protected Content")).not.toBeInTheDocument();
     });
 
-    test("muestra un indicador de carga mientras se verifica la autenticación", () => {
-        // Simular el estado de carga
+    test("muestra un indicador de carga mientras se obtienen los datos del usuario", () => {
+        // Hay token, pero currentUser todavía no llegó de /api/auth/users/me/
         useAuth.mockReturnValue({
-            authToken: null,
-            isLoading: true,
+            authToken: "fake-token",
+            isLoading: false,
+            currentUser: null,
         });
 
         render(<TestRoutes />);
@@ -84,11 +87,11 @@ describe("ProtectedRoute", () => {
         expect(screen.queryByText("Protected Content")).not.toBeInTheDocument();
     });
 
-    test("no muestra la carga si hay token, aunque isLoading sea true", () => {
-        // Simular estado de carga pero con token existente
+    test("no se queda en carga si currentUser ya llegó, aunque isLoading esté desactualizado", () => {
         useAuth.mockReturnValue({
             authToken: "fake-token",
             isLoading: true,
+            currentUser: { role: "User" },
         });
 
         render(<TestRoutes />);
@@ -101,5 +104,49 @@ describe("ProtectedRoute", () => {
             screen.queryByText("Verificando autenticación...")
         ).not.toBeInTheDocument();
         expect(screen.queryByText("Login Page")).not.toBeInTheDocument();
+    });
+
+    test("ruta adminOnly: espera a que cargue currentUser en vez de redirigir de una (regresión /caja)", () => {
+        // Este es exactamente el caso que rompía /caja: hay token, el usuario
+        // SÍ es Admin, pero la respuesta de /api/auth/users/me/ todavía no
+        // llegó. Antes del fix, esto redirigía a "/" antes de tiempo.
+        useAuth.mockReturnValue({
+            authToken: "fake-token",
+            isLoading: false,
+            currentUser: null,
+        });
+
+        render(<TestRoutes adminOnly />);
+
+        expect(
+            screen.getByText("Verificando autenticación...")
+        ).toBeInTheDocument();
+        expect(screen.queryByText("Landing Page")).not.toBeInTheDocument();
+        expect(screen.queryByText("Protected Content")).not.toBeInTheDocument();
+    });
+
+    test("ruta adminOnly: muestra el contenido una vez que currentUser confirma el rol Admin", () => {
+        useAuth.mockReturnValue({
+            authToken: "fake-token",
+            isLoading: false,
+            currentUser: { role: "Admin" },
+        });
+
+        render(<TestRoutes adminOnly />);
+
+        expect(screen.getByText("Protected Content")).toBeInTheDocument();
+    });
+
+    test("ruta adminOnly: redirige si currentUser ya cargó y no es Admin", () => {
+        useAuth.mockReturnValue({
+            authToken: "fake-token",
+            isLoading: false,
+            currentUser: { role: "User" },
+        });
+
+        render(<TestRoutes adminOnly />);
+
+        expect(screen.getByText("Landing Page")).toBeInTheDocument();
+        expect(screen.queryByText("Protected Content")).not.toBeInTheDocument();
     });
 });
