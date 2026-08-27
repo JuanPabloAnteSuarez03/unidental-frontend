@@ -1,215 +1,159 @@
-## UNIDENTAL Frontend
+# UNIDENTAL — Frontend
 
-Aplicación web de gestión para UNIDENTAL. Incluye inventario, ventas, órdenes de compra, transferencias internas, devoluciones, créditos, reportes avanzados y un completo sistema de pruebas. Construido con React 19 + Vite 6 y desplegado en Vercel, consumiendo un backend en Render.
+**English** · [Español](README.es.md)
 
-### Tabla de contenidos
-- [Características principales](#características-principales)
-- [Stack y arquitectura](#stack-y-arquitectura)
-- [Configuración de entorno](#configuración-de-entorno)
-- [Instalación y ejecución](#instalación-y-ejecución)
-- [Scripts disponibles](#scripts-disponibles)
-- [Dominios clave y flujos](#dominios-clave-y-flujos)
-- [Pruebas y calidad](#pruebas-y-calidad)
-- [Despliegue](#despliegue)
-- [Estructura del proyecto](#estructura-del-proyecto)
-- [Solución de problemas](#solución-de-problemas)
-- [Contribución](#contribución)
+Management web app for UNIDENTAL, a dental-supplies distributor operating from two locations in Cali, Colombia. Inventory, sales, purchase orders, inter-location transfers, returns, credit accounts and reporting — built with React 19 and Vite, deployed on Vercel against a Django backend on Render.
+
+🔗 **Live:** https://unidental-frontend.vercel.app
+🔗 **Backend:** [unidental-backend](https://github.com/JuanPabloAnteSuarez03/unidental-backend) · [API docs](https://unidental-backend.onrender.com/swagger/)
 
 ---
 
-### Características principales
-- Inventario con filtros, búsqueda, paginación y vista por sede (Sur/Norte) con tabla dedicada y paginación propia.
-- Ventas con selector de productos, jerarquía inteligente de precios y control de lotes (FIFO automático y selección manual por lote).
-- Alertas de vencimiento y configuración de umbrales por producto.
-- Órdenes de compra completas (opciones de compra por proveedor, pagos, lista de items, comparador de proveedores).
-- Devoluciones, movimientos de stock y transferencias internas entre sedes.
-- Créditos de ventas y gestión de cobranza.
-- Reportería avanzada de compras y ventas con detalles por transacción.
-- Autenticación, perfiles y creación de usuarios (con toggle de visibilidad de contraseña).
-- Generación y validación de SKU.
-- Estrategia de caché persistente e in‑memory para rendimiento, con botones de refresco donde importa.
+## Features
+
+- **Inventory** with filters, search, pagination and a dedicated per-location view (Sur / Norte) with its own table and pagination
+- **Sales** with a product selector, a price hierarchy and batch control — automatic FIFO or manual per-batch distribution
+- **Expiry alerts** with a configurable threshold per product
+- **Purchase orders** end to end: supplier purchase options, payments, item list and a supplier comparison
+- **Returns, stock movements and inter-location transfers**
+- **Sales credit accounts** and collections
+- **Reporting** for purchases and sales, with per-transaction detail
+- **Authentication**, profiles and user creation
+- **SKU** generation and validation
+- **Caching strategy** — persistent and in-memory, with explicit refresh controls where it matters
 
 ---
 
-### Stack y arquitectura
-- **Frontend**: React 19, Vite 6, React Router DOM 7, TailwindCSS.
-- **Iconos**: `react-icons`.
-- **Estado global**: React Context API (`AuthContext`, `ProductsContext`, `CustomersContext`, `ReportesContext`).
-- **Ruteo**: `src/router` con `ProtectedRoute` para rutas autenticadas.
-- **Servicios API**: `src/services/*` (e.g., `inventoryService.js`, `salesService.js`, `returnsService.js`, `purchasesService.js`, `transfersService.js`).
-- **Hooks**: `useInventory`, `usePagination`, `useProductSearch`, `useKeepBackendAwake`, entre otros.
-- **Configuración API**: `src/config/api.js` define `BASE_URL` y `ENDPOINTS` centrales.
+## Stack
 
-Arquitectura orientada a módulos con componentes autocontenidos en `src/components`, páginas en `src/pages`, lógica de datos en `src/hooks` y acceso a datos en `src/services`.
+| Concern | Technology |
+|---|---|
+| Framework | React 19, Vite |
+| Routing | React Router DOM 7, with `ProtectedRoute` |
+| Styling | TailwindCSS |
+| HTTP | Axios |
+| Icons | react-icons |
+| State | React Context (`AuthContext`, `ProductsContext`, `CustomersContext`, `ReportesContext`) |
+| Unit / integration tests | Jest, Testing Library, MSW |
+| E2E | Playwright |
+| Accessibility | axe |
+| Hosting | Vercel |
 
----
-
-### Configuración de entorno
-- Backend por defecto: `https://unidental-backend.onrender.com/api` (ver `src/config/api.js`).
-- Desarrollo: Vite expone un proxy para `/api` hacia `VITE_API_URL` (ver `vite.config.js`).
-
-Variables de entorno soportadas:
-- `VITE_API_URL` (opcional, solo desarrollo): URL base del backend para el proxy de Vite.
+The architecture is module-oriented: self-contained components in `src/components`, pages in `src/pages`, data logic in `src/hooks` and data access in `src/services`. `src/config/api.js` centralizes `BASE_URL` and `ENDPOINTS`.
 
 ---
 
-### Instalación y ejecución
-1) Requisitos
-- Node.js 18+ y npm
+## Getting started
 
-2) Instalación
+**Requirements:** Node.js 18+ and npm.
+
 ```bash
 npm install
+npm run dev            # http://localhost:5173
 ```
 
-3) Desarrollo (puerto 3000)
+By default the app talks to the deployed backend (`https://unidental-backend.onrender.com/api`, see `src/config/api.js`). To point at a local backend, set `VITE_API_URL` — Vite proxies `/api` to it in development (see `vite.config.js`).
+
 ```bash
-npm run dev
+# .env
+VITE_API_URL=http://127.0.0.1:8000
 ```
 
-4) Build producción y preview
-```bash
-npm run build
-npm run preview
-```
+### Scripts
 
-5) Lint
-```bash
-npm run lint
-```
+| Script | What it does |
+|---|---|
+| `npm run dev` | Vite dev server |
+| `npm run build` | Production bundle in `dist/` |
+| `npm run preview` | Serve the build locally |
+| `npm run lint` | ESLint |
+| `npm test` | Jest |
+| `npm run test:coverage` | Jest with coverage |
+| `npm run test:unit` · `test:integration` | Targeted Jest suites |
+| `npm run test:e2e` · `test:e2e:ui` | Playwright (headless / UI mode) |
+| `npm run test:critical` | The three critical flows: sales, purchases, returns |
+| `npm run test:accessibility` | axe + Jest |
+| `npm run test:visual` | Visual regression via Playwright |
+| `npm run test:api` · `test:manual` · `test:monitor` | Custom scripts in `scripts/` |
+| `npm run test:quick` · `test:practical` · `test:all` | Combined shortcuts |
 
----
-
-### Scripts disponibles
-Desde `package.json`:
-- `dev`: Levanta el entorno de desarrollo con Vite.
-- `build`: Genera el bundle de producción en `dist/`.
-- `preview`: Sirve el build localmente.
-- `lint`: Ejecuta ESLint.
-- `test`, `test:watch`, `test:coverage`, `test:ci`: Pruebas con Jest.
-- `test:unit`, `test:integration`: Suites específicas de Jest.
-- `test:e2e`, `test:e2e:dev`, `test:e2e:ui`: Pruebas E2E con Playwright.
-- `test:accessibility`: Accesibilidad con axe + Jest.
-- `test:visual`: Regresión visual con Playwright.
-- `test:api`: Pruebas de API (scripts personalizados).
-- `test:manual`: Guía de pruebas manuales (scripts personalizados).
-- `test:quick`, `test:practical`: Atajos combinados.
-- `test:monitor`: Ejecuta pruebas y genera reportes consolidados.
-
-Ver también `README-TESTING.md` para detalles extensos de testing y CI.
+See `README-TESTING.md` for the full testing guide.
 
 ---
 
-### Dominios clave y flujos
+## Key flows
 
-1) Inventario y paginación
-- Hook `useInventory` coordina carga, filtros y paginación.
-- Hook `usePagination` normaliza `currentPage`/`totalPages` (mínimo 1) y previene “rebotes” a página 1 tras saltos directos.
-- El componente `InventoryContentByLocation` renderiza una tabla alternativa cuando se filtra por sede, con su propia paginación conectada a un endpoint dedicado.
+**Inventory and pagination.** `useInventory` coordinates loading, filters and pagination. `usePagination` normalizes `currentPage`/`totalPages` (minimum 1) and prevents the bounce back to page 1 after a direct page jump. When filtering by location, `InventoryContentByLocation` renders an alternative table with its own pagination against a dedicated endpoint.
 
-2) Filtro por ubicación (Sur/Norte)
-- Vista dedicada que consume `inventoryService.getProductsByLocation` (`/api/catalogs/products/by-location/`).
-- Carga en paralelo de stock por producto y mapeo de precio de compra desde el caché global para mantener paridad con la tabla estándar.
+**Batch control in sales.** Automatic FIFO mode discounts batches by expiry order. In manual mode the user distributes quantities across batches; the global quantity field locks and the total becomes the sum of the manual entries.
 
-3) Control de lotes en ventas
-- Modo automático (FIFO) para descontar lotes, priorizando el más reciente.
-- Modo manual: el usuario distribuye cantidades por lote; el campo de cantidad global se bloquea y la cantidad total es la suma manual.
+**Price hierarchy.** Sales resolve the price in this order:
 
-4) Jerarquía de precios en ventas
-Orden de prioridad:
-1. Precio de venta sugerido (`sale_price` del producto)
-2. Último precio de venta
-3. Último precio de compra
-4. Costo
-La leyenda se muestra en `src/components/Sales/PriceSourceLegend.jsx`.
+1. Suggested sale price (`sale_price`)
+2. Last sale price
+3. Last purchase price
+4. Cost
 
-5) Alertas de vencimiento y umbrales
-- Página `AlertasPage` para listar próximos a vencer y vencidos.
-- Modal para configurar umbral por producto.
-- Botón “Limpiar Caché” para evitar efectos de caché obsoleta al operar con lotes.
+The active source is surfaced to the user in `src/components/Sales/PriceSourceLegend.jsx`.
 
-6) Compras y proveedores
-- Órdenes de compra con flujo completo: selección de proveedores, opciones de compra, detalle de items y pagos.
-
-7) Movimientos, devoluciones y transferencias
-- Módulos para entradas/salidas múltiples, devoluciones por venta y transferencias entre sedes con sus tablas y filtros.
-
-8) Reportes
-- Panel de reportes de compras y ventas con desgloses, totales y modales de detalle.
-
-9) Autenticación y usuarios
-- Inicio de sesión, perfiles y creación de usuarios.
-- Toggle de visibilidad de contraseña en formularios de login y creación de usuario.
-
-10) SKUs
-- Generación, validación y utilidades para sistemas de SKU.
+**Expiry alerts.** `AlertasPage` lists what is expiring and what already expired, with a modal to set the per-product threshold and a *Clear cache* button so stale cache never misleads batch operations.
 
 ---
 
-### Estrategia de caché
-- Caché persistente en `localStorage` para listas pesadas (productos, inventario, precios de compra) y caché in‑memory para respuestas intermedias.
-- Botones de refresco donde impacta al usuario:
-  - En selectores de producto (`ProductSearchSelector`), botón “Actualizar” para limpiar caché y recargar.
-  - En alertas, “Limpiar Caché” para forzar relectura.
-- Invalidación controlada al navegar o forzar refresh; TTL configurable por módulo.
+## Caching
+
+Heavy lists (products, inventory, purchase prices) are cached in `localStorage`, with an in-memory cache for intermediate responses and a configurable TTL per module. Because a stale cache is actively harmful when operating on batches, refresh controls are exposed where it matters — an *Update* button in `ProductSearchSelector`, and *Clear cache* in the alerts view.
 
 ---
 
-### Pruebas y calidad
-- Unitarias e integración (Jest + Testing Library, MSW).
-- E2E (Playwright) con UI opcional.
-- Accesibilidad con axe.
-- Visual regression (Playwright).
-- Umbrales de cobertura: 80% global (ver `package.json` → `jest.coverageThreshold`).
-- Reportes centralizados en `test-results/` y guía en `README-TESTING.md`.
+## Testing
+
+Coverage threshold is **80% global** (`jest.coverageThreshold` in `package.json`). Reports are centralized in `test-results/`. Lighthouse config lives in `lighthouserc.js`.
 
 ---
 
-### Despliegue
-- Objetivo: Vercel.
-- Rewrites en `vercel.json`:
-  - `/api/(.*)` → backend en Render (`https://unidental-backend.onrender.com/api/$1`).
-  - SPA fallback a `index.html`.
-- Build command: `npm run build`
-- Output: `dist/`
-- Variables recomendadas en Vercel: `VITE_API_URL` si se requiere proxy diferenciado.
+## Deployment
+
+Vercel, configured in `vercel.json`:
+
+- `/api/(.*)` rewrites to the Render backend
+- SPA fallback to `index.html`
+- Build: `npm run build` → `dist/`
 
 ---
 
-### Estructura del proyecto
+## Project structure
+
 ```
 src/
-├─ components/           # UI modular (Inventario, Ventas, Compras, Reportes, etc.)
-├─ pages/                # Páginas de alto nivel
-├─ services/             # Integraciones API (inventory, sales, returns, purchases, transfers, ...)
-├─ context/              # Contextos globales (Auth, Products, Customers, Reportes)
-├─ hooks/                # Lógica reutilizable (useInventory, usePagination, useProductSearch, ...)
-├─ router/               # Configuración de ruteo y rutas protegidas
-├─ config/               # Configuración central (API, compañía)
-└─ utils/                # Utilidades varias (fechas, etc.)
+├─ components/           Modular UI (Inventory, Sales, Purchases, Reports, ...)
+├─ pages/                Top-level pages
+├─ services/             API integrations (inventory, sales, returns, purchases, transfers, ...)
+├─ context/              Global contexts (Auth, Products, Customers, Reportes)
+├─ hooks/                Reusable logic (useInventory, usePagination, useProductSearch, ...)
+├─ router/               Routing and protected routes
+├─ config/               Central configuration (API, company)
+└─ utils/                Helpers (dates, etc.)
 ```
 
 ---
 
-### Solución de problemas
-- La paginación vuelve a página 1 al saltar a la última página
-  - Asegúrate de estar en la vista correcta (por sede vs general). `usePagination` y `useInventory` previenen rebotes; limpia caché y reintenta.
-- No aparecen productos recién creados en buscadores
-  - Usa el botón “Actualizar” del `ProductSearchSelector` o limpia el caché desde la sección correspondiente.
-- El “Precio compra” no se ve en vista por sede
-  - Verifica que `InventoryContentByLocation` reciba `purchasePricesMap` desde la página de inventario (esto ya está integrado por defecto).
-- Inconsistencias de stock
-  - La celda `StockCell` prioriza `product.stock` cuando está presente (vistas por sede), o calcula desde `stockByLocation` como fallback.
+## Contributing
+
+1. Branch: `git checkout -b feature/<name>`
+2. Implement and add the relevant tests
+3. Run `npm run test:quick` (or `npm run test:all`)
+4. Keep coverage ≥ 80% and the linter clean: `npm run lint`
+5. Open a PR describing the change and its risks
 
 ---
 
-### Contribución
-1) Crear branch: `git checkout -b feature/nombre-feature`
-2) Implementar y agregar pruebas relevantes.
-3) Ejecutar suites: `npm run test:quick` o `npm run test:all`.
-4) Asegurar cobertura ≥ 80% y linter sin errores: `npm run lint`.
-5) Abrir Pull Request con descripción clara de cambios y riesgos.
+## About
+
+Built by [Juan Pablo Ante Suárez](https://github.com/JuanPabloAnteSuarez03). I implemented much of this frontend together with a teammate, on top of the backend API I had already designed and built.
+
+📖 **Full case study:** [juanpabloante.vercel.app/en/projects/unidental](https://juanpabloante.vercel.app/en/projects/unidental)
 
 ---
 
-Privado · © UNIDENTAL. Todos los derechos reservados.
+Private · © UNIDENTAL. All rights reserved.
